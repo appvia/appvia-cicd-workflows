@@ -90,7 +90,7 @@ jobs:
 
       - name: Terraform Init
         id: init
-        run: terraform init -backend-config="bucket=${{ inputs.aws-s3-bucket-name }}" -backend-config="key=${{ inputs.terraform-state-key }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-dynamodb-table-name }}"
+        run: terraform init -backend-config="bucket=${{ inputs.aws-s3-bucket-name }}" -backend-config="key=${{ inputs.terraform-state-key }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-dynamodb-table-name }}" -backend-config="region=${{ inputs.aws-region }}"
 
       - name: Terraform Validate
         id: validate
