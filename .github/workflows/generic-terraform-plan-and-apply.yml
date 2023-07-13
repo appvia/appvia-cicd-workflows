@@ -1,0 +1,170 @@
+name: Terraform Validate, Plan & Apply
+on:
+  workflow_call:
+    inputs:
+      aws-region:
+        default: 'eu-west-2'
+        description: 'The AWS region to deploy to'
+        required: false
+        type: string
+
+      aws-role-arn:
+        description: 'The AWS role to assume'
+        required: true
+        type: string
+
+      aws-s3-bucket-name:
+        description: 'The AWS S3 bucket to store the terraform state'
+        required: true
+        type: string
+
+      aws-dynamodb-table-name:
+        description: 'The AWS DynamoDB table to store the terraform state'
+        required: true
+        type: string
+
+      terraform-log-level:
+        default: 'INFO'
+        description: 'The log level of terraform'
+        required: false
+        type: string
+
+      terraform-state-key:
+        default: '${{ github.event.repository.name }}.tfstate'
+        description: 'The key of the terraform state'
+        required: false
+        type: string
+
+      terraform-values-file:
+        default: 'values/production.tfvars'
+        description: 'The values file to use'
+        required: false
+        type: string
+
+      terraform-version:
+        default: '1.5.2'
+        description: 'The version of terraform to use'
+        required: false
+        type: string
+
+env:
+  TF_LOG: ${{ inputs.terraform-log-level }}
+  AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/web_identity_token_file
+
+jobs:
+  terraform:
+    name: "Terraform deployment"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Retrieve Web Identity Token
+        run: |
+          curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value' > $AWS_WEB_IDENTITY_TOKEN_FILE
+
+      - name: Authenticate with AWS
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-region: ${{ inputs.aws-region }}
+          role-session-name: ${{ github.event.repository.name }}
+          role-to-assume: ${{ inputs.aws-role-arn }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+
+      - name: Terraform Format
+        id: fmt
+        run: terraform fmt -check
+        continue-on-error: true
+
+      - name: Terraform Init
+        id: init
+        run: terraform init -backend-config="bucket=${{ inputs.aws-s3-bucket-name }}" -backend-config="key=${{ inputs.terraform-state-key }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-dynamodb-table-name }}"
+
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate -no-color
+
+      - name: Terraform plan
+        id: plan
+        if: github.event_name == 'pull_request'
+        run: terraform plan -var-file=${{ inputs.terraform-values-file }} -no-color -input=false
+        continue-on-error: true
+
+      - name: Add PR Comment
+        uses: actions/github-script@v6
+        if: github.event_name == 'pull_request'
+        env:
+          PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
+        with:
+          script: |
+            // 1. Retrieve existing bot comments for the PR
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            })
+            const botComment = comments.find(comment => {
+              return comment.user.type === 'Bot' && comment.body.includes('Terraform Format and Style')
+            })
+
+            // 2. Prepare format of the comment
+            const output = `#### Terraform Format and Style: 🖌 \`${{ steps.fmt.outcome }}\`
+            #### Terraform Initialisation: ⚙️ \`${{ steps.init.outcome }}\`
+            #### Terraform Validation: 🤖 \`${{ steps.validate.outcome }}\`
+
+            <details><summary>Validation Output</summary>
+
+            \`\`\`\n
+            ${{ steps.validate.outputs.stdout }}
+            \`\`\`
+
+            </details>
+
+            #### Terraform Plan: 📖 \`${{ steps.plan.outcome }}\`
+
+            <details><summary>Show Plan</summary>
+
+            \`\`\`\n
+            ${process.env.PLAN}
+            \`\`\`
+
+            </details>
+
+            *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+            // 3. If we have a comment, update it, otherwise create a new one
+            if (botComment) {
+              github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: output
+              })
+            } else {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: output
+              })
+            }
+
+      - name: Terraform Plan Status
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
+
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform apply -var-file=${{ inputs.terraform-values-file }} -auto-approve -input=false
