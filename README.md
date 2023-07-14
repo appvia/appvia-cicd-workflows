@@ -4,7 +4,7 @@ This repository contains a collection of GitHub Actions workflow templates that 
 
 ## Workflows
 
-- [Terraform Plan & Apply](./docs/generic-terraform-plan-and-apply.md)
+- [Terraform Plan & Apply](https://github.com/appvia/appvia-cicd-workflows/actions/workflows/generic-terraform-plan-and-apply.yml)
 
 ## License
 
