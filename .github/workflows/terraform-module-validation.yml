@@ -20,7 +20,7 @@ jobs:
       result: ${{ steps.format.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
@@ -35,7 +35,7 @@ jobs:
       result: ${{ steps.lint.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Setup Linter
         uses: terraform-linters/setup-tflint@v3
       - name: Linter Initialize
@@ -50,7 +50,7 @@ jobs:
       result: ${{ steps.init.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
@@ -65,7 +65,7 @@ jobs:
       result: ${{ steps.validate.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
@@ -83,7 +83,7 @@ jobs:
       result: ${{ steps.docs.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Terraform Docs
         id: docs
         uses: terraform-docs/gh-actions@v1.0.0
