@@ -155,7 +155,7 @@ jobs:
             * 🤖 Terraform Validation:       \`${{ needs.terraform-plan.outputs.result-validate }}\`
             * 📖 Terraform Plan:             \`${{ needs.terraform-plan.outputs.result-plan }}\`
 
-            <details><summary>**Output: 📖 Terraform Plan**</summary>
+            <details><summary><b>Output: 📖 Terraform Plan</b></summary>
 
             \`\`\`\n
             ${{ needs.terraform-plan.outputs.plan-output }}
