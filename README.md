@@ -4,7 +4,8 @@ This repository contains a collection of GitHub Actions workflow templates that 
 
 ## Workflows
 
-- [Terraform Plan & Apply](./docs/generic-terraform-plan-and-apply.md)
+- [Terraform Plan & Apply (AWS)](./docs/terraform-plan-and-apply-aws.md)
+- [Terraform Module Validation](./docs/terraform-module-validation.md)
 
 ## License
 
