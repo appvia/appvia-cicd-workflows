@@ -150,7 +150,7 @@ jobs:
             const output = `### Pull Request Review Status
             * 🖌 Terraform Format and Style: \`${{ needs.terraform-format.outputs.result }}\`
             * 🔍 Terraform Linting:          \`${{ needs.terraform-lint.outputs.result }}\`
-            * 🔧 AWS Authentication:         \`${{ needs.terraform-plan.outputs.result-auth }}\`
+            * 🔑 AWS Authentication:         \`${{ needs.terraform-plan.outputs.result-auth }}\`
             * 🔧 Terraform Initialisation:   \`${{ needs.terraform-plan.outputs.result-init }}\`
             * 🤖 Terraform Validation:       \`${{ needs.terraform-plan.outputs.result-validate }}\`
             * 📖 Terraform Plan:             \`${{ needs.terraform-plan.outputs.result-plan }}\`
