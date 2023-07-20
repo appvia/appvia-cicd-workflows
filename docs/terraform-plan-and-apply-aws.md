@@ -32,7 +32,7 @@ This GitHub Actions workflow template ([terraform-plan-and-apply-aws.yml](../.gi
 
 Create a new workflow file in your Terraform repository (e.g. `.github/workflows/terraform.yml`) with the below contents:
 ```yml
-name: Terraform Plan and Apply
+name: Terraform
 on:
   push:
     branches:
@@ -44,7 +44,7 @@ on:
 jobs:
   terraform:
       uses: appvia/appvia-cicd-workflows/.github/workflows/terraform-plan-and-apply-aws.yml@main
-      name: Terraform Plan and Apply
+      name: Plan and Apply
       with:
         aws-role-arn: ${{ vars.AWS_ROLE_ARN }}
         aws-s3-bucket-name: ${{ vars.AWS_TERRAFORM_STATE_S3_BUCKET_NAME }}

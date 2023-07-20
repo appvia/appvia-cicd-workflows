@@ -30,7 +30,7 @@ on:
         type: string
 
       terraform-log-level:
-        default: 'INFO'
+        default: ''
         description: 'The log level of terraform'
         required: false
         type: string
@@ -95,14 +95,14 @@ jobs:
         run: tflint -f compact
   terraform-plan:
     name: "Terraform Plan"
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ${{ inputs.runs-on }}
     outputs:
       result-auth: ${{ steps.auth.outcome }}
       result-init: ${{ steps.init.outcome }}
       result-validate: ${{ steps.validate.outcome }}
       result-plan: ${{ steps.plan.outcome }}
-      plan-output: ${{ steps.plan.outputs.stdout }}
+      plan-stdout: ${{ steps.plan.outputs.stdout }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
@@ -124,6 +124,7 @@ jobs:
           aws-region: ${{ inputs.aws-region }}
           role-session-name: ${{ github.event.repository.name }}
           role-to-assume: ${{ inputs.aws-role-arn }}
+          mask-aws-account-id: 'no'
       - name: Terraform Init
         id: init
         run: terraform init -backend-config="bucket=${{ inputs.aws-s3-bucket-name }}" -backend-config="key=${{ inputs.terraform-state-key }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-dynamodb-table-name }}" -backend-config="region=${{ inputs.aws-region }}"
@@ -132,7 +133,13 @@ jobs:
         run: terraform validate -no-color
       - name: Terraform plan
         id: plan
-        run: terraform plan -var-file=${{ inputs.terraform-values-file }} -no-color -input=false
+        run: |
+          terraform plan -var-file=${{ inputs.terraform-values-file }} -no-color -input=false -out=tfplan
+      - name: Upload tfplan
+        uses: actions/upload-artifact@v3
+        with:
+          name: tfplan
+          path: tfplan
   update-pr:
     name: "Update PR"
     if: github.event_name == 'pull_request' && (success() || failure())
@@ -144,6 +151,8 @@ jobs:
     steps:
       - name: Add PR Comment
         uses: actions/github-script@v6
+        env:
+          PLAN: "${{ needs.terraform-plan.outputs.plan-stdout }}"
         with:
           script: |
             // 1. Retrieve existing bot comments for the PR
@@ -156,25 +165,37 @@ jobs:
               return comment.user.type === 'Bot' && comment.body.includes('Pull Request Review Status')
             })
 
-            // 2. Prepare format of the comment
+            // 2. Check output length
+            const PLAN = process.env.PLAN || '';
+            const excludedStrings = ["Refreshing state...", "Reading...", "Read complete after"];
+            const filteredLines = PLAN.split('\n').filter(line => 
+              !excludedStrings.some(excludedStr => line.includes(excludedStr))
+            );
+            var planOutput = filteredLines.join('\n').trim();
+            if (planOutput.length < 1 || planOutput.length > 65000) {
+              planOutput = "Terraform Plan output is too large, please view the workflow run logs directly."
+            }
+
+            // 3. Prepare format of the comment
             const output = `### Pull Request Review Status
-            * 🖌 Terraform Format and Style: \`${{ needs.terraform-format.outputs.result }}\`
-            * 🔍 Terraform Linting:          \`${{ needs.terraform-lint.outputs.result }}\`
-            * 🔑 AWS Authentication:         \`${{ needs.terraform-plan.outputs.result-auth }}\`
-            * 🔧 Terraform Initialisation:   \`${{ needs.terraform-plan.outputs.result-init }}\`
-            * 🤖 Terraform Validation:       \`${{ needs.terraform-plan.outputs.result-validate }}\`
-            * 📖 Terraform Plan:             \`${{ needs.terraform-plan.outputs.result-plan }}\`
+            * 🖌 <b>Terraform Format and Style:</b> \`${{ needs.terraform-format.outputs.result }}\`
+            * 🔍 <b>Terraform Linting:</b>          \`${{ needs.terraform-lint.outputs.result }}\`
+            * 🔑 <b>AWS Authentication:</b>         \`${{ needs.terraform-plan.outputs.result-auth }}\`
+            * 🔧 <b>Terraform Initialisation:</b>   \`${{ needs.terraform-plan.outputs.result-init }}\`
+            * 🤖 <b>Terraform Validation:</b>       \`${{ needs.terraform-plan.outputs.result-validate }}\`
+            * 📖 <b>Terraform Plan:</b>             \`${{ needs.terraform-plan.outputs.result-plan }}\`
 
             <details><summary><b>Output: 📖 Terraform Plan</b></summary>
 
-            \`\`\`\n
-            ${{ needs.terraform-plan.outputs.plan-output }}
+            \`\`\`
+            ${planOutput}
             \`\`\`
             </details>
 
-            *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+            *<b>Pusher:</b> @${{ github.actor }}, <b>Action:</b> \`${{ github.event_name }}\`*
+            *<b>Workflow Run Link:</b> ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}*`;
 
-            // 3. If we have a comment, update it, otherwise create a new one
+            // 4. If we have a comment, update it, otherwise create a new one
             if (botComment) {
               github.rest.issues.updateComment({
                 owner: context.repo.owner,
@@ -198,6 +219,7 @@ jobs:
     needs:
       - terraform-format
       - terraform-lint
+      - terraform-plan
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
@@ -222,5 +244,9 @@ jobs:
       - name: Terraform Init
         id: init
         run: terraform init -backend-config="bucket=${{ inputs.aws-s3-bucket-name }}" -backend-config="key=${{ inputs.terraform-state-key }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-dynamodb-table-name }}" -backend-config="region=${{ inputs.aws-region }}"
+      - name: Download tfplan
+        uses: actions/download-artifact@v3
+        with:
+          name: tfplan
       - name: Terraform Apply
-        run: terraform apply -var-file=${{ inputs.terraform-values-file }} -auto-approve -input=false
+        run: terraform apply -auto-approve -input=false tfplan
