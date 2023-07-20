@@ -23,6 +23,12 @@ on:
         required: true
         type: string
 
+      runs-on:
+        default: 'ubuntu-latest'
+        description: 'The runner to use'
+        required: false
+        type: string
+
       terraform-log-level:
         default: 'INFO'
         description: 'The log level of terraform'
@@ -90,7 +96,7 @@ jobs:
   terraform-plan:
     name: "Terraform Plan"
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     outputs:
       result-auth: ${{ steps.auth.outcome }}
       result-init: ${{ steps.init.outcome }}
@@ -184,7 +190,7 @@ jobs:
   terraform-apply:
     name: "Terraform Apply"
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     needs:
       - terraform-format
       - terraform-lint
