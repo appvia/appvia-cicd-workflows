@@ -51,6 +51,10 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
+      - name: Setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
@@ -66,6 +70,10 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
+      - name: Setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
@@ -116,13 +124,14 @@ jobs:
 
             // 2. Prepare format of the comment
             const output = `### Pull Request Review Status
-            * 🖌 Terraform Format and Style: \`${{ needs.terraform-format.outputs.result }}\`
-            * 🔍 Terraform Linting:          \`${{ needs.terraform-lint.outputs.result }}\`
-            * 🔧 Terraform Initialisation:   \`${{ needs.terraform-init.outputs.result }}\`
-            * 🤖 Terraform Validation:       \`${{ needs.terraform-validate.outputs.result }}\`
-            * 📖 Terraform Documentation:    \`${{ needs.terraform-docs.outputs.result }}\`
+            * 🖌 <b>Terraform Format and Style:</b> \`${{ needs.terraform-format.outputs.result }}\`
+            * 🔍 <b>Terraform Linting:</b>          \`${{ needs.terraform-lint.outputs.result }}\`
+            * 🔧 <b>Terraform Initialisation:</b>   \`${{ needs.terraform-init.outputs.result }}\`
+            * 🤖 <b>Terraform Validation:</b>       \`${{ needs.terraform-validate.outputs.result }}\`
+            * 📖 <b>Terraform Documentation:</b>    \`${{ needs.terraform-docs.outputs.result }}\`
 
-            *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+            *<b>Pusher:</b> @${{ github.actor }}, <b>Action:</b> \`${{ github.event_name }}\`*
+            *<b>Workflow Run Link:</b> ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}*`;
 
             // 3. If we have a comment, update it, otherwise create a new one
             if (botComment) {
