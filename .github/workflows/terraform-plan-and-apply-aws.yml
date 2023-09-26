@@ -12,19 +12,16 @@ on:
         required: false
         type: string
 
-      aws-role-arn:
-        description: 'The AWS role to assume'
+      aws-ro-role-arn:
+        description: 'The Read Only AWS role to assume for PR branch applies'
         required: true
         type: string
 
-<<<<<<< Updated upstream
-=======
       aws-rw-role-arn:
           description: 'The Read/Write AWS role to assume for main branch applies'
           required: true
           type: string
 
->>>>>>> Stashed changes
       aws-s3-bucket-name:
         description: 'The AWS S3 bucket to store the terraform state'
         required: true
@@ -142,7 +139,7 @@ jobs:
         with:
           aws-region: ${{ inputs.aws-region }}
           role-session-name: ${{ github.event.repository.name }}
-          role-to-assume: ${{ inputs.aws-role-arn }}
+          role-to-assume: ${{ inputs.aws-ro-role-arn }}
           mask-aws-account-id: 'no'
       - name: Terraform Init
         id: init
@@ -302,7 +299,7 @@ jobs:
         with:
           aws-region: ${{ inputs.aws-region }}
           role-session-name: ${{ github.event.repository.name }}
-          role-to-assume: ${{ inputs.aws-role-arn }}
+          role-to-assume: ${{ inputs.aws-rw-role-arn }}
       - name: Terraform Init
         id: init
         run: terraform init -backend-config="bucket=${{ inputs.aws-s3-bucket-name }}" -backend-config="key=${{ inputs.terraform-state-key }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-dynamodb-table-name }}" -backend-config="region=${{ inputs.aws-region }}"
