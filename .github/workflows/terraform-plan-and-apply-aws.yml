@@ -17,6 +17,14 @@ on:
         required: true
         type: string
 
+<<<<<<< Updated upstream
+=======
+      aws-rw-role-arn:
+          description: 'The Read/Write AWS role to assume for main branch applies'
+          required: true
+          type: string
+
+>>>>>>> Stashed changes
       aws-s3-bucket-name:
         description: 'The AWS S3 bucket to store the terraform state'
         required: true
