@@ -5,7 +5,6 @@ on:
       infracost-api-key:
         description: 'The API key for infracost'
         required: false
-
     inputs:
       aws-region:
         default: 'eu-west-2'
@@ -88,7 +87,7 @@ jobs:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Terraform Format
         id: format
-        run: terraform fmt -check
+        uses: dflook/terraform-fmt-check@v1
   terraform-lint:
     name: "Terraform Lint"
     runs-on: ubuntu-latest
@@ -151,7 +150,6 @@ jobs:
         with:
           name: tfplan
           path: tfplan
-
   get-cost-estimate:
     name: "Get Cost Estimate"
     if: github.event_name == 'pull_request' && ${{ inputs.enable-infracost }}
