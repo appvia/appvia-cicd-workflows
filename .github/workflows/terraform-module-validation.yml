@@ -3,7 +3,7 @@ on:
   workflow_call:
     inputs:
       terraform-version:
-        default: '1.5.2'
+        default: '1.5.7'
         description: 'The version of terraform to use'
         required: false
         type: string
