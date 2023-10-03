@@ -1,6 +1,11 @@
 name: Terraform Validate, Plan & Apply
 on:
   workflow_call:
+    secrets:
+      infracost-api-key:
+        description: 'The API key for infracost'
+        required: false
+
     inputs:
       aws-region:
         default: 'eu-west-2'
@@ -22,6 +27,12 @@ on:
         description: 'The AWS DynamoDB table to store the terraform state'
         required: true
         type: string
+
+      enable-infracost:
+        default: true
+        description: 'Whether to run infracost on the Terraform Plan (secrets.infracost-api-key must be set if enabled)'
+        required: false
+        type: boolean
 
       runs-on:
         default: 'ubuntu-latest'
@@ -48,7 +59,7 @@ on:
         type: string
 
       terraform-version:
-        default: '1.5.2'
+        default: '1.5.7'
         description: 'The version of terraform to use'
         required: false
         type: string
@@ -140,6 +151,36 @@ jobs:
         with:
           name: tfplan
           path: tfplan
+
+  get-cost-estimate:
+    name: "Get Cost Estimate"
+    if: github.event_name == 'pull_request' && ${{ inputs.enable-infracost }}
+    runs-on: ubuntu-latest
+    needs:
+      - terraform-plan
+    steps:
+      - name: Setup Infracost
+        uses: infracost/actions/setup@v2
+        with:
+          api-key: ${{ secrets.infracost-api-key }}
+          currency: GBP
+      - name: Download tfplan
+        uses: actions/download-artifact@v3
+        with:
+          name: tfplan
+      - name: Generate Infracost Cost Estimate
+        run: |
+          infracost breakdown --path=tfplan \
+            --format=json \
+            --out-file=/tmp/infracost.json
+      - name: Post Infracost comment
+        run: |
+          infracost comment github --path=/tmp/infracost.json \
+            --repo=$GITHUB_REPOSITORY \
+            --github-token=${{github.token}} \
+            --pull-request=${{github.event.pull_request.number}} \
+            --behavior=update
+
   update-pr:
     name: "Update PR"
     if: github.event_name == 'pull_request' && (success() || failure())
