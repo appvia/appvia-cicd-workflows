@@ -16,7 +16,8 @@ This GitHub Actions workflow template ([terraform-module-validation.yml](../.git
 3. **Terraform Init:** Provider plugins and modules are installed.
 4. **Terraform Validate:** The Terraform configuration files are run through validation to check for syntax errors and other issues.
 5. **Terraform Docs:** The terraform-docs utility is run to check that the documentation for the module is up to date.
-6. **Add PR Comment:** If the workflow is triggered via a Pull Request, a comment will be added to the ticket containing the results of the previous steps.
+6. **Get Cost Estimate:** The infracost utility is run to get a cost estimate for the module. A comment will be added to the pull request with the cost estimate.
+7. **Add PR Comment:** If the workflow is triggered via a Pull Request, a comment will be added to the ticket containing the results of the previous steps.
 
 ## Inputs
 
@@ -41,6 +42,8 @@ jobs:
   terraform:
       uses: appvia/appvia-cicd-workflows/.github/workflows/terraform-module-validation.yml@main
       name: Module Validation
+      secrets:
+        infracost-api-key: ${{ secrets.ORG_INFRACOST_API_KEY }}
 ```
 
 **Note:** This template may change over time, so it is recommended that you point to a tagged version rather than the main branch.
