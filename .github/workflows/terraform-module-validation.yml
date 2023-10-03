@@ -1,7 +1,16 @@
 name: Terraform Module Validation
 on:
   workflow_call:
+    secrets:
+      infracost-api-key:
+        description: 'The API key for infracost'
+        required: false
     inputs:
+      enable-infracost:
+        default: true
+        description: 'Whether to run infracost on the Terraform Plan (secrets.infracost-api-key must be set if enabled)'
+        required: false
+        type: boolean
       terraform-version:
         default: '1.5.7'
         description: 'The version of terraform to use'
@@ -97,6 +106,56 @@ jobs:
         uses: terraform-docs/gh-actions@v1.0.0
         with:
           fail-on-diff: true
+  get-cost-estimate:
+    name: "Get Cost Estimate"
+    if: github.event_name == 'pull_request' && ${{ inputs.enable-infracost }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Infracost
+        uses: infracost/actions/setup@v2
+        with:
+          api-key: ${{ secrets.infracost-api-key }}
+          currency: GBP
+      - name: Checkout PR Base Branch
+        uses: actions/checkout@v3
+        with:
+          ref: '${{ github.event.pull_request.base.ref }}'
+      - name: Check For TF Files
+        id: baseline
+        run: |
+          if ls *.tf 2>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Generate Cost Estimate Baseline
+        if: steps.baseline.outputs.exists == 'true'
+        run: |
+          infracost breakdown --path=${TF_ROOT} \
+            --format=json \
+            --out-file=/tmp/infracost-base.json
+      - name: Checkout PR branch
+        uses: actions/checkout@v3
+      - name: Generate Cost Estimate Difference
+        if: steps.baseline.outputs.exists == 'true'
+        run: |
+          infracost diff --path=${TF_ROOT} \
+            --format=json \
+            --compare-to=/tmp/infracost-base.json \
+            --out-file=/tmp/infracost.json
+      - name: Generate Infracost Cost Estimate
+        if: steps.baseline.outputs.exists == 'false'
+        run: |
+          infracost breakdown --path=${TF_ROOT} \
+            --format=json \
+            --out-file=/tmp/infracost.json
+      - name: Post Infracost comment
+        run: |
+          infracost comment github --path=/tmp/infracost.json \
+            --repo=$GITHUB_REPOSITORY \
+            --github-token=${{github.token}} \
+            --pull-request=${{github.event.pull_request.number}} \
+            --behavior=update
   update-pr:
     name: "Update PR"
     if: github.event_name == 'pull_request' && (success() || failure())
