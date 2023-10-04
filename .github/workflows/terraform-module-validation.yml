@@ -7,7 +7,7 @@ on:
         required: false
     inputs:
       enable-infracost:
-        default: true
+        default: false
         description: 'Whether to run infracost on the Terraform Plan (secrets.infracost-api-key must be set if enabled)'
         required: false
         type: boolean
