@@ -153,6 +153,7 @@ jobs:
         with:
           name: tfplan
           path: "tfplan*"
+          retention-days: 1
   get-cost-estimate:
     name: "Get Cost Estimate"
     if: github.event_name == 'pull_request' && ${{ inputs.enable-infracost }}
