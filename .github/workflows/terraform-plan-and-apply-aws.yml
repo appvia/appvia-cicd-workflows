@@ -141,15 +141,18 @@ jobs:
       - name: Terraform Validate
         id: validate
         run: terraform validate -no-color
-      - name: Terraform plan
+      - name: Terraform Plan
         id: plan
         run: |
           terraform plan -var-file=${{ inputs.terraform-values-file }} -no-color -input=false -out=tfplan
+      - name: Terraform Plan JSON Output
+        run: |
+          terraform show -json tfplan > tfplan.json
       - name: Upload tfplan
         uses: actions/upload-artifact@v3
         with:
           name: tfplan
-          path: tfplan
+          path: "tfplan*"
   get-cost-estimate:
     name: "Get Cost Estimate"
     if: github.event_name == 'pull_request' && ${{ inputs.enable-infracost }}
@@ -168,7 +171,7 @@ jobs:
           name: tfplan
       - name: Generate Infracost Cost Estimate
         run: |
-          infracost breakdown --path=tfplan \
+          infracost breakdown --path=tfplan.json \
             --format=json \
             --out-file=/tmp/infracost.json
       - name: Post Infracost comment
