@@ -12,8 +12,9 @@ This GitHub Actions workflow template ([terraform-plan-and-apply-aws.yml](../.gi
 5. **Terraform Init:** The Terraform backend is initialised and any necessary provider plugins are downloaded. The required inputs for AWS S3 bucket name and DynamoDB table name must be provided for storing the Terraform state.
 6. **Terraform Validate:** The workflow validates the Terraform configuration files using the terraform validate command to check for syntax errors and other issues.
 7. **Terraform Plan:** A Terraform plan is generated with a specified values file (overridable via inputs) using the terraform plan command.
-8. **Add PR Comment:** If the workflow is triggered via a Pull Request, a comment will be added to the ticket containing the results of the previous steps.
-9. **Apply Changes:** If the workflow is triggered by a push to the main branch, it automatically applies the changes using the terraform apply command. This step should be used with caution as AWS infrastructure is modified at this point.
+8. **Get Cost Estimate:** The infracost utility is run to get a cost estimate on the Terraform Plan output. A comment will be added to the pull request with the cost estimate.
+9. **Add PR Comment:** If the workflow is triggered via a Pull Request, a comment will be added to the ticket containing the results of the previous steps.
+10. **Apply Changes:** If the workflow is triggered by a push to the main branch, it automatically applies the changes using the terraform apply command. This step should be used with caution as AWS infrastructure is modified at this point.
 
 ## Inputs
 
@@ -45,10 +46,13 @@ jobs:
   terraform:
       uses: appvia/appvia-cicd-workflows/.github/workflows/terraform-plan-and-apply-aws.yml@main
       name: Plan and Apply
+      secrets:
+        infracost-api-key: ${{ secrets.ORG_INFRACOST_API_KEY }}
       with:
         aws-role-arn: ${{ vars.AWS_ROLE_ARN }}
         aws-s3-bucket-name: ${{ vars.AWS_TERRAFORM_STATE_S3_BUCKET_NAME }}
         aws-dynamodb-table-name: ${{ vars.AWS_TERRAFORM_STATE_DYNAMODB_TABLE_NAME }}
+        enable-infracost: true
 ```
 
 **Note:** This template may change over time, so it is recommended that you point to a tagged version rather than the main branch.
