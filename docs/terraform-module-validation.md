@@ -44,6 +44,8 @@ jobs:
       name: Module Validation
       secrets:
         infracost-api-key: ${{ secrets.ORG_INFRACOST_API_KEY }}
+      with:
+        enable-infracost: true
 ```
 
 **Note:** This template may change over time, so it is recommended that you point to a tagged version rather than the main branch.

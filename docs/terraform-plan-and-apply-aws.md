@@ -52,6 +52,7 @@ jobs:
         aws-role-arn: ${{ vars.AWS_ROLE_ARN }}
         aws-s3-bucket-name: ${{ vars.AWS_TERRAFORM_STATE_S3_BUCKET_NAME }}
         aws-dynamodb-table-name: ${{ vars.AWS_TERRAFORM_STATE_DYNAMODB_TABLE_NAME }}
+        enable-infracost: true
 ```
 
 **Note:** This template may change over time, so it is recommended that you point to a tagged version rather than the main branch.
