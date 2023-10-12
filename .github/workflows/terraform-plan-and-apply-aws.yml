@@ -17,13 +17,13 @@ on:
         required: false
         type: string
 
-      aws-ro-role-arn:
+      aws-readonly-role-arn:
         default: 'arn:aws:iam::${{ github.event.workflow_call.inputs.aws-account-id }}:role/githubactions-readonly'
         description: 'The Read Only AWS role to assume for PR branch applies'
         required: false
         type: string
 
-      aws-rw-role-arn:
+      aws-readwrite-role-arn:
         default: 'arn:aws:iam::${{ github.event.workflow_call.inputs.aws-account-id }}:role/githubactions-readwrite'
         description: 'The Read/Write AWS role to assume for main branch applies'
         required: false
