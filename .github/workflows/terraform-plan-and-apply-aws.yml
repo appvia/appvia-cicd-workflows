@@ -6,6 +6,11 @@ on:
         description: 'The API key for infracost'
         required: false
     inputs:
+      aws-account-id:
+        description: 'The AWS account to deploy to'
+        required: true
+        type: string  
+
       aws-region:
         default: 'eu-west-2'
         description: 'The AWS region to deploy to'
@@ -13,21 +18,25 @@ on:
         type: string
 
       aws-ro-role-arn:
+        default: 'arn:aws:iam::${{ github.event.workflow_call.inputs.aws-account-id }}:role/githubactions-readonly'
         description: 'The Read Only AWS role to assume for PR branch applies'
-        required: true
+        required: false
         type: string
 
       aws-rw-role-arn:
-          description: 'The Read/Write AWS role to assume for main branch applies'
-          required: true
-          type: string
+        default: 'arn:aws:iam::${{ github.event.workflow_call.inputs.aws-account-id }}:role/githubactions-readwrite'
+        description: 'The Read/Write AWS role to assume for main branch applies'
+        required: false
+        type: string
 
       aws-s3-bucket-name:
+        default: '${{ github.event.workflow_call.inputs.aws-account-id }}-${{ github.event.workflow_call.inputs.aws-region }}-tfstate'
         description: 'The AWS S3 bucket to store the terraform state'
-        required: true
+        required: false
         type: string
 
       aws-dynamodb-table-name:
+        default: '${{ github.event.workflow_call.inputs.aws-account-id }}-${{ github.event.workflow_call.inputs.inputs.aws-region }}-tflock'
         description: 'The AWS DynamoDB table to store the terraform state'
         required: true
         type: string
