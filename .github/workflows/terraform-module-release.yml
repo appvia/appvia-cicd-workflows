@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       runs-on:
-        default: '["ubuntu-latest"]'
+        default: "['ubuntu-latest']"
         description: 'The runner to use'
         required: false
         type: string   

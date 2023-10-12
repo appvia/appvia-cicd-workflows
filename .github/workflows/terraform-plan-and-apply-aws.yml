@@ -48,7 +48,7 @@ on:
         type: boolean
       
       runs-on:
-        default: '["ubuntu-latest"]'
+        default: "['ubuntu-latest']"
         description: 'The runner to use'
         required: false
         type: string
