@@ -14,7 +14,7 @@ on:
       aws-dynamodb-table-name:
         default: '${{ github.event.workflow_call.inputs.aws-account-id }}-${{ github.event.workflow_call.inputs.inputs.aws-region }}-tflock'
         description: 'The AWS DynamoDB table to store the terraform state'
-        required: true
+        required: false
         type: string
       
       aws-readonly-role-arn:
