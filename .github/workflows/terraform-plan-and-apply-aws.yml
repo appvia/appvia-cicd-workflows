@@ -9,73 +9,74 @@ on:
       aws-account-id:
         description: 'The AWS account to deploy to'
         required: true
-        type: string  
-
-      aws-region:
-        default: 'eu-west-2'
-        description: 'The AWS region to deploy to'
-        required: false
         type: string
-
-      aws-readonly-role-arn:
-        default: 'arn:aws:iam::${{ github.event.workflow_call.inputs.aws-account-id }}:role/githubactions-readonly'
-        description: 'The Read Only AWS role to assume for PR branch applies'
-        required: false
-        type: string
-
-      aws-readwrite-role-arn:
-        default: 'arn:aws:iam::${{ github.event.workflow_call.inputs.aws-account-id }}:role/githubactions-readwrite'
-        description: 'The Read/Write AWS role to assume for main branch applies'
-        required: false
-        type: string
-
-      aws-s3-bucket-name:
-        default: '${{ github.event.workflow_call.inputs.aws-account-id }}-${{ github.event.workflow_call.inputs.aws-region }}-tfstate'
-        description: 'The AWS S3 bucket to store the terraform state'
-        required: false
-        type: string
-
+      
       aws-dynamodb-table-name:
         default: '${{ github.event.workflow_call.inputs.aws-account-id }}-${{ github.event.workflow_call.inputs.inputs.aws-region }}-tflock'
         description: 'The AWS DynamoDB table to store the terraform state'
         required: true
         type: string
-
+      
+      aws-readonly-role-arn:
+        default: 'arn:aws:iam::${{ github.event.workflow_call.inputs.aws-account-id }}:role/githubactions-readonly'
+        description: 'The Read Only AWS role to assume for PR branch applies'
+        required: false
+        type: string
+      
+      aws-readwrite-role-arn:
+        default: 'arn:aws:iam::${{ github.event.workflow_call.inputs.aws-account-id }}:role/githubactions-readwrite'
+        description: 'The Read/Write AWS role to assume for main branch applies'
+        required: false
+        type: string
+      
+      aws-region:
+        default: 'eu-west-2'
+        description: 'The AWS region to deploy to'
+        required: false
+        type: string
+      
+      aws-s3-bucket-name:
+        default: '${{ github.event.workflow_call.inputs.aws-account-id }}-${{ github.event.workflow_call.inputs.aws-region }}-tfstate'
+        description: 'The AWS S3 bucket to store the terraform state'
+        required: false
+        type: string
+      
       enable-infracost:
         default: false
         description: 'Whether to run infracost on the Terraform Plan (secrets.infracost-api-key must be set if enabled)'
         required: false
         type: boolean
-
+      
       runs-on:
         default: 'ubuntu-latest'
         description: 'The runner to use'
         required: false
         type: string
-
+      
       terraform-log-level:
         default: ''
         description: 'The log level of terraform'
         required: false
         type: string
-
+      
       terraform-state-key:
         default: '${{ github.event.repository.name }}.tfstate'
         description: 'The key of the terraform state'
         required: false
         type: string
-
+      
       terraform-values-file:
         default: 'values/production.tfvars'
         description: 'The values file to use'
         required: false
         type: string
-
+      
       terraform-version:
         default: '1.5.7'
         description: 'The version of terraform to use'
         required: false
         type: string
+      
 
 env:
   TF_LOG: ${{ inputs.terraform-log-level }}
