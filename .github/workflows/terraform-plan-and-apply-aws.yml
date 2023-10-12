@@ -149,7 +149,7 @@ jobs:
         with:
           aws-region: ${{ inputs.aws-region }}
           role-session-name: ${{ github.event.repository.name }}
-          role-to-assume: ${{ inputs.aws-ro-role-arn }}
+          role-to-assume: ${{ inputs.aws-readonly-role-arn }}
           mask-aws-account-id: 'no'
       - name: Terraform Init
         id: init
@@ -309,7 +309,7 @@ jobs:
         with:
           aws-region: ${{ inputs.aws-region }}
           role-session-name: ${{ github.event.repository.name }}
-          role-to-assume: ${{ inputs.aws-rw-role-arn }}
+          role-to-assume: ${{ inputs.aws-readwrite-role-arn }}
       - name: Terraform Init
         id: init
         run: terraform init -backend-config="bucket=${{ inputs.aws-s3-bucket-name }}" -backend-config="key=${{ inputs.terraform-state-key }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-dynamodb-table-name }}" -backend-config="region=${{ inputs.aws-region }}"
