@@ -2,11 +2,17 @@ name: Terraform Module Release
 
 on:
   workflow_call:
+    inputs:
+      runs-on:
+        default: '["ubuntu-latest"]'
+        description: 'The runner to use'
+        required: false
+        type: string   
 
 jobs:
   release:
     name: Github Release
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(github.event.inputs.runs-on) }}
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Clone repo

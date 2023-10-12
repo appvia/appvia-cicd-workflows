@@ -48,7 +48,7 @@ on:
         type: boolean
       
       runs-on:
-        default: 'ubuntu-latest'
+        default: '["ubuntu-latest"]'
         description: 'The runner to use'
         required: false
         type: string
@@ -90,7 +90,7 @@ permissions:
 jobs:
   terraform-format:
     name: "Terraform Format"
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(github.event.inputs.runs-on) }}
     outputs:
       result: ${{ steps.format.outcome }}
     steps:
@@ -105,7 +105,7 @@ jobs:
         uses: dflook/terraform-fmt-check@v1
   terraform-lint:
     name: "Terraform Lint"
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(github.event.inputs.runs-on) }}
     outputs:
       result: ${{ steps.lint.outcome }}
     steps:
@@ -121,7 +121,7 @@ jobs:
   terraform-plan:
     name: "Terraform Plan"
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
-    runs-on: ${{ inputs.runs-on }}
+    runs-on: ${{ fromJSON(github.event.inputs.runs-on) }}
     outputs:
       result-auth: ${{ steps.auth.outcome }}
       result-init: ${{ steps.init.outcome }}
@@ -182,7 +182,7 @@ jobs:
   get-cost-estimate:
     name: "Get Cost Estimate"
     if: github.event_name == 'pull_request' && inputs.enable-infracost
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(github.event.inputs.runs-on) }}
     needs:
       - terraform-plan
     steps:
@@ -211,7 +211,7 @@ jobs:
   update-pr:
     name: "Update PR"
     if: github.event_name == 'pull_request' && (success() || failure())
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(github.event.inputs.runs-on) }}
     needs:
       - terraform-format
       - terraform-lint
@@ -284,7 +284,7 @@ jobs:
   terraform-apply:
     name: "Terraform Apply"
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ${{ inputs.runs-on }}
+    runs-on: ${{ fromJSON(github.event.inputs.runs-on) }}
     needs:
       - terraform-format
       - terraform-lint
