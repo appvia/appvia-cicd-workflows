@@ -12,7 +12,7 @@ on:
         type: string
       
       aws-dynamodb-table-name:
-        default: '${{ github.event.workflow_call.inputs.aws-account-id }}-${{ github.event.workflow_call.inputs.inputs.aws-region }}-tflock'
+        default: '${{ github.event.workflow_call.inputs.aws-account-id }}-${{ github.event.workflow_call.inputs.aws-region }}-tflock'
         description: 'The AWS DynamoDB table to store the terraform state'
         required: false
         type: string
