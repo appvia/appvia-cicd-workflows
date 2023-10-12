@@ -108,7 +108,7 @@ jobs:
           fail-on-diff: true
   get-cost-estimate:
     name: "Get Cost Estimate"
-    if: github.event_name == 'pull_request' && ${{ inputs.enable-infracost }}
+    if: github.event_name == 'pull_request' && inputs.enable-infracost
     runs-on: ubuntu-latest
     steps:
       - name: Setup Infracost
