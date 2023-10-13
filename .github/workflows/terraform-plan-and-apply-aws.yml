@@ -111,6 +111,7 @@ jobs:
       result-auth: ${{ steps.auth.outcome }}
       result-init: ${{ steps.init.outcome }}
       result-validate: ${{ steps.validate.outcome }}
+      result-s3-backend-check: ${{ steps.s3-backend-check.outcome }}
       result-plan: ${{ steps.plan.outcome }}
       plan-stdout: ${{ steps.plan.outputs.stdout }}
     steps:
@@ -141,6 +142,15 @@ jobs:
       - name: Terraform Validate
         id: validate
         run: terraform validate -no-color
+      - name: Terraform S3 Backend Check
+        id: s3-backend-check
+        run: |
+          if grep -q 'backend "s3"' terraform.tf; then
+            echo "Terraform configuration references an S3 backend."
+          else
+            echo "Terraform configuration does not reference an S3 backend."
+            exit 1
+          fi
       - name: Terraform Plan
         id: plan
         run: |
@@ -226,6 +236,7 @@ jobs:
             * 🔑 <b>AWS Authentication:</b>         \`${{ needs.terraform-plan.outputs.result-auth }}\`
             * 🔧 <b>Terraform Initialisation:</b>   \`${{ needs.terraform-plan.outputs.result-init }}\`
             * 🤖 <b>Terraform Validation:</b>       \`${{ needs.terraform-plan.outputs.result-validate }}\`
+            * 📁 <b>Terraform S3 Backend:</b>       \`${{ needs.terraform-plan.outputs.result-s3-backend-check }}\`
             * 📖 <b>Terraform Plan:</b>             \`${{ needs.terraform-plan.outputs.result-plan }}\`
 
             <details><summary><b>Output: 📖 Terraform Plan</b></summary>
