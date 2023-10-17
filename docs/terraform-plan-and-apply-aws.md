@@ -49,10 +49,12 @@ jobs:
       secrets:
         infracost-api-key: ${{ secrets.ORG_INFRACOST_API_KEY }}
       with:
-        aws-role-arn: ${{ vars.AWS_ROLE_ARN }}
-        aws-s3-bucket-name: ${{ vars.AWS_TERRAFORM_STATE_S3_BUCKET_NAME }}
-        aws-dynamodb-table-name: ${{ vars.AWS_TERRAFORM_STATE_DYNAMODB_TABLE_NAME }}
+        aws-account-id: 123456789012
+        aws-role-name-readonly: your-role-ro
+        aws-role-name-readwrite: your-role-rw
         enable-infracost: true
 ```
+
+The `aws-role-name` inputs are optional and will default to the repository name (with the respective `-ro` or `-rw` suffixes) if not provided.
 
 **Note:** This template may change over time, so it is recommended that you point to a tagged version rather than the main branch.
