@@ -23,8 +23,8 @@ jobs:
     strategy:
       matrix:
         module: ${{ fromJson(needs.modules.outputs.modules) }} 
-    uses: appvia/appvia-cicd-workflows/.github/workflows/terraform-plan.yml@main
-    name: Terraform
+    uses: appvia/appvia-cicd-workflows/.github/workflows/terraform-plan-aws.yml
+    name: Terraform Run
     secrets:
         infracost-api-key: ${{ secrets.ORG_INFRACOST_API_KEY }}
     with:
