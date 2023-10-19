@@ -5,7 +5,7 @@ on:
     - monorepo
   pull_request:
     branches:
-    - main
+    - monorepo
 
 jobs:
   modules:
