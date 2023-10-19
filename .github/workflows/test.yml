@@ -1,0 +1,35 @@
+name: Terraform Plan Generic Modules
+on:
+  push:
+    branches:
+    - monorepo
+  pull_request:
+    branches:
+    - main
+
+jobs:
+  modules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: theappnest/terraform-monorepo-action@master
+        id: modules
+        with:
+          monitored: 'main.tf'
+    outputs:
+      modules: ${{ steps.modules.outputs.modules }}
+
+  terraform:
+    needs: modules
+    strategy:
+      matrix:
+        module: ${{ fromJson(needs.modules.outputs.modules) }} 
+    uses: appvia/appvia-cicd-workflows/.github/workflows/terraform-plan.yml@main
+    name: Terraform
+    secrets:
+        infracost-api-key: ${{ secrets.ORG_INFRACOST_API_KEY }}
+    with:
+      aws-account-id: 536471746696
+      enable-infracost: true
+      terraform-version: 1.5.7
+      terraform-values-file: '${{ fromJson(needs.modules.outputs.modules) }}/values/production.tfvars'
+      working-directory: ${{ matrix.module }}
