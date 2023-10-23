@@ -184,7 +184,7 @@ jobs:
       - name: Terraform Plan
         id: plan
         run: |
-          terraform plan -var primary_location=${{ inputs.azure-primary-region }}  -var-file=${{ inputs.terraform-values-file }} -no-color -input=false -out=tfplan
+          terraform plan -var-file=${{ inputs.terraform-values-file }} -no-color -input=false -out=tfplan
       
       - name: Terraform Plan JSON Output
         run: |
