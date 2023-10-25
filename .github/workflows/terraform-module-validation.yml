@@ -16,6 +16,11 @@ on:
         description: 'The version of terraform to use'
         required: false
         type: string
+      working-directory:
+        default: '.'
+        description: 'Working directory'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -25,6 +30,9 @@ jobs:
   terraform-format:
     name: "Terraform Format"
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     outputs:
       result: ${{ steps.format.outcome }}
     steps:
@@ -40,6 +48,9 @@ jobs:
   terraform-lint:
     name: "Terraform Lint"
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     outputs:
       result: ${{ steps.lint.outcome }}
     steps:
@@ -55,6 +66,9 @@ jobs:
   terraform-init:
     name: "Terraform Init"
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     outputs:
       result: ${{ steps.init.outcome }}
     steps:
@@ -74,6 +88,9 @@ jobs:
   terraform-validate:
     name: "Terraform Validate"
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     outputs:
       result: ${{ steps.validate.outcome }}
     steps:
@@ -96,6 +113,9 @@ jobs:
   terraform-docs:
     name: "Terraform Docs"
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     outputs:
       result: ${{ steps.docs.outcome }}
     steps:
@@ -110,6 +130,9 @@ jobs:
     name: "Get Cost Estimate"
     if: github.event_name == 'pull_request' && inputs.enable-infracost
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Setup Infracost
         uses: infracost/actions/setup@v2
@@ -178,7 +201,7 @@ jobs:
               issue_number: context.issue.number,
             })
             const botComment = comments.find(comment => {
-              return comment.user.type === 'Bot' && comment.body.includes('Pull Request Review Status')
+              return comment.user.type === 'Bot' && comment.body.includes('Pull Request Review Status') && comment.body.includes('<b>Working Directory:</b> \`${{ inputs.working-directory }}\`')
             })
 
             // 2. Prepare format of the comment
@@ -189,6 +212,7 @@ jobs:
             * 🤖 <b>Terraform Validation:</b>       \`${{ needs.terraform-validate.outputs.result }}\`
             * 📖 <b>Terraform Documentation:</b>    \`${{ needs.terraform-docs.outputs.result }}\`
 
+            *<b>Working Directory:</b> \`${{ inputs.working-directory }}\`*
             *<b>Pusher:</b> @${{ github.actor }}, <b>Action:</b> \`${{ github.event_name }}\`*
             *<b>Workflow Run Link:</b> ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}*`;
 
