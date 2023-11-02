@@ -5,16 +5,18 @@ on:
       infracost-api-key:
         description: 'The API key for infracost'
         required: false
-      AZURE_CLIENT_ID:
-        description: 'The Azure Client ID'
-        required: true
-      AZURE_TENANT_ID:
-        description: 'The Azure Tenant ID'
-        required: true
       GH_TOKEN:
          description: 'The GitHub Token'   
          required: true
     inputs:
+      AZURE_CLIENT_ID:
+        description: 'The Azure Client ID'
+        required: true
+        type: string
+      AZURE_TENANT_ID:
+        description: 'The Azure Tenant ID'
+        required: true
+        type: string
       terraform-subscription-id:
         description: 'The azure subscription ID to deploy to'
         required: true
@@ -75,7 +77,6 @@ on:
      
 env:
   TF_LOG: ${{ inputs.terraform-log-level }}
-  AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/web_identity_token_file
 
 permissions:
   id-token: write
@@ -121,9 +122,9 @@ jobs:
     runs-on: ${{ inputs.runs-on }}
     environment: ${{ inputs.environment  }}
     env:
-      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_CLIENT_ID: ${{ inputs.AZURE_CLIENT_ID }}
       ARM_SUBSCRIPTION_ID: ${{ inputs.terraform-subscription-id }}
-      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_TENANT_ID: ${{ inputs.AZURE_TENANT_ID }}
     outputs:
       result-auth: ${{ steps.auth.outcome }}
       result-init: ${{ steps.init.outcome }}
@@ -152,8 +153,8 @@ jobs:
       - name: Login via Az module
         uses: azure/login@v1
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          client-id: ${{ inputs.AZURE_CLIENT_ID }}
+          tenant-id: ${{ inputs.AZURE_TENANT_ID }}
           subscription-id: ${{ inputs.terraform-subscription-id }}
 
       - name: Run Terraform init
@@ -163,8 +164,8 @@ jobs:
             -backend-config="storage_account_name=${{ inputs.terraform-backend-storage-account-name }}" \
             -backend-config="container_name=${{ inputs.terraform-backend-container-name }}" \
             -backend-config="key=${{ inputs.terraform-state-key }}" \
-            -backend-config="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
-            -backend-config="client_id=${{ secrets.AZURE_CLIENT_ID }}"
+            -backend-config="tenant_id=${{ inputs.AZURE_TENANT_ID }}" \
+            -backend-config="client_id=${{ inputs.AZURE_CLIENT_ID }}"
         working-directory: ${{ inputs.terraform-working-directory }}
 
       - name: Terraform Validate
@@ -266,7 +267,6 @@ jobs:
             const output = `### Pull Request Review Status
             * 🖌 <b>Terraform Format and Style:</b> \`${{ needs.terraform-format.outputs.result }}\`
             * 🔍 <b>Terraform Linting:</b>          \`${{ needs.terraform-lint.outputs.result }}\`
-            * 🔑 <b>AWS Authentication:</b>         \`${{ needs.terraform-plan.outputs.result-auth }}\`
             * 🔧 <b>Terraform Initialisation:</b>   \`${{ needs.terraform-plan.outputs.result-init }}\`
             * 🤖 <b>Terraform Validation:</b>       \`${{ needs.terraform-plan.outputs.result-validate }}\`
             * 📁 <b>Terraform S3 Backend:</b>       \`${{ needs.terraform-plan.outputs.result-s3-backend-check }}\`
@@ -305,9 +305,9 @@ jobs:
     runs-on: ${{ inputs.runs-on }}
     environment: ${{ inputs.environment  }}
     env:
-      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_CLIENT_ID: ${{ inputs.AZURE_CLIENT_ID }}
       ARM_SUBSCRIPTION_ID: ${{ inputs.terraform-subscription-id }}
-      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_TENANT_ID: ${{ inputs.AZURE_TENANT_ID }}
     needs:
       - terraform-format
       - terraform-lint
@@ -331,8 +331,8 @@ jobs:
       - name: Login via Az module
         uses: azure/login@v1
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          client-id: ${{ inputs.AZURE_CLIENT_ID }}
+          tenant-id: ${{ inputs.AZURE_TENANT_ID }}
           subscription-id: ${{ inputs.terraform-subscription-id }}
   
       - name: Run Terraform init
@@ -343,8 +343,8 @@ jobs:
             -backend-config="storage_account_name=${{ inputs.terraform-backend-storage-account-name }}" \
             -backend-config="container_name=${{ inputs.terraform-backend-container-name }}" \
             -backend-config="key=${{ inputs.terraform-state-key }}" \
-            -backend-config="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
-            -backend-config="client_id=${{ secrets.AZURE_CLIENT_ID }}"
+            -backend-config="tenant_id=${{ inputs.AZURE_TENANT_ID }}" \
+            -backend-config="client_id=${{ inputs.AZURE_CLIENT_ID }}"
   
       - name: Download tfplan
         uses: actions/download-artifact@v3
