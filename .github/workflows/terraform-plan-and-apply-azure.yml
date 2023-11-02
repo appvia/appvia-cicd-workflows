@@ -45,10 +45,10 @@ on:
         required: true
         description: 'The primary Azure region to deploy to'
         default: 'uksouth'
-      # environment: 
-      #   type: string
-      #   required: true
-      #   description: 'The environment to deploy to'
+      environment: 
+        type: string
+        required: true
+        description: 'The environment to deploy to'
       terraform-values-file:
         default: 'values/production.tfvars'
         description: 'The values file to use'
