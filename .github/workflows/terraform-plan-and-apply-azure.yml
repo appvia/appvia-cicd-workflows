@@ -21,10 +21,6 @@ on:
         description: 'The azure subscription ID to deploy to'
         required: true
         type: string
-      # terraform-backend-subscription-id:
-      #   description: 'Azure subscription ID for the backend storage account'
-      #   type: string
-      #   required: true
       terraform-state-key:
         default: '${{ github.event.repository.name }}.tfstate'
         description: 'The key of the terraform state'
@@ -164,7 +160,7 @@ jobs:
       - name: Run Terraform init
         run: |
           terraform init -var use_oidc=true -var state_resource_group_name=${{ inputs.state-resource-group-name }}   -lock=false \
-            -backend-config="subscription_id=${{ inputs.terraform-backend-subscription-id }}" \
+            -backend-config="subscription_id=${{ inputs.terraform-subscription-id }}" \
             -backend-config="storage_account_name=${{ inputs.terraform-backend-storage-account-name }}" \
             -backend-config="container_name=${{ inputs.terraform-backend-container-name }}" \
             -backend-config="key=${{ inputs.terraform-state-key }}" \
@@ -343,7 +339,7 @@ jobs:
         working-directory: ${{ inputs.terraform-working-directory }}
         run: |
           terraform init  -lock=false \
-            -backend-config="subscription_id=${{ inputs.terraform-backend-subscription-id }}" \
+            -backend-config="subscription_id=${{ inputs.terraform-subscription-id }}" \
             -backend-config="storage_account_name=${{ inputs.terraform-backend-storage-account-name }}" \
             -backend-config="container_name=${{ inputs.terraform-backend-container-name }}" \
             -backend-config="key=${{ inputs.terraform-state-key }}" \
