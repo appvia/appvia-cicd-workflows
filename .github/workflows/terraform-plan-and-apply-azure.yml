@@ -38,7 +38,7 @@ on:
         description: 'The name of the state storage account container'
         required: false
         type: string
-        description: 'tfstate'
+        default: 'tfstate'
       state-resource-group-name:
         type: string
         required: false
