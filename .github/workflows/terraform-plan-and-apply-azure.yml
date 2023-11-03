@@ -31,10 +31,14 @@ on:
         required: false
         type: string
       terraform-backend-storage-account-name:
-        # default: todo 
         description: 'The name of the state storage account'
         required: true
         type: string
+      terraform-backend-container-name:
+        description: 'The name of the state storage account container'
+        required: false
+        type: string
+        description: 'tfstate'
       state-resource-group-name:
         type: string
         required: false
