@@ -42,7 +42,7 @@ on:
         default: 'rg-alz-state'
       azure-primary-region: 
         type: string
-        required: true
+        required: false
         description: 'The primary Azure region to deploy to'
         default: 'uksouth'
       environment: 
