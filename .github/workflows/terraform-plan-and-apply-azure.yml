@@ -20,7 +20,7 @@ on:
       terraform-subscription-id:
         description: 'The azure subscription ID to deploy to'
         required: true
-        type: number
+        type: string
       # terraform-backend-subscription-id:
       #   description: 'Azure subscription ID for the backend storage account'
       #   type: string
