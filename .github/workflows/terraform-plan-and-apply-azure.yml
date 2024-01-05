@@ -165,7 +165,8 @@ jobs:
             -backend-config="container_name=${{ inputs.terraform-backend-container-name }}" \
             -backend-config="key=${{ inputs.terraform-state-key }}" \
             -backend-config="tenant_id=${{ inputs.AZURE_TENANT_ID }}" \
-            -backend-config="client_id=${{ inputs.AZURE_CLIENT_ID }}"
+            -backend-config="client_id=${{ inputs.AZURE_CLIENT_ID }}" \
+            -backend-config="ARM_USE_MSI=true" 
         working-directory: ${{ inputs.terraform-working-directory }}
 
       - name: Terraform Validate
