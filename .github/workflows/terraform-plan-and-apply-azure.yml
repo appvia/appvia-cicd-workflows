@@ -159,13 +159,14 @@ jobs:
 
       - name: Run Terraform init
         run: |
-          terraform init -var state_resource_group_name=${{ inputs.state-resource-group-name }} -lock=false \
+          terraform init -lock=false \
             -backend-config="subscription_id=${{ inputs.terraform-subscription-id }}" \
             -backend-config="storage_account_name=${{ inputs.terraform-backend-storage-account-name }}" \
             -backend-config="container_name=${{ inputs.terraform-backend-container-name }}" \
             -backend-config="key=${{ inputs.terraform-state-key }}" \
             -backend-config="tenant_id=${{ inputs.AZURE_TENANT_ID }}" \
             -backend-config="client_id=${{ inputs.AZURE_CLIENT_ID }}" \
+            -backend-config="resource_group_name=${{ inputs.state-resource-group-name }}" \
             -backend-config="use_msi=true" 
         working-directory: ${{ inputs.terraform-working-directory }}
 
