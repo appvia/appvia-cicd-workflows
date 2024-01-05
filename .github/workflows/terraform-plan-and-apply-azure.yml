@@ -159,7 +159,7 @@ jobs:
 
       - name: Run Terraform init
         run: |
-          terraform init  -lock=false \
+          terraform init -var state_resource_group_name=${{ inputs.state-resource-group-name }} -lock=false \
             -backend-config="subscription_id=${{ inputs.terraform-subscription-id }}" \
             -backend-config="storage_account_name=${{ inputs.terraform-backend-storage-account-name }}" \
             -backend-config="container_name=${{ inputs.terraform-backend-container-name }}" \
