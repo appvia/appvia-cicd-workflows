@@ -166,8 +166,6 @@ jobs:
             -backend-config="key=${{ inputs.terraform-state-key }}" \
             -backend-config="tenant_id=${{ inputs.AZURE_TENANT_ID }}" \
             -backend-config="client_id=${{ inputs.AZURE_CLIENT_ID }}" \
-            -backend-config="resource_group_name=${{ inputs.state-resource-group-name }}" \
-            -backend-config="use_msi=true" 
         working-directory: ${{ inputs.terraform-working-directory }}
 
       - name: Terraform Validate
