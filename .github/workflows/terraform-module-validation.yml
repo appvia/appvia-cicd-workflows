@@ -3,22 +3,22 @@ on:
   workflow_call:
     secrets:
       infracost-api-key:
-        description: 'The API key for infracost'
+        description: "The API key for infracost"
         required: false
     inputs:
       enable-infracost:
         default: false
-        description: 'Whether to run infracost on the Terraform Plan (secrets.infracost-api-key must be set if enabled)'
+        description: "Whether to run infracost on the Terraform Plan (secrets.infracost-api-key must be set if enabled)"
         required: false
         type: boolean
       terraform-version:
-        default: '1.5.7'
-        description: 'The version of terraform to use'
+        default: "1.5.7"
+        description: "The version of terraform to use"
         required: false
         type: string
       working-directory:
-        default: '.'
-        description: 'Working directory'
+        default: "."
+        description: "Working directory"
         required: false
         type: string
 
@@ -37,9 +37,9 @@ jobs:
       result: ${{ steps.format.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Terraform Format
@@ -55,7 +55,7 @@ jobs:
       result: ${{ steps.lint.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup Linter
         uses: terraform-linters/setup-tflint@v3
       - name: Linter Initialize
@@ -73,13 +73,13 @@ jobs:
       result: ${{ steps.init.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 16
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Terraform Init
@@ -95,13 +95,13 @@ jobs:
       result: ${{ steps.validate.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 16
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Terraform Init
@@ -120,7 +120,7 @@ jobs:
       result: ${{ steps.docs.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Terraform Docs
         id: docs
         uses: terraform-docs/gh-actions@v1.0.0
@@ -140,9 +140,9 @@ jobs:
           api-key: ${{ secrets.infracost-api-key }}
           currency: GBP
       - name: Checkout PR Base Branch
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
-          ref: '${{ github.event.pull_request.base.ref }}'
+          ref: "${{ github.event.pull_request.base.ref }}"
       - name: Check For TF Files
         id: baseline
         run: |
@@ -158,7 +158,7 @@ jobs:
             --format=json \
             --out-file=/tmp/infracost-base.json
       - name: Checkout PR branch
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Generate Cost Estimate Difference
         if: steps.baseline.outputs.exists == 'true'
         run: |
