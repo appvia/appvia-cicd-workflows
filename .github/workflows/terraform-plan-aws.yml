@@ -1,4 +1,4 @@
-## Plan only workflow for testing purposes. Allows working directory 
+## Plan only workflow for testing purposes. Allows working directory
 # distinction to test with different modules.
 
 name: Terraform Validate and Plan
@@ -6,64 +6,63 @@ on:
   workflow_call:
     secrets:
       infracost-api-key:
-        description: 'The API key for infracost'
+        description: "The API key for infracost"
         required: false
     inputs:
       aws-account-id:
-        description: 'The AWS account ID to deploy to'
+        description: "The AWS account ID to deploy to"
         required: true
         type: number
       aws-role-name-readonly:
-        default: '${{ github.event.repository.name }}-ro'
-        description: 'The Read Only AWS role to assume for PR branch executions'
+        default: "${{ github.event.repository.name }}-ro"
+        description: "The Read Only AWS role to assume for PR branch executions"
         required: false
         type: string
       aws-role-name-readwrite:
-        default: '${{ github.event.repository.name }}-rw'
-        description: 'The Read/Write AWS role to assume for main branch executions'
+        default: "${{ github.event.repository.name }}-rw"
+        description: "The Read/Write AWS role to assume for main branch executions"
         required: false
         type: string
       aws-region:
-        default: 'eu-west-2'
-        description: 'The AWS region to deploy to'
+        default: "eu-west-2"
+        description: "The AWS region to deploy to"
         required: false
         type: string
       enable-infracost:
         default: false
-        description: 'Whether to run infracost on the Terraform Plan (secrets.infracost-api-key must be set if enabled)'
+        description: "Whether to run infracost on the Terraform Plan (secrets.infracost-api-key must be set if enabled)"
         required: false
         type: boolean
       runs-on:
         default: "ubuntu-latest"
-        description: 'Single label value for the GitHub runner to use (custom value only applies to Terraform Plan and Apply steps)'
+        description: "Single label value for the GitHub runner to use (custom value only applies to Terraform Plan and Apply steps)"
         required: false
         type: string
       terraform-log-level:
-        default: ''
-        description: 'The log level of terraform'
+        default: ""
+        description: "The log level of terraform"
         required: false
         type: string
       terraform-state-key:
-        default: '${{ github.event.repository.name }}.tfstate'
-        description: 'The key of the terraform state'
+        default: "${{ github.event.repository.name }}.tfstate"
+        description: "The key of the terraform state"
         required: false
         type: string
       terraform-values-file:
-        default: 'values/production.tfvars'
-        description: 'The values file to use'
+        default: "values/production.tfvars"
+        description: "The values file to use"
         required: false
         type: string
       terraform-version:
-        default: '1.5.7'
-        description: 'The version of terraform to use'
+        default: "1.5.7"
+        description: "The version of terraform to use"
         required: false
         type: string
       working-directory:
-        default: '.'
-        description: 'Working directory'
+        default: "."
+        description: "Working directory"
         required: false
         type: string
-    
 
 env:
   TF_LOG: ${{ inputs.terraform-log-level }}
@@ -79,15 +78,15 @@ jobs:
     name: "Terraform Format"
     runs-on: ubuntu-latest
     defaults:
-        run:
-          working-directory: ${{ inputs.working-directory }}
+      run:
+        working-directory: ${{ inputs.working-directory }}
     outputs:
       result: ${{ steps.format.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Terraform Format
@@ -97,15 +96,15 @@ jobs:
     name: "Terraform Lint"
     runs-on: ubuntu-latest
     defaults:
-        run:
-          working-directory: ${{ inputs.working-directory }}
+      run:
+        working-directory: ${{ inputs.working-directory }}
     outputs:
       result: ${{ steps.lint.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup Linter
-        uses: terraform-linters/setup-tflint@v3
+        uses: terraform-linters/setup-tflint@v4
       - name: Linter Initialize
         run: tflint --init
       - name: Linting Code
@@ -116,8 +115,8 @@ jobs:
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ${{ inputs.runs-on }}
     defaults:
-        run:
-          working-directory: ${{ inputs.working-directory }}
+      run:
+        working-directory: ${{ inputs.working-directory }}
     outputs:
       result-auth: ${{ steps.auth.outcome }}
       result-init: ${{ steps.init.outcome }}
@@ -127,13 +126,13 @@ jobs:
       plan-stdout: ${{ steps.plan.outputs.stdout }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 16
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Retrieve Web Identity Token for AWS Authentication
@@ -149,12 +148,12 @@ jobs:
           fi
       - name: Authenticate with AWS
         id: auth
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ inputs.aws-region }}
           role-session-name: ${{ github.event.repository.name }}
           role-to-assume: arn:aws:iam::${{ inputs.aws-account-id }}:role/${{ steps.role.outputs.name }}
-          mask-aws-account-id: 'no'
+          mask-aws-account-id: "no"
       - name: Terraform Init
         id: init
         run: terraform init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ inputs.terraform-state-key }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
@@ -178,7 +177,7 @@ jobs:
         run: |
           terraform show -json tfplan > tfplan.json
       - name: Upload tfplan
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: tfplan
           path: "tfplan*"
@@ -188,8 +187,8 @@ jobs:
     if: github.event_name == 'pull_request' && inputs.enable-infracost
     runs-on: ubuntu-latest
     defaults:
-        run:
-          working-directory: ${{ inputs.working-directory }}
+      run:
+        working-directory: ${{ inputs.working-directory }}
     needs:
       - terraform-plan
     steps:
@@ -199,7 +198,7 @@ jobs:
           api-key: ${{ secrets.infracost-api-key }}
           currency: GBP
       - name: Download tfplan
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: tfplan
       - name: Generate Infracost Cost Estimate
