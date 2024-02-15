@@ -98,7 +98,7 @@ jobs:
         run: tflint -f compact
   terraform-plan:
     name: "Terraform Plan"
-    if: (github.event_name == 'pull_request') || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.ref == 'refs/heads/main' && github.event_name == 'schedule')
+    if: (github.event_name == 'pull_request') || (github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'push'))
     runs-on: ${{ inputs.runs-on }}
     outputs:
       result-auth: ${{ steps.auth.outcome }}
@@ -269,7 +269,7 @@ jobs:
 
   terraform-apply:
     name: "Terraform Apply"
-    if: (github.ref == 'refs/heads/main' && github.event_name == 'push') || (github.ref == 'refs/heads/main' && github.event_name == 'schedule')
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule')
     runs-on: ${{ inputs.runs-on }}
     needs:
       - terraform-format
