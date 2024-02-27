@@ -12,7 +12,7 @@ on:
         required: false
         type: boolean
       terraform-version:
-        default: "1.5.7"
+        default: "1.7.1"
         description: "The version of terraform to use"
         required: false
         type: string
