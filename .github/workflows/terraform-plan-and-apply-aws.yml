@@ -6,6 +6,10 @@ on:
         description: "The API key for infracost"
         required: false
     inputs:
+      additional-dir:
+        description: Uploads additional directorie as an artifact from the terraform plan
+        required: false
+        type: string
       aws-account-id:
         description: "The AWS account ID to deploy to"
         required: true
@@ -165,6 +169,13 @@ jobs:
           name: tfplan
           path: "tfplan*"
           retention-days: 1
+      - name: Upload additional directory
+        if: inputs.additional-dir
+        uses: actions/upload-artifact@v4
+        with:
+          name: additional-dir
+          path: ${{ inputs.additional-dir }}
+          retention-days: 1
   get-cost-estimate:
     name: "Get Cost Estimate"
     if: github.event_name == 'pull_request' && inputs.enable-infracost
@@ -303,5 +314,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: tfplan
+      - name: Download Additional Directories
+        if: inputs.additional-dir
+        uses: actions/download-artifact@v4
+        with:
+          name: additional-dir
       - name: Terraform Apply
         run: terraform apply -auto-approve -input=false tfplan
