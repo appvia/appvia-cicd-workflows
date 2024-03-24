@@ -45,6 +45,7 @@ jobs:
       - name: Terraform Format
         id: format
         run: terraform fmt -check
+
   terraform-lint:
     name: "Terraform Lint"
     runs-on: ubuntu-latest
@@ -63,6 +64,7 @@ jobs:
       - name: Linting Code
         id: lint
         run: tflint -f compact
+
   terraform-init:
     name: "Terraform Init"
     runs-on: ubuntu-latest
@@ -85,6 +87,7 @@ jobs:
       - name: Terraform Init
         id: init
         run: terraform init
+
   terraform-validate:
     name: "Terraform Validate"
     runs-on: ubuntu-latest
@@ -110,6 +113,21 @@ jobs:
       - name: Terraform Validate
         id: validate
         run: terraform validate -no-color
+
+  terraform-tfsec:
+    name: "Terraform Tfsec"
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.tfsec.outcome }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: tfsec
+        id: tfsec
+        uses: aquasecurity/tfsec-action@v1.0.0
+        with:
+          fomrat: sarif
+
   terraform-docs:
     name: "Terraform Docs"
     runs-on: ubuntu-latest
@@ -126,6 +144,7 @@ jobs:
           output-file: README.md
           output-method: inject
           working-dir: ${{ inputs.working-directory }}
+
   get-cost-estimate:
     name: "Get Cost Estimate"
     if: github.event_name == 'pull_request' && inputs.enable-infracost
@@ -179,6 +198,7 @@ jobs:
             --github-token=${{github.token}} \
             --pull-request=${{github.event.pull_request.number}} \
             --behavior=update
+
   update-pr:
     name: "Update PR"
     if: github.event_name == 'pull_request' && (success() || failure())
@@ -188,6 +208,7 @@ jobs:
       - terraform-lint
       - terraform-init
       - terraform-validate
+      - terraform-tfsec
       - terraform-docs
     steps:
       - name: Add PR Comment
@@ -210,6 +231,7 @@ jobs:
             * 🔍 <b>Terraform Linting:</b>          \`${{ needs.terraform-lint.outputs.result }}\`
             * 🔧 <b>Terraform Initialisation:</b>   \`${{ needs.terraform-init.outputs.result }}\`
             * 🤖 <b>Terraform Validation:</b>       \`${{ needs.terraform-validate.outputs.result }}\`
+            * 📁 <b>Terraform Security Check:</b>   \`${{ needs.terraform-tfsec.outputs.result-tfsec }}\`
             * 📖 <b>Terraform Documentation:</b>    \`${{ needs.terraform-docs.outputs.result }}\`
 
             *<b>Working Directory:</b> \`${{ inputs.working-directory }}\`*
