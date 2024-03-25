@@ -187,7 +187,7 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-      - name: Tfsec
+      - name: Terraform Tfsec
         id: tfsec
         uses: aquasecurity/tfsec-action@v1.0.0
         with:
