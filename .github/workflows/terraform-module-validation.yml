@@ -118,11 +118,11 @@ jobs:
     name: "Terraform Tfsec"
     runs-on: ubuntu-latest
     outputs:
-      result: ${{ steps.tfsec.outcome }}
+      result-tfsec: ${{ steps.tfsec.outcome }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-      - name: tfsec
+      - name: Tfsec
         id: tfsec
         uses: aquasecurity/tfsec-action@v1.0.0
         with:
