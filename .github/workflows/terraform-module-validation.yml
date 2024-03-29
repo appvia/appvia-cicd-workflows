@@ -119,17 +119,25 @@ jobs:
         id: validate
         run: terraform -chdir=${{ inputs.terraform-dir }} validate -no-color
 
-  terraform-tfsec:
-    name: "Terraform Tfsec"
+  terraform-security:
+    name: "Static Security Analysis"
     runs-on: ubuntu-latest
     outputs:
-      result-tfsec: ${{ steps.tfsec.outcome }}
+      result: ${{ steps.tfsec.outcome }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-      - name: Tfsec
-        id: tfsec
-        uses: aquasecurity/tfsec-action@v1.0.0
+      - name: Run Trivy vulnerability
+        id: security
+        uses: aquasecurity/trivy-action@0.19.0
+        with:
+          exit-code: "1"
+          format: "sarif"
+          hide-progress: true
+          ignore-unfixed: true
+          output: "trivy-results.sarif"
+          scan-type: "config"
+          severity: "CRITICAL,HIGH"
 
   terraform-docs:
     name: "Terraform Docs"
@@ -211,7 +219,7 @@ jobs:
       - terraform-lint
       - terraform-init
       - terraform-validate
-      - terraform-tfsec
+      - terraform-security
       - terraform-docs
     steps:
       - name: Add PR Comment
@@ -234,7 +242,7 @@ jobs:
             * 🔍 <b>Terraform Linting:</b>          \`${{ needs.terraform-lint.outputs.result }}\`
             * 🔧 <b>Terraform Initialisation:</b>   \`${{ needs.terraform-init.outputs.result }}\`
             * 🤖 <b>Terraform Validation:</b>       \`${{ needs.terraform-validate.outputs.result }}\`
-            * 📁 <b>Terraform Security Check:</b>   \`${{ needs.terraform-tfsec.outputs.result-tfsec }}\`
+            * 📁 <b>Terraform Security Check:</b>   \`${{ needs.terraform-security.outputs.result }}\`
             * 📖 <b>Terraform Documentation:</b>    \`${{ needs.terraform-docs.outputs.result }}\`
 
             *<b>Working Directory:</b> \`${{ inputs.working-directory }}\`*
