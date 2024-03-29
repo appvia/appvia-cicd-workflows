@@ -114,7 +114,7 @@ jobs:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Terraform Init
         id: init
-        run: terraform init
+        run: terraform -chdir=${{ inputs.terraform-dir }} init
       - name: Terraform Validate
         id: validate
         run: terraform -chdir=${{ inputs.terraform-dir }} validate -no-color
