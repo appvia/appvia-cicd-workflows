@@ -62,6 +62,12 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+      - name: Terraform Init
+        run: terraform -chdir=${{ inputs.terraform-dir }} init
       - name: Setup Linter
         uses: terraform-linters/setup-tflint@v3
       - name: Linter Initialize
