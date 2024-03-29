@@ -16,6 +16,11 @@ on:
         description: "The version of terraform to use"
         required: false
         type: string
+      terraform-validate-dir:
+        default: "."
+        description: "The directory to validate"
+        required: false
+        type: string
       working-directory:
         default: "."
         description: "Working directory"
@@ -112,7 +117,7 @@ jobs:
         run: terraform init
       - name: Terraform Validate
         id: validate
-        run: terraform validate -no-color
+        run: terraform -chdir=${{ inputs.terraform-validate-dir }} validate -no-color
 
   terraform-tfsec:
     name: "Terraform Tfsec"

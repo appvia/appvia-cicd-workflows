@@ -4,12 +4,11 @@ This GitHub Actions workflow template ([terraform-module-validation.yml](../.git
 
 ## Workflow Jobs
 
-      - terraform-format
-      - terraform-lint
-      - terraform-init
-      - terraform-validate
-      - terraform-docs
-
+- terraform-format
+- terraform-lint
+- terraform-init
+- terraform-validate
+- terraform-docs
 
 1. **Terraform Format:** Runs the terraform fmt command to check that all Terraform files are formatted correctly.
 2. **Terraform Lint:** Runs a terraform lint to check for deprecated syntax, unused declarations, invalid types, and enforcing best practices.
@@ -21,31 +20,32 @@ This GitHub Actions workflow template ([terraform-module-validation.yml](../.git
 
 ## Inputs
 
-| Input | Required? | Default Value | Description |
-|-------|-------------|-----------|---------------|
-| terraform-version | No | 1.5.2 | The version of Terraform to use |
+| Input             | Required? | Default Value | Description                     |
+| ----------------- | --------- | ------------- | ------------------------------- |
+| terraform-version | No        | 1.5.2         | The version of Terraform to use |
 
 ## Usage
 
 Create a new workflow file in your Terraform repository (e.g. `.github/workflows/terraform.yml`) with the below contents:
+
 ```yml
 name: Terraform
 on:
   push:
     branches:
-    - main
+      - main
   pull_request:
     branches:
-    - main
+      - main
 
 jobs:
   terraform:
-      uses: appvia/appvia-cicd-workflows/.github/workflows/terraform-module-validation.yml@main
-      name: Module Validation
-      secrets:
-        infracost-api-key: ${{ secrets.ORG_INFRACOST_API_KEY }}
-      with:
-        enable-infracost: true
+    uses: appvia/appvia-cicd-workflows/.github/workflows/terraform-module-validation.yml@main
+    name: Module Validation
+    secrets:
+      infracost-api-key: ${{ secrets.ORG_INFRACOST_API_KEY }}
+    with:
+      enable-infracost: true
 ```
 
 **Note:** This template may change over time, so it is recommended that you point to a tagged version rather than the main branch.
