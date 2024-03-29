@@ -67,7 +67,7 @@ jobs:
         with:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Terraform Init
-        run: terraform -chdir=${{ inputs.terraform-dir }} init
+        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
       - name: Setup Linter
         uses: terraform-linters/setup-tflint@v3
       - name: Linter Initialize
