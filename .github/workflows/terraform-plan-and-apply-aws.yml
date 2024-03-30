@@ -36,7 +36,7 @@ on:
         type: boolean
       runs-on:
         default: "ubuntu-latest"
-        description: "Single label value for the GitHub runner to use (custom value only applies to Terraform Plan and Apply steps)"
+        description: "Single label value for the GitHub runner to use (custom value only applies to -chdir={{ $inputs.terraform-dir }} Terraform Plan and Apply steps)"
         required: false
         type: string
       terraform-log-level:
@@ -154,10 +154,10 @@ jobs:
           mask-aws-account-id: "no"
       - name: Terraform Init
         id: init
-        run: terraform -chdir={{ $inputs.terraform-dir }} init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ inputs.terraform-state-key }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
+        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ inputs.terraform-state-key }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
       - name: Terraform Validate
         id: validate
-        run: terraform -chdir={{ $inputs.terraform-dir }} validate -no-color
+        run: terraform -chdir=${{ inputs.terraform-dir }} validate -no-color
       - name: Terraform S3 Backend Check
         id: s3-backend-check
         run: |
@@ -170,10 +170,10 @@ jobs:
       - name: Terraform Plan
         id: plan
         run: |
-          terraform -chdir={{ $inputs.terraform-dir }} plan -var-file=${{ inputs.terraform-values-file }} -no-color -input=false -out=tfplan
+          terraform -chdir=${{ inputs.terraform-dir }} plan -var-file=${{ inputs.terraform-values-file }} -no-color -input=false -out=tfplan
       - name: Terraform Plan JSON Output
         run: |
-          terraform -chdir={{ $inputs.terraform-dir }} show -json tfplan > tfplan.json
+          terraform -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
       - name: Upload tfplan
         uses: actions/upload-artifact@v4
         with:
@@ -334,7 +334,7 @@ jobs:
           role-to-assume: arn:aws:iam::${{ inputs.aws-account-id }}:role/${{ inputs.aws-role-name-readwrite }}
       - name: Terraform Init
         id: init
-        run: terraform -chdir={{ $inputs.terraform-dir }} init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ inputs.terraform-state-key }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
+        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ inputs.terraform-state-key }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
       - name: Download tfplan
         uses: actions/download-artifact@v4
         with:
@@ -346,4 +346,4 @@ jobs:
           name: additional-dir
           path: ${{ inputs.additional-dir }}
       - name: Terraform Apply
-        run: terraform -chdir={{ $inputs.terraform-dir }} apply -auto-approve -input=false tfplan
+        run: terraform -chdir=${{ inputs.terraform-dir }} apply -auto-approve -input=false tfplan
