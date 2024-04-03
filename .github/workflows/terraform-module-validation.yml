@@ -128,6 +128,9 @@ jobs:
   terraform-tfsec:
     name: "Terraform Tfsec"
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     outputs:
       result-tfsec: ${{ steps.tfsec.outcome }}
     steps:
@@ -140,6 +143,9 @@ jobs:
   terraform-docs:
     name: "Terraform Docs"
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     outputs:
       result: ${{ steps.docs.outcome }}
     steps:
@@ -152,7 +158,6 @@ jobs:
           fail-on-diff: true
           output-file: README.md
           output-method: inject
-          working-dir: ${{ inputs.working-directory }}
 
   get-cost-estimate:
     name: "Get Cost Estimate"
