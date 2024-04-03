@@ -20,7 +20,7 @@ on:
         required: false
         type: string
       aws-role-name-readwrite:
-        default: "${{ github.event.repository.name }}-rw"
+        default: "${{ github.event.repository.name }}"
         description: "The Read/Write AWS role to assume for main branch executions"
         required: false
         type: string
