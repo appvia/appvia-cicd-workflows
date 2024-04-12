@@ -14,6 +14,10 @@ on:
         description: "The AWS account ID to deploy to"
         required: true
         type: number
+      aws-role:
+        description: "The AWS role to assume for PR branch executions"
+        required: false
+        type: string
       aws-role-name-readonly:
         default: "${{ github.event.repository.name }}-ro"
         description: "The Read Only AWS role to assume for PR branch executions"
@@ -66,8 +70,10 @@ on:
         type: string
 
 env:
+  AWS_READONLY_OVERRIDE_ROLE: ${{ inputs.aws-read-role-name }}
+  AWS_READWRITE_OVERRIDE_ROLE: ${{ inputs.aws-write-role-name }}
+  AWS_ROLE: ${{ inputs.aws-role }}
   TF_LOG: ${{ inputs.terraform-log-level }}
-  AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/web_identity_token_file
 
 permissions:
   id-token: write
@@ -140,9 +146,9 @@ jobs:
         id: role
         run: |
           if [[ "${GITHUB_REF##*/}" == "main" ]]; then
-            echo "name=${{ inputs.aws-role-name-readwrite }}" >> $GITHUB_OUTPUT
+            echo "name=${AWS_READWRITE_OVERRIDE_ROLE:-${AWS_ROLE}}" >> $GITHUB_OUTPUT
           else
-            echo "name=${{ inputs.aws-role-name-readonly }}" >> $GITHUB_OUTPUT
+            echo "name=${AWS_READONLY_OVERRIDE_ROLE:-${AWS_ROLE}-ro}" >> $GITHUB_OUTPUT
           fi
       - name: Authenticate with AWS
         id: auth
