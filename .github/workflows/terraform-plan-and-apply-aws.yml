@@ -215,16 +215,19 @@ jobs:
           path: ${{ inputs.additional-dir }}
           retention-days: 1
 
-  terraform-tfsec:
+  terraform-security:
     name: "Terraform Tfsec"
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     outputs:
-      result-tfsec: ${{ steps.tfsec.outcome }}
+      result: ${{ steps.security.outcome }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-      - name: Terraform Tfsec
-        id: tfsec
+      - name: Tfsec
+        id: security
         uses: aquasecurity/tfsec-action@v1.0.0
 
   get-cost-estimate:
@@ -299,7 +302,7 @@ jobs:
             * 🔍 <b>Terraform Linting:</b>          \`${{ needs.terraform-lint.outputs.result }}\`
             * 🔑 <b>AWS Authentication:</b>         \`${{ needs.terraform-plan.outputs.result-auth }}\`
             * 🔧 <b>Terraform Initialisation:</b>   \`${{ needs.terraform-plan.outputs.result-init }}\`
-            * 👮 <b>Terraform Security Check:</b>   \`${{ needs.terraform-tfsec.outputs.result-tfsec }}\`
+            * 👮 <b>Terraform Security Check:</b>   \`${{ needs.terraform-security.outputs.result }}\`
             * 🤖 <b>Terraform Validation:</b>       \`${{ needs.terraform-plan.outputs.result-validate }}\`
             * 🔘 <b>Terraform Tests:</b>            \`${{ needs.terraform-tests.outputs.result }}\`
             * 📁 <b>Terraform S3 Backend:</b>       \`${{ needs.terraform-plan.outputs.result-s3-backend-check }}\`
