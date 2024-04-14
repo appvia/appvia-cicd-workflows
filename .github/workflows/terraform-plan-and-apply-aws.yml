@@ -136,7 +136,7 @@ jobs:
         run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
       - name: Run Tests
         id: tests
-        run: terraform test -chdir=${{ inputs.terraform-dir }}
+        run: terraform -chdir=${{ inputs.terraform-dir }} test
 
   terraform-plan:
     name: "Terraform Plan"
@@ -216,7 +216,7 @@ jobs:
           retention-days: 1
 
   terraform-security:
-    name: "Terraform Tfsec"
+    name: "Terraform Security"
     runs-on: ubuntu-latest
     defaults:
       run:

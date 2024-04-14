@@ -95,7 +95,7 @@ jobs:
         run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
       - name: Run Tests
         id: tests
-        run: terraform test -chdir=${{ inputs.terraform-dir }}
+        run: terraform -chdir=${{ inputs.terraform-dir }} test
 
   terraform-init:
     name: "Terraform Init"
@@ -147,7 +147,7 @@ jobs:
         run: terraform -chdir=${{ inputs.terraform-dir }} validate -no-color
 
   terraform-security:
-    name: "Terraform Tfsec"
+    name: "Terraform Security"
     runs-on: ubuntu-latest
     defaults:
       run:
