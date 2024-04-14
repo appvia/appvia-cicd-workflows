@@ -244,7 +244,7 @@ jobs:
       - terraform-init
       - terraform-validate
       - terraform-tests
-      - terraform-tfsec
+      - terraform-security
       - terraform-docs
     steps:
       - name: Add PR Comment
