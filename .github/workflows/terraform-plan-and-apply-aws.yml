@@ -46,7 +46,7 @@ on:
         type: boolean
 
       enable-commitlint:
-        default: true
+        default: false
         description: "Whether to run commitlint on the commit message"
         required: false
         type: boolean
