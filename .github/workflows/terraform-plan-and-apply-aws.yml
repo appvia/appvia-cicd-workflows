@@ -73,6 +73,7 @@ env:
   AWS_READONLY_OVERRIDE_ROLE: ${{ inputs.aws-read-role-name }}
   AWS_READWRITE_OVERRIDE_ROLE: ${{ inputs.aws-write-role-name }}
   AWS_ROLE: ${{ inputs.aws-role }}
+  AWS_WEB_IDENTITY_TOKEN_FILE: "/tmp/web_identity_token_file"
   TF_LOG: ${{ inputs.terraform-log-level }}
 
 permissions:
