@@ -1,3 +1,4 @@
+---
 name: Terraform Validate, Plan & Apply
 on:
   workflow_call:
@@ -5,74 +6,98 @@ on:
       infracost-api-key:
         description: "The API key for infracost"
         required: false
+
     inputs:
       additional-dir:
-        description: Uploads additional directorie as an artifact from the terraform plan
+        description: Uploads additional directorie as an artifact from plan stage
         required: false
         type: string
+
       aws-account-id:
         description: "The AWS account ID to deploy to"
         required: true
         type: number
+
       aws-role:
-        default: "${{ github.event.repository.name }}"
-        description: "The AWS role to assume for PR branch executions"
-        required: false
+        description: "The AWS role to assume"
+        required: true
         type: string
+
       aws-read-role-name:
-        description: "The Read Only AWS role to assume for PR branch executions"
+        description: "Overrides the default behavior, and uses a custom role name for read-only access"
         required: false
         type: string
+
       aws-write-role-name:
-        description: "The Read/Write AWS role to assume for main branch executions"
+        description: "Overrides the default behavior, and uses a custom role name for read-write access"
         required: false
         type: string
+
       aws-region:
         default: "eu-west-2"
         description: "The AWS region to deploy to"
         required: false
         type: string
+
       enable-infracost:
         default: false
         description: "Whether to run infracost on the Terraform Plan (secrets.infracost-api-key must be set if enabled)"
         required: false
         type: boolean
+
+      enable-commitlint:
+        default: true
+        description: "Whether to run commitlint on the commit message"
+        required: false
+        type: boolean
+
       runs-on:
         default: "ubuntu-latest"
-        description: "Single label value for the GitHub runner to use (custom value only applies to -chdir={{ $inputs.terraform-dir }} Terraform Plan and Apply steps)"
+        description: "Single label value for the GitHub runner to use (custom value only applies to Terraform Plan and Apply steps)"
         required: false
         type: string
-      terraform-log-level:
-        default: ""
-        description: "The log level of terraform"
-        required: false
-        type: string
-      terraform-state-key:
-        default: "${{ github.event.repository.name }}.tfstate"
-        description: "The key of the terraform state"
-        required: false
-        type: string
+
       terraform-dir:
         default: "."
         description: "The directory to validate"
         required: false
         type: string
+
+      terraform-log-level:
+        default: ""
+        description: "The log level of terraform"
+        required: false
+        type: string
+
+      terraform-state-key:
+        default: "${{ github.event.repository.name }}.tfstate"
+        description: "The key of the terraform state"
+        required: false
+        type: string
+
       terraform-values-file:
         default: "values/production.tfvars"
         description: "The values file to use"
         required: false
         type: string
+
       terraform-version:
         default: "1.7.1"
         description: "The version of terraform to use"
         required: false
         type: string
 
+      working-directory:
+        default: "."
+        description: "The working directory to run terraform commands in"
+        required: false
+        type: string
+
 env:
+  AWS_ROLE: ${{ inputs.aws-role }}
   AWS_READONLY_OVERRIDE_ROLE: ${{ inputs.aws-read-role-name }}
   AWS_READWRITE_OVERRIDE_ROLE: ${{ inputs.aws-write-role-name }}
-  AWS_ROLE: ${{ inputs.aws-role }}
-  AWS_WEB_IDENTITY_TOKEN_FILE: "/tmp/web_identity_token_file"
+  AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/web_identity_token_file
   TF_LOG: ${{ inputs.terraform-log-level }}
 
 permissions:
@@ -84,6 +109,9 @@ jobs:
   terraform-format:
     name: "Terraform Format"
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     outputs:
       result: ${{ steps.format.outcome }}
     steps:
@@ -100,6 +128,9 @@ jobs:
   terraform-lint:
     name: "Terraform Lint"
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     outputs:
       result: ${{ steps.lint.outcome }}
     steps:
@@ -122,7 +153,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ${{ inputs.terraform-dir }}
+        working-directory: ${{ inputs.working-directory }}
     outputs:
       result: ${{ steps.tests.outcome }}
     steps:
@@ -138,10 +169,84 @@ jobs:
         id: tests
         run: terraform -chdir=${{ inputs.terraform-dir }} test
 
+  commitlint:
+    name: "Commitlint"
+    if: inputs.enable-commitlint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    outputs:
+      result: ${{ steps.commitlint.outcome }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 16
+      - name: Install Commitlint
+        run: npm install -g @commitlint/cli @commitlint/config-conventional
+      - name: Run Commitlint
+        id: commitlint
+        run: npx commitlint --from=HEAD~1
+
+  terraform-security:
+    name: "Terraform Security"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    outputs:
+      result: ${{ steps.security.outcome }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: security
+        id: security
+        uses: aquasecurity/security-action@v1.0.0
+
+  terraform-infracost:
+    name: "Get Cost Estimate"
+    if: github.event_name == 'pull_request' && inputs.enable-infracost
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    needs:
+      - terraform-plan
+    steps:
+      - name: Setup Infracost
+        uses: infracost/actions/setup@v2
+        with:
+          api-key: ${{ secrets.infracost-api-key }}
+          currency: GBP
+      - name: Download tfplan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+      - name: Generate Infracost Cost Estimate
+        run: |
+          infracost breakdown --path=tfplan.json \
+            --format=json \
+            --out-file=/tmp/infracost.json
+      - name: Post Infracost comment
+        run: |
+          infracost comment github --path=/tmp/infracost.json \
+            --repo=$GITHUB_REPOSITORY \
+            --github-token=${{github.token}} \
+            --pull-request=${{github.event.pull_request.number}} \
+            --behavior=update
+
   terraform-plan:
     name: "Terraform Plan"
     if: (github.event_name == 'pull_request') || (github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule"]'), github.event_name))
     runs-on: ${{ inputs.runs-on }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     outputs:
       result-auth: ${{ steps.auth.outcome }}
       result-init: ${{ steps.init.outcome }}
@@ -215,59 +320,20 @@ jobs:
           path: ${{ inputs.additional-dir }}
           retention-days: 1
 
-  terraform-security:
-    name: "Terraform Security"
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ inputs.terraform-dir }}
-    outputs:
-      result: ${{ steps.security.outcome }}
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-      - name: Tfsec
-        id: security
-        uses: aquasecurity/tfsec-action@v1.0.0
-
-  get-cost-estimate:
-    name: "Get Cost Estimate"
-    if: github.event_name == 'pull_request' && inputs.enable-infracost
-    runs-on: ubuntu-latest
-    needs:
-      - terraform-plan
-    steps:
-      - name: Setup Infracost
-        uses: infracost/actions/setup@v2
-        with:
-          api-key: ${{ secrets.infracost-api-key }}
-          currency: GBP
-      - name: Download tfplan
-        uses: actions/download-artifact@v4
-        with:
-          name: tfplan
-      - name: Generate Infracost Cost Estimate
-        run: |
-          infracost breakdown --path=tfplan.json \
-            --format=json \
-            --out-file=/tmp/infracost.json
-      - name: Post Infracost comment
-        run: |
-          infracost comment github --path=/tmp/infracost.json \
-            --repo=$GITHUB_REPOSITORY \
-            --github-token=${{github.token}} \
-            --pull-request=${{github.event.pull_request.number}} \
-            --behavior=update
-
   update-pr:
     name: "Update PR"
     if: github.event_name == 'pull_request' && (success() || failure())
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     needs:
       - terraform-format
       - terraform-lint
       - terraform-plan
       - terraform-tests
+      - terraform-security
+      - commitlint
     steps:
       - name: Add PR Comment
         uses: actions/github-script@v6
@@ -301,12 +367,13 @@ jobs:
             * 🖌 <b>Terraform Format and Style:</b> \`${{ needs.terraform-format.outputs.result }}\`
             * 🔍 <b>Terraform Linting:</b>          \`${{ needs.terraform-lint.outputs.result }}\`
             * 🔑 <b>AWS Authentication:</b>         \`${{ needs.terraform-plan.outputs.result-auth }}\`
-            * 🔧 <b>Terraform Initialisation:</b>   \`${{ needs.terraform-plan.outputs.result-init }}\`
             * 👮 <b>Terraform Security Check:</b>   \`${{ needs.terraform-security.outputs.result }}\`
-            * 🤖 <b>Terraform Validation:</b>       \`${{ needs.terraform-plan.outputs.result-validate }}\`
             * 🔘 <b>Terraform Tests:</b>            \`${{ needs.terraform-tests.outputs.result }}\`
+            * 🔧 <b>Terraform Initialisation:</b>   \`${{ needs.terraform-plan.outputs.result-init }}\`
+            * 🤖 <b>Terraform Validation:</b>       \`${{ needs.terraform-plan.outputs.result-validate }}\`
             * 📁 <b>Terraform S3 Backend:</b>       \`${{ needs.terraform-plan.outputs.result-s3-backend-check }}\`
             * 📖 <b>Terraform Plan:</b>             \`${{ needs.terraform-plan.outputs.result-plan }}\`
+            *    <b>Commitlint:</b>                 \`${{ needs.commitlint.outputs.result }}\`
 
             <details><summary><b>Output: 📖 Terraform Plan</b></summary>
 
@@ -339,6 +406,9 @@ jobs:
     name: "Terraform Apply"
     if: github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule"]'), github.event_name)
     runs-on: ${{ inputs.runs-on }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     needs:
       - terraform-format
       - terraform-lint
@@ -363,10 +433,10 @@ jobs:
         with:
           aws-region: ${{ inputs.aws-region }}
           role-session-name: ${{ github.event.repository.name }}
-          role-to-assume: arn:aws:iam::${{ inputs.aws-account-id }}:role/${{ inputs.aws-role-name-readwrite }}
+          role-to-assume: arn:aws:iam::${{ inputs.account-id }}:role/${{ inputs.aws-role }}
       - name: Terraform Init
         id: init
-        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ inputs.terraform-state-key }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
+        run: terraform -chdir=${{ inputs.terraform-dir }} -init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ inputs.terraform-state-key }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
       - name: Download tfplan
         uses: actions/download-artifact@v4
         with:
@@ -378,4 +448,4 @@ jobs:
           name: additional-dir
           path: ${{ inputs.additional-dir }}
       - name: Terraform Apply
-        run: terraform -chdir=${{ inputs.terraform-dir }} apply -auto-approve -input=false tfplan
+        run: terraform apply -auto-approve -input=false tfplan
