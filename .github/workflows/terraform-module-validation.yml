@@ -104,7 +104,7 @@ jobs:
         run: tflint --init
       - name: Linting Code
         id: lint
-        run: tflint -chdir=${{ inputs.terraform-dir }} -f compact
+        run: tflint -f compact
 
   terraform-tests:
     name: "Terraform Unit Tests"
@@ -300,9 +300,8 @@ jobs:
             * 🔍 <b>Terraform Linting:</b>          \`${{ needs.terraform-lint.outputs.result }}\`
             * 👮 <b>Terraform Security Check:</b>   \`${{ needs.terraform-security.outputs.result }}\`
             * 🔘 <b>Terraform Tests:</b>            \`${{ needs.terraform-tests.outputs.result }}\`
-            * 🔧 <b>Terraform Initialisation:</b>   \`${{ needs.terraform-plan.outputs.result-init }}\`
-            * 🤖 <b>Terraform Validation:</b>       \`${{ needs.terraform-plan.outputs.result-validate }}\`
-            * 📁 <b>Terraform S3 Backend:</b>       \`${{ needs.terraform-plan.outputs.result-s3-backend-check }}\`
+            * 🔧 <b>Terraform Initialisation:</b>   \`${{ needs.terraform-init.outputs.result }}\`
+            * 🤖 <b>Terraform Validation:</b>       \`${{ needs.terraform-validate.outputs.result }}\`
             * 📖 <b>Terraform Documentation:</b>    \`${{ needs.terraform-docs.outputs.result }}\`
             *    <b>Commitlint:</b>                 \`${{ needs.commitlint.outputs.result }}\`
 
