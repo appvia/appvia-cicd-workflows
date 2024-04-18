@@ -99,7 +99,7 @@ jobs:
       - name: Terraform Init
         run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
       - name: Setup Linter
-        uses: terraform-linters/setup-tflint@v3
+        uses: terraform-linters/setup-tflint@v4
       - name: Linter Initialize
         run: tflint --init
       - name: Linting Code
@@ -189,7 +189,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Terraform Docs
         id: docs
-        uses: terraform-docs/gh-actions@v1.0.0
+        uses: terraform-docs/gh-actions@v1.1.0
         with:
           fail-on-diff: true
           working-dir: ${{ inputs.terraform-dir }}
