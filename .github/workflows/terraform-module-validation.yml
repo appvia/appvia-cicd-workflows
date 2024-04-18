@@ -12,21 +12,25 @@ on:
         description: "Whether to run infracost on the Terraform Plan (secrets.infracost-api-key must be set if enabled)"
         required: false
         type: boolean
+
       enable-commitlint:
         default: false
         description: "Whether to run commitlint on the commit message"
         required: false
         type: boolean
+
       terraform-dir:
         default: "."
         description: "The directory to validate"
         required: false
         type: string
+
       terraform-version:
         default: "1.7.1"
         description: "The version of terraform to use"
         required: false
         type: string
+
       working-directory:
         default: "."
         description: "Working directory"
@@ -203,7 +207,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Terraform security
         id: security
-        uses: aquasecurity/security-action@v1.0.0
+        uses: aquasecurity/tfsec-action@v1.0.0
 
   terraform-infracost:
     name: "Get Cost Estimate"
