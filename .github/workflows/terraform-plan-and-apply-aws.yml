@@ -146,7 +146,7 @@ jobs:
         run: tflint --init
       - name: Linting Code
         id: lint
-        run: tflint -f compact
+        run: tflint -chdir=${{ inputs.terraform-dir }} -f compact
 
   terraform-tests:
     name: "Terraform Unit Tests"
