@@ -20,7 +20,7 @@ on:
 
       aws-role:
         description: "The AWS role to assume"
-        required: true
+        required: false
         type: string
 
       aws-read-role-name:
