@@ -141,7 +141,7 @@ jobs:
       - name: Terraform Init
         run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
       - name: Setup Linter
-        uses: terraform-linters/setup-tflint@v3
+        uses: terraform-linters/setup-tflint@v4
       - name: Linter Initialize
         run: tflint --init
       - name: Linting Code
