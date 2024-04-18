@@ -122,7 +122,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ${{ inputs.working-directory }}
+        working-directory: ${{ inputs.terraform-dir }}
     outputs:
       result: ${{ steps.tests.outcome }}
     steps:
