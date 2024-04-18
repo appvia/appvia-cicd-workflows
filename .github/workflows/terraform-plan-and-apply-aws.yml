@@ -15,16 +15,15 @@ on:
         required: true
         type: number
       aws-role:
+        default: "${{ github.event.repository.name }}"
         description: "The AWS role to assume for PR branch executions"
         required: false
         type: string
-      aws-role-name-readonly:
-        default: "${{ github.event.repository.name }}-ro"
+      aws-read-role-name:
         description: "The Read Only AWS role to assume for PR branch executions"
         required: false
         type: string
-      aws-role-name-readwrite:
-        default: "${{ github.event.repository.name }}"
+      aws-write-role-name:
         description: "The Read/Write AWS role to assume for main branch executions"
         required: false
         type: string
