@@ -204,6 +204,7 @@ jobs:
         run: |
           for dir in examples/*; do
             if [ -d "$dir" ]; then
+              echo "--> Validating $dir"
               terraform -chdir=${dir} init
               terraform -chdir=${dir} validate -no-color
             fi
