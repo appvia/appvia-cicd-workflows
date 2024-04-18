@@ -1,3 +1,4 @@
+---
 name: Terraform Module Validation
 on:
   workflow_call:
@@ -11,14 +12,19 @@ on:
         description: "Whether to run infracost on the Terraform Plan (secrets.infracost-api-key must be set if enabled)"
         required: false
         type: boolean
-      terraform-version:
-        default: "1.7.1"
-        description: "The version of terraform to use"
+      enable-commitlint:
+        default: false
+        description: "Whether to run commitlint on the commit message"
         required: false
-        type: string
+        type: boolean
       terraform-dir:
         default: "."
         description: "The directory to validate"
+        required: false
+        type: string
+      terraform-version:
+        default: "1.7.1"
+        description: "The version of terraform to use"
         required: false
         type: string
       working-directory:
@@ -32,6 +38,28 @@ permissions:
   pull-requests: write
 
 jobs:
+  commitlint:
+    name: "Commitlint"
+    if: inputs.enable-commitlint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 16
+      - name: Install Commitlint
+        run: npm install -g @commitlint/cli @commitlint/config-conventional
+      - name: Run Commitlint
+        id: commitlint
+        run: npx commitlint --from=HEAD~1
+
   terraform-format:
     name: "Terraform Format"
     runs-on: ubuntu-latest
@@ -49,7 +77,7 @@ jobs:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Terraform Format
         id: format
-        run: terraform fmt -check
+        run: terraform -chdir=${{ inputs.terraform-dir }} fmt -check -recursive
 
   terraform-lint:
     name: "Terraform Lint"
@@ -62,10 +90,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ inputs.terraform-version }}
+      - name: Setup Linter
+        uses: terraform-linters/setup-tflint@v4
       - name: Terraform Init
         run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
       - name: Setup Linter
@@ -74,7 +100,7 @@ jobs:
         run: tflint --init
       - name: Linting Code
         id: lint
-        run: tflint -f compact
+        run: tflint -chdir=${{ inputs.terraform-dir }} -f compact
 
   terraform-tests:
     name: "Terraform Unit Tests"
@@ -146,21 +172,6 @@ jobs:
         id: validate
         run: terraform -chdir=${{ inputs.terraform-dir }} validate -no-color
 
-  terraform-security:
-    name: "Terraform Security"
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ inputs.working-directory }}
-    outputs:
-      result: ${{ steps.security.outcome }}
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-      - name: Tfsec
-        id: security
-        uses: aquasecurity/tfsec-action@v1.0.0
-
   terraform-docs:
     name: "Terraform Docs"
     runs-on: ubuntu-latest
@@ -177,10 +188,24 @@ jobs:
         uses: terraform-docs/gh-actions@v1.0.0
         with:
           fail-on-diff: true
-          output-file: README.md
-          output-method: inject
+          working-dir: ${{ inputs.terraform-dir }}
 
-  get-cost-estimate:
+  terraform-security:
+    name: "Terraform Security"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    outputs:
+      result: ${{ steps.security.outcome }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Terraform security
+        id: security
+        uses: aquasecurity/security-action@v1.0.0
+
+  terraform-infracost:
     name: "Get Cost Estimate"
     if: github.event_name == 'pull_request' && inputs.enable-infracost
     runs-on: ubuntu-latest
@@ -238,14 +263,18 @@ jobs:
     name: "Update PR"
     if: github.event_name == 'pull_request' && (success() || failure())
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     needs:
+      - commitlint
+      - terraform-docs
       - terraform-format
-      - terraform-lint
       - terraform-init
-      - terraform-validate
+      - terraform-lint
       - terraform-tests
       - terraform-security
-      - terraform-docs
+      - terraform-validate
     steps:
       - name: Add PR Comment
         uses: actions/github-script@v6
@@ -265,11 +294,13 @@ jobs:
             const output = `### Pull Request Review Status
             * 🖌 <b>Terraform Format and Style:</b> \`${{ needs.terraform-format.outputs.result }}\`
             * 🔍 <b>Terraform Linting:</b>          \`${{ needs.terraform-lint.outputs.result }}\`
-            * 🔧 <b>Terraform Initialisation:</b>   \`${{ needs.terraform-init.outputs.result }}\`
-            * 🤖 <b>Terraform Validation:</b>       \`${{ needs.terraform-validate.outputs.result }}\`
             * 👮 <b>Terraform Security Check:</b>   \`${{ needs.terraform-security.outputs.result }}\`
             * 🔘 <b>Terraform Tests:</b>            \`${{ needs.terraform-tests.outputs.result }}\`
+            * 🔧 <b>Terraform Initialisation:</b>   \`${{ needs.terraform-plan.outputs.result-init }}\`
+            * 🤖 <b>Terraform Validation:</b>       \`${{ needs.terraform-plan.outputs.result-validate }}\`
+            * 📁 <b>Terraform S3 Backend:</b>       \`${{ needs.terraform-plan.outputs.result-s3-backend-check }}\`
             * 📖 <b>Terraform Documentation:</b>    \`${{ needs.terraform-docs.outputs.result }}\`
+            *    <b>Commitlint:</b>                 \`${{ needs.commitlint.outputs.result }}\`
 
             *<b>Working Directory:</b> \`${{ inputs.working-directory }}\`*
             *<b>Pusher:</b> @${{ github.actor }}, <b>Action:</b> \`${{ github.event_name }}\`*
