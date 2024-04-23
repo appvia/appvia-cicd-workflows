@@ -319,6 +319,7 @@ jobs:
           name: additional-dir
           path: ${{ inputs.additional-dir }}
           retention-days: 1
+          if-no-files-found: error
 
   update-pr:
     name: "Update PR"
