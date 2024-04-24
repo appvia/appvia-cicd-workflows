@@ -242,6 +242,8 @@ jobs:
       - name: Terraform security
         id: security
         uses: aquasecurity/tfsec-action@v1.0.0
+        with:
+          working_directory: ${{ inputs.working-directory }}
 
   terraform-infracost:
     name: "Get Cost Estimate"
