@@ -46,7 +46,7 @@ on:
         type: boolean
 
       enable-commitlint:
-        default: false
+        default: true
         description: "Whether to run commitlint on the commit message"
         required: false
         type: boolean
@@ -106,6 +106,33 @@ permissions:
   pull-requests: write
 
 jobs:
+  commitlint:
+    name: "Commitlint"
+    if: inputs.enable-commitlint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    outputs:
+      result: ${{ steps.commitlint.outcome }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 16
+      - name: Install Commitlint
+        run: npm install -g @commitlint/cli @commitlint/config-conventional
+      - name: Retrieve Commit Configuration
+        run: |
+          wget https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/config/commitlint.config.js -O .commitlint.config.js
+      - name: Run Commitlint
+        id: commitlint
+        run: npx commitlint --from=HEAD~1
+
   terraform-format:
     name: "Terraform Format"
     runs-on: ubuntu-latest
@@ -168,30 +195,6 @@ jobs:
       - name: Run Tests
         id: tests
         run: terraform -chdir=${{ inputs.terraform-dir }} test
-
-  commitlint:
-    name: "Commit Linting"
-    if: inputs.enable-commitlint
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ inputs.working-directory }}
-    outputs:
-      result: ${{ steps.commitlint.outcome }}
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Setup node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 16
-      - name: Install Commitlint
-        run: npm install -g @commitlint/cli @commitlint/config-conventional
-      - name: Run Commitlint
-        id: commitlint
-        run: npx commitlint --from=HEAD~1
 
   terraform-security:
     name: "Terraform Security"

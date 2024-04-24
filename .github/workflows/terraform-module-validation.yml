@@ -13,14 +13,8 @@ on:
         required: false
         type: boolean
 
-      enable-validation-main:
-        default: true
-        description: "Indicicates if we should validate the root module (useful for validating via examples/<dir>)"
-        required: false
-        type: boolean
-
       enable-commitlint:
-        default: false
+        default: true
         description: "Whether to run commitlint on the commit message"
         required: false
         type: boolean
@@ -34,6 +28,18 @@ on:
       terraform-version:
         default: "1.7.1"
         description: "The version of terraform to use"
+        required: false
+        type: string
+
+      cicd-repository:
+        default: "appvia/appvia-cicd-workflows"
+        description: "The repository to pull the CI/CD workflows from"
+        required: false
+        type: string
+
+      cicd-branch:
+        default: "main"
+        description: "The branch to pull the CI/CD workflows from"
         required: false
         type: string
 
@@ -68,6 +74,9 @@ jobs:
           node-version: 16
       - name: Install Commitlint
         run: npm install -g @commitlint/cli @commitlint/config-conventional
+      - name: Retrieve Commit Configuration
+        run: |
+          wget https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/config/commitlint.config.js -O .commitlint.config.js
       - name: Run Commitlint
         id: commitlint
         run: npx commitlint --from=HEAD~1
@@ -160,7 +169,6 @@ jobs:
 
   terraform-validate:
     name: "Terraform Validate"
-    if: inputs.enable-validation-main
     runs-on: ubuntu-latest
     defaults:
       run:
