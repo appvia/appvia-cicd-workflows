@@ -72,11 +72,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 16
+      - name: Install Dependencies
+        run: npm install @commitlint/config-conventional @commitlint/cli
       - name: Retrieve Commit Configuration
         run: |
           wget https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/config/commitlint.config.js -O commitlint.config.js
-      - name: Install Dependencies
-        run: npm install @commitlint/cli
       - name: Run Commitlint
         id: commitlint
         run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
