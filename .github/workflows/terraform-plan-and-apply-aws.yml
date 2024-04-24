@@ -39,6 +39,18 @@ on:
         required: false
         type: string
 
+      cicd-repository:
+        default: "appvia/appvia-cicd-workflows"
+        description: "The repository to pull the CI/CD workflows from"
+        required: false
+        type: string
+
+      cicd-branch:
+        default: "main"
+        description: "The branch to pull the CI/CD workflows from"
+        required: false
+        type: string
+
       enable-infracost:
         default: false
         description: "Whether to run infracost on the Terraform Plan (secrets.infracost-api-key must be set if enabled)"
@@ -125,10 +137,10 @@ jobs:
         with:
           node-version: 16
       - name: Install Commitlint
-        run: npm install -g @commitlint/cli @commitlint/config-conventional
+        run: npm install conventional-changelog-conventionalcommits
       - name: Retrieve Commit Configuration
         run: |
-          wget https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/config/commitlint.config.js -O .commitlint.config.js
+          wget https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/config/commitlint.config.js -O commitlint.config.js
       - name: Run Commitlint
         id: commitlint
         run: npx commitlint --from=HEAD~1
