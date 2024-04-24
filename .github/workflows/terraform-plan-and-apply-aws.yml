@@ -120,7 +120,7 @@ permissions:
 jobs:
   commitlint:
     name: "Commitlint"
-    if: inputs.enable-commitlint
+    if: github.event_name == 'pull_request' && inputs.enable-commitlint
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -136,14 +136,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 16
-      - name: Install Commitlint
-        run: npm install conventional-changelog-conventionalcommits
       - name: Retrieve Commit Configuration
         run: |
           wget https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/config/commitlint.config.js -O commitlint.config.js
       - name: Run Commitlint
         id: commitlint
-        run: npx commitlint --from=HEAD~1
+        run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
 
   terraform-format:
     name: "Terraform Format"
