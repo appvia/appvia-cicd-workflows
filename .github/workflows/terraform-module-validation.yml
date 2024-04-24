@@ -351,7 +351,7 @@ jobs:
             * 🤖 <b>Terraform Validation:</b>           \`${{ needs.terraform-validate.outputs.result }}\`
             * 🤖 <b>Terraform Example Validation:</b>   \`${{ needs.terraform-validate-examples.outputs.result }}\`
             * 📖 <b>Terraform Documentation:</b>        \`${{ needs.terraform-docs.outputs.result }}\`
-            *    <b>Commit Linting:</b>                 \`${{ needs.commitlint.outputs.result }}\`
+            * 🔖 <b>Commitlint:</b>                     \`${{ needs.commitlint.outputs.result }}\`
 
             *<b>Working Directory:</b> \`${{ inputs.working-directory }}\`*
             *<b>Pusher:</b> @${{ github.actor }}, <b>Action:</b> \`${{ github.event_name }}\`*
