@@ -205,7 +205,7 @@ jobs:
           for dir in examples/*; do
             if [ -d "$dir" ]; then
               echo "--> Validating $dir"
-              terraform -chdir=${dir} init
+              terraform -chdir=${dir} init -backend=false
               terraform -chdir=${dir} validate -no-color
             fi
           done
@@ -242,6 +242,8 @@ jobs:
       - name: Terraform security
         id: security
         uses: aquasecurity/tfsec-action@v1.0.0
+        with:
+          working_directory: ${{ inputs.working-directory }}
 
   terraform-infracost:
     name: "Get Cost Estimate"
