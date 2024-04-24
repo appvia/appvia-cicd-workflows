@@ -55,6 +55,8 @@ jobs:
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
+    outputs:
+      result: ${{ steps.commitlint.outcome }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
