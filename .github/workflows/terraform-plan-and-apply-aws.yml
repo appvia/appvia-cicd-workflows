@@ -13,6 +13,12 @@ on:
         required: false
         type: string
 
+      additional-dir-optional:
+        default: false
+        description: Uploads additional directorie as an artifact from plan stage
+        required: false
+        type: boolean
+
       aws-account-id:
         description: "The AWS account ID to deploy to"
         required: true
@@ -327,6 +333,10 @@ jobs:
           name: tfplan
           path: "tfplan*"
           retention-days: 1
+      - name: Optional Additional Directory Upload
+        if: inputs.additional-dir-optional && inputs.additional-dir != ''
+        run: |
+          touch ./${{ inputs.additional-dir }}/.optional.file
       - name: Upload additional directory
         if: inputs.additional-dir
         uses: actions/upload-artifact@v4
