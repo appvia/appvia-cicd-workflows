@@ -336,7 +336,8 @@ jobs:
       - name: Optional Additional Directory Upload
         if: inputs.additional-dir-optional && inputs.additional-dir != ''
         run: |
-          touch ./${{ inputs.additional-dir }}/.optional.file
+          mkdir -p ${{ inputs.additional-dir }}
+          touch ${{ inputs.additional-dir }}/.optional.file
       - name: Upload additional directory
         if: inputs.additional-dir
         uses: actions/upload-artifact@v4
