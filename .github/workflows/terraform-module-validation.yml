@@ -223,6 +223,7 @@ jobs:
   terraform-docs:
     name: "Terraform Docs"
     runs-on: ubuntu-latest
+    if: ${{ github.actor != 'dependabot[bot]' }}
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
