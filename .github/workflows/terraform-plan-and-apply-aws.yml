@@ -440,6 +440,7 @@ jobs:
       - terraform-format
       - terraform-lint
       - terraform-plan
+      - terraform-tests
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
