@@ -179,7 +179,6 @@ jobs:
           mask-aws-account-id: "no"
       - name: Terraform Init
         run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
-      - name:
       - name: Run Tests
         id: tests
         run: terraform -chdir=${{ inputs.terraform-dir }} test
