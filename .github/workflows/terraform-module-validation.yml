@@ -62,7 +62,7 @@ permissions:
 jobs:
   commitlint:
     name: "Commitlint"
-    if: inputs.enable-commitlint
+    if: github.event_name == 'pull_request' && inputs.enable-commitlint
     runs-on: ubuntu-latest
     defaults:
       run:
