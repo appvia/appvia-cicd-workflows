@@ -31,6 +31,12 @@ on:
         required: false
         type: boolean
 
+      enable-terraform-tests:
+        default: true
+        description: "Whether to run terraform test"
+        required: false
+        type: boolean
+
       terraform-dir:
         default: "."
         description: "The directory to validate"
@@ -126,6 +132,7 @@ jobs:
   terraform-tests:
     name: "Terraform Unit Tests"
     runs-on: ubuntu-latest
+    if: inputs.enable-terraform-tests
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
