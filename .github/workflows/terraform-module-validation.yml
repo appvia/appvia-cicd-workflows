@@ -73,9 +73,7 @@ on:
         type: string
 
 env:
-  AWS_ROLE: ${{ inputs.aws-role }}
   AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/web_identity_token_file
-  TF_LOG: ${{ inputs.terraform-log-level }}
 
 permissions:
   contents: read
@@ -173,7 +171,6 @@ jobs:
           curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value' > $AWS_WEB_IDENTITY_TOKEN_FILE
       - name: Authenticate with AWS
         if: inputs.enable-terraform-tests-credentials
-        id: auth
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ inputs.terraform-tests-aws-region }}
