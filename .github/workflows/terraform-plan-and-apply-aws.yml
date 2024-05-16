@@ -9,13 +9,13 @@ on:
 
     inputs:
       additional-dir:
-        description: Uploads additional directorie as an artifact from plan stage
+        description: Uploads additional directory as an artifact from plan stage
         required: false
         type: string
 
       additional-dir-optional:
         default: false
-        description: Uploads additional directorie as an artifact from plan stage
+        description: Uploads additional directory as an artifact from plan stage
         required: false
         type: boolean
 
@@ -68,6 +68,12 @@ on:
         description: "Whether to run commitlint on the commit message"
         required: false
         type: boolean
+
+      environment:
+        default: "production"
+        description: "The environment to deploy to"
+        required: false
+        type: string
 
       runs-on:
         default: "ubuntu-latest"
@@ -353,7 +359,7 @@ jobs:
               issue_number: context.issue.number,
             })
             const botComment = comments.find(comment => {
-              return comment.user.type === 'Bot' && comment.body.includes('Pull Request Review Status')
+              return comment.user.type === 'Bot' && comment.body.includes('Pull Request Review Status (${{ inputs.environment }})')
             })
 
             // 2. Check output length
@@ -367,8 +373,16 @@ jobs:
               planOutput = "Terraform Plan output is too large, please view the workflow run logs directly."
             }
 
-            // 3. Prepare format of the comment
-            const output = `### Pull Request Review Status
+            // 3. Get plan summary
+            const planRegex = /Plan: (\d+) to add, (\d+) to change, (\d+) to destroy\./;
+            const planMatch = planOutput.match(planRegex);
+            var planSummary = "Not found, please view the workflow run logs directly."
+            if (planMatch) {
+              planSummary = `${planMatch[1]} to add, ${planMatch[2]} to change, ${planMatch[3]} to destroy.`
+            }
+
+            // 4. Prepare format of the comment
+            const output = `### Pull Request Review Status (${{ inputs.environment }})
             * 🖌 <b>Terraform Format and Style:</b> \`${{ needs.terraform-format.outputs.result }}\`
             * 🔍 <b>Terraform Linting:</b>          \`${{ needs.terraform-lint.outputs.result }}\`
             * 🔑 <b>AWS Authentication:</b>         \`${{ needs.terraform-plan.outputs.result-auth }}\`
@@ -386,10 +400,12 @@ jobs:
             \`\`\`
             </details>
 
+            <b>Plan Summary:</b> ${planSummary}
+
             *<b>Pusher:</b> @${{ github.actor }}, <b>Action:</b> \`${{ github.event_name }}\`*
             *<b>Workflow Run Link:</b> ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}*`;
 
-            // 4. If we have a comment, update it, otherwise create a new one
+            // 5. If we have a comment, update it, otherwise create a new one
             if (botComment) {
               github.rest.issues.updateComment({
                 owner: context.repo.owner,
@@ -409,6 +425,7 @@ jobs:
   terraform-apply:
     name: "Terraform Apply"
     if: github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule"]'), github.event_name)
+    environment: ${{ inputs.environment }}
     runs-on: ${{ inputs.runs-on }}
     defaults:
       run:
