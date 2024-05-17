@@ -338,7 +338,7 @@ jobs:
       - name: Terraform Plan
         id: plan
         run: |
-          terraform -chdir=${{ inputs.terraform-dir }} plan -var-file=$TF_VAR_FILE -no-color -input=false -out=tfplan
+          terraform -chdir=${{ inputs.terraform-dir }} plan -var-file=$TF_VAR_FILE -no-color -input=false -out=tfplan 2>&1 | tee tfplan.stdout
       - name: Terraform Plan JSON Output
         run: |
           terraform -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
@@ -376,10 +376,12 @@ jobs:
       - terraform-security
       - commitlint
     steps:
+      - name: Download tfplan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
       - name: Add PR Comment
         uses: actions/github-script@v6
-        env:
-          PLAN: "${{ needs.terraform-plan.outputs.plan-stdout }}"
         with:
           script: |
             // 1. Retrieve existing bot comments for the PR
@@ -393,17 +395,14 @@ jobs:
             })
 
             // 2. Check output length
-            const PLAN = process.env.PLAN || '';
-            const excludedStrings = ["Refreshing state...", "Reading...", "Read complete after"];
-            const filteredLines = PLAN.split('\n').filter(line =>
+            const fs = require("fs");
+            const plan = fs.readFileSync("tfplan.stdout", "utf8");
+            const excludedStrings = ["Terraform used the selected providers", "No changes", "Refreshing state...", "Reading...", "Read complete after"];
+            const filteredLines = plan.split('\n').filter(line =>
               !excludedStrings.some(excludedStr => line.includes(excludedStr))
             );
             var planOutput = filteredLines.join('\n').trim();
-            if (planOutput.length < 1 || planOutput.length > 65000) {
-              planOutput = "Terraform Plan output is too large, please view the workflow run logs directly."
-            }
 
-            // 3. Get plan summary
             const planRegex = /Plan: (\d+) to add, (\d+) to change, (\d+) to destroy\./;
             const planMatch = planOutput.match(planRegex);
             var planSummary = "Not found, please view the workflow run logs directly."
@@ -411,7 +410,12 @@ jobs:
               planSummary = `${planMatch[1]} to add, ${planMatch[2]} to change, ${planMatch[3]} to destroy.`
             }
 
-            // 4. Prepare format of the comment
+            const MAX_GITHUB_COMMENT_LENGTH = 65536 - 800; // 800 characters for the comment template
+            if (planOutput.length < 1 || planOutput.length > MAX_GITHUB_COMMENT_LENGTH) {
+              planOutput = "Terraform Plan output is too large, please view the workflow run logs directly."
+            }
+
+            // 3. Prepare format of the comment
             const output = `### Pull Request Review Status (${{ inputs.environment }})
             * 🖌 <b>Terraform Format and Style:</b> \`${{ needs.terraform-format.outputs.result }}\`
             * 🔍 <b>Terraform Linting:</b>          \`${{ needs.terraform-lint.outputs.result }}\`
@@ -435,7 +439,7 @@ jobs:
             *<b>Pusher:</b> @${{ github.actor }}, <b>Action:</b> \`${{ github.event_name }}\`*
             *<b>Workflow Run Link:</b> ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}*`;
 
-            // 5. If we have a comment, update it, otherwise create a new one
+            // 4. If we have a comment, update it, otherwise create a new one
             if (botComment) {
               github.rest.issues.updateComment({
                 owner: context.repo.owner,
