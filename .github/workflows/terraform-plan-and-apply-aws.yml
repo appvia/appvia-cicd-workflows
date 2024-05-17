@@ -239,7 +239,7 @@ jobs:
       - name: Download tfplan
         uses: actions/download-artifact@v4
         with:
-          name: tfplan
+          name: tfplan-${{ inputs.environment }}
       - name: Generate Infracost Cost Estimate
         run: |
           infracost breakdown --path=tfplan.json \
@@ -346,9 +346,9 @@ jobs:
       - name: Upload tfplan
         uses: actions/upload-artifact@v4
         with:
-          name: tfplan
+          name: tfplan-${{ inputs.environment }}
           path: "tfplan*"
-          retention-days: 1
+          retention-days: 14
       - name: Optional Additional Directory Upload
         if: inputs.additional-dir-optional && inputs.additional-dir != ''
         run: |
@@ -358,9 +358,9 @@ jobs:
         if: inputs.additional-dir
         uses: actions/upload-artifact@v4
         with:
-          name: additional-dir
+          name: additional-dir-${{ inputs.environment }}
           path: ${{ inputs.additional-dir }}
-          retention-days: 1
+          retention-days: 14
           if-no-files-found: error
 
   update-pr:
@@ -380,7 +380,7 @@ jobs:
       - name: Download tfplan
         uses: actions/download-artifact@v4
         with:
-          name: tfplan
+          name: tfplan-${{ inputs.environment }}
       - name: Add PR Comment
         uses: actions/github-script@v6
         with:
@@ -516,12 +516,12 @@ jobs:
       - name: Download tfplan
         uses: actions/download-artifact@v4
         with:
-          name: tfplan
+          name: tfplan-${{ inputs.environment }}
       - name: Download Additional Directories
         if: inputs.additional-dir
         uses: actions/download-artifact@v4
         with:
-          name: additional-dir
+          name: additional-dir-${{ inputs.environment }}
           path: ${{ inputs.additional-dir }}
       - name: Terraform Apply
         run: terraform apply -auto-approve -input=false tfplan
