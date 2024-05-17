@@ -9,13 +9,13 @@ on:
 
     inputs:
       additional-dir:
-        description: Uploads additional directorie as an artifact from plan stage
+        description: Uploads additional directory as an artifact from plan stage
         required: false
         type: string
 
       additional-dir-optional:
         default: false
-        description: Uploads additional directorie as an artifact from plan stage
+        description: Uploads additional directory as an artifact from plan stage
         required: false
         type: boolean
 
@@ -69,6 +69,18 @@ on:
         required: false
         type: boolean
 
+      environment:
+        default: "production"
+        description: "The environment to deploy to"
+        required: false
+        type: string
+
+      use-env-as-suffix:
+        default: false
+        description: "Whether to use the environment as a suffix for the state file and iam roles"
+        required: false
+        type: boolean
+
       runs-on:
         default: "ubuntu-latest"
         description: "Single label value for the GitHub runner to use (custom value only applies to Terraform Plan and Apply steps)"
@@ -88,14 +100,14 @@ on:
         type: string
 
       terraform-state-key:
-        default: "${{ github.event.repository.name }}.tfstate"
-        description: "The key of the terraform state"
+        default: ""
+        description: "The key of the terraform state (default: <repo-name>.tfstate)"
         required: false
         type: string
 
       terraform-values-file:
-        default: "values/production.tfvars"
-        description: "The values file to use"
+        default: ""
+        description: "The values file to use (default: <environment>.tfvars)"
         required: false
         type: string
 
@@ -271,10 +283,15 @@ jobs:
       - name: Determine AWS Role
         id: role
         run: |
-          if [[ "${GITHUB_REF##*/}" == "main" ]]; then
-            echo "name=${AWS_READWRITE_OVERRIDE_ROLE:-${AWS_ROLE}}" >> $GITHUB_OUTPUT
+          if [ "${{ inputs.use-env-as-suffix }}" == "true" ]; then
+            role_suffix="-${{ inputs.environment }}"
           else
-            echo "name=${AWS_READONLY_OVERRIDE_ROLE:-${AWS_ROLE}-ro}" >> $GITHUB_OUTPUT
+            role_suffix=""
+          fi
+          if [[ "${GITHUB_REF##*/}" == "main" ]]; then
+            echo "name=${AWS_READWRITE_OVERRIDE_ROLE:-${AWS_ROLE}${role_suffix}}" >> $GITHUB_OUTPUT
+          else
+            echo "name=${AWS_READONLY_OVERRIDE_ROLE:-${AWS_ROLE}${role_suffix}-ro}" >> $GITHUB_OUTPUT
           fi
       - name: Authenticate with AWS
         id: auth
@@ -284,9 +301,21 @@ jobs:
           role-session-name: ${{ github.event.repository.name }}
           role-to-assume: arn:aws:iam::${{ inputs.aws-account-id }}:role/${{ steps.role.outputs.name }}
           mask-aws-account-id: "no"
+      - name: Set terraform-state-key variable
+        id: state-key
+        run: |
+          if [ -n "${{ inputs.terraform-state-key }}" ]; then
+            echo "name=${{ inputs.terraform-state-key }}" >> $GITHUB_OUTPUT
+          else
+            if [ "${{ inputs.use-env-as-suffix }}" == "true" ]; then
+              echo "name=${{ github.event.repository.name }}-${{ inputs.environment }}.tfstate" >> $GITHUB_OUTPUT
+            else
+              echo "name=${{ github.event.repository.name }}.tfstate" >> $GITHUB_OUTPUT
+            fi
+          fi
       - name: Terraform Init
         id: init
-        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ inputs.terraform-state-key }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
+        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ steps.state-key.outputs.name }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
       - name: Terraform Validate
         id: validate
         run: terraform -chdir=${{ inputs.terraform-dir }} validate -no-color
@@ -299,10 +328,17 @@ jobs:
             echo "Terraform configuration does not reference an S3 backend."
             exit 1
           fi
+      - name: Set terraform-values-file variable
+        run: |
+          if [ -n "${{ inputs.terraform-values-file }}" ]; then
+            echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> $GITHUB_ENV
+          else
+            echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> $GITHUB_ENV
+          fi
       - name: Terraform Plan
         id: plan
         run: |
-          terraform -chdir=${{ inputs.terraform-dir }} plan -var-file=${{ inputs.terraform-values-file }} -no-color -input=false -out=tfplan
+          terraform -chdir=${{ inputs.terraform-dir }} plan -var-file=$TF_VAR_FILE -no-color -input=false -out=tfplan
       - name: Terraform Plan JSON Output
         run: |
           terraform -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
@@ -353,7 +389,7 @@ jobs:
               issue_number: context.issue.number,
             })
             const botComment = comments.find(comment => {
-              return comment.user.type === 'Bot' && comment.body.includes('Pull Request Review Status')
+              return comment.user.type === 'Bot' && comment.body.includes('Pull Request Review Status (${{ inputs.environment }})')
             })
 
             // 2. Check output length
@@ -367,8 +403,16 @@ jobs:
               planOutput = "Terraform Plan output is too large, please view the workflow run logs directly."
             }
 
-            // 3. Prepare format of the comment
-            const output = `### Pull Request Review Status
+            // 3. Get plan summary
+            const planRegex = /Plan: (\d+) to add, (\d+) to change, (\d+) to destroy\./;
+            const planMatch = planOutput.match(planRegex);
+            var planSummary = "Not found, please view the workflow run logs directly."
+            if (planMatch) {
+              planSummary = `${planMatch[1]} to add, ${planMatch[2]} to change, ${planMatch[3]} to destroy.`
+            }
+
+            // 4. Prepare format of the comment
+            const output = `### Pull Request Review Status (${{ inputs.environment }})
             * 🖌 <b>Terraform Format and Style:</b> \`${{ needs.terraform-format.outputs.result }}\`
             * 🔍 <b>Terraform Linting:</b>          \`${{ needs.terraform-lint.outputs.result }}\`
             * 🔑 <b>AWS Authentication:</b>         \`${{ needs.terraform-plan.outputs.result-auth }}\`
@@ -386,10 +430,12 @@ jobs:
             \`\`\`
             </details>
 
+            <b>Plan Summary:</b> ${planSummary}
+
             *<b>Pusher:</b> @${{ github.actor }}, <b>Action:</b> \`${{ github.event_name }}\`*
             *<b>Workflow Run Link:</b> ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}*`;
 
-            // 4. If we have a comment, update it, otherwise create a new one
+            // 5. If we have a comment, update it, otherwise create a new one
             if (botComment) {
               github.rest.issues.updateComment({
                 owner: context.repo.owner,
@@ -409,6 +455,7 @@ jobs:
   terraform-apply:
     name: "Terraform Apply"
     if: github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule"]'), github.event_name)
+    environment: ${{ inputs.environment }}
     runs-on: ${{ inputs.runs-on }}
     defaults:
       run:
@@ -434,7 +481,11 @@ jobs:
       - name: Determine AWS Role
         id: role
         run: |
-          echo "name=${AWS_READWRITE_OVERRIDE_ROLE:-${AWS_ROLE}}" >> $GITHUB_OUTPUT
+          if [ "${{ inputs.use-env-as-suffix }}" == "true" ]; then
+            echo "name=${AWS_READWRITE_OVERRIDE_ROLE:-${AWS_ROLE}-${{ inputs.environment }}}" >> $GITHUB_OUTPUT
+          else
+            echo "name=${AWS_READWRITE_OVERRIDE_ROLE:-${AWS_ROLE}}" >> $GITHUB_OUTPUT
+          fi
       - name: Authenticate with AWS
         id: auth
         uses: aws-actions/configure-aws-credentials@v4
@@ -442,9 +493,21 @@ jobs:
           aws-region: ${{ inputs.aws-region }}
           role-session-name: ${{ github.event.repository.name }}
           role-to-assume: arn:aws:iam::${{ inputs.aws-account-id }}:role/${{ steps.role.outputs.name }}
+      - name: Set terraform-state-key variable
+        id: state-key
+        run: |
+          if [ -n "${{ inputs.terraform-state-key }}" ]; then
+            echo "name=${{ inputs.terraform-state-key }}" >> $GITHUB_OUTPUT
+          else
+            if [ "${{ inputs.use-env-as-suffix }}" == "true" ]; then
+              echo "name=${{ github.event.repository.name }}-${{ inputs.environment }}.tfstate" >> $GITHUB_OUTPUT
+            else
+              echo "name=${{ github.event.repository.name }}.tfstate" >> $GITHUB_OUTPUT
+            fi
+          fi
       - name: Terraform Init
         id: init
-        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ inputs.terraform-state-key }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
+        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ steps.state-key.outputs.name }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
       - name: Download tfplan
         uses: actions/download-artifact@v4
         with:
