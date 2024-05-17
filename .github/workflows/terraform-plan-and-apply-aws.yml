@@ -25,6 +25,7 @@ on:
         type: number
 
       aws-role:
+        default: "${{ github.event.repository.name }}"
         description: "The AWS role to assume"
         required: false
         type: string
