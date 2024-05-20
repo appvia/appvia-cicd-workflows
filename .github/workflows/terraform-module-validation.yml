@@ -72,6 +72,11 @@ on:
         required: false
         type: string
 
+      tfsec-soft-fail:
+        default: false
+        description: "tfsec soft fai"
+        type: string
+
 env:
   AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/web_identity_token_file
 
@@ -294,6 +299,7 @@ jobs:
         uses: aquasecurity/tfsec-action@v1.0.0
         with:
           working_directory: ${{ inputs.working-directory }}
+          soft-fail:  ${{ inputs.tfsec-soft-fail }}
 
   terraform-infracost:
     name: "Get Cost Estimate"
