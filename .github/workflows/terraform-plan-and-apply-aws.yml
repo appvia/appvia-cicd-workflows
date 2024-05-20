@@ -341,6 +341,7 @@ jobs:
         id: plan
         run: |
           terraform -chdir=${{ inputs.terraform-dir }} plan -var-file=$TF_VAR_FILE -no-color -input=false -out=tfplan 2>&1 | tee tfplan.stdout
+          exit "${PIPESTATUS[0]}"
       - name: Terraform Plan JSON Output
         run: |
           terraform -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
