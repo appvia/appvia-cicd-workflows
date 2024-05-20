@@ -75,7 +75,7 @@ on:
       tfsec-soft-fail:
         default: false
         description: "tfsec soft fai"
-        type: string
+        type: boolean
 
 env:
   AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/web_identity_token_file
