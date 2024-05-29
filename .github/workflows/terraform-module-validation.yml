@@ -1,3 +1,4 @@
+---
 name: Terraform Module Validation
 on:
   workflow_call:
@@ -6,32 +7,106 @@ on:
         description: "The API key for infracost"
         required: false
     inputs:
+      cicd-repository:
+        default: "appvia/appvia-cicd-workflows"
+        description: "The repository to pull the CI/CD workflows from"
+        required: false
+        type: string
+
+      cicd-branch:
+        default: "main"
+        description: "The branch to pull the CI/CD workflows from"
+        required: false
+        type: string
+
       enable-infracost:
         default: false
         description: "Whether to run infracost on the Terraform Plan (secrets.infracost-api-key must be set if enabled)"
         required: false
         type: boolean
-      terraform-version:
-        default: "1.7.1"
-        description: "The version of terraform to use"
+
+      enable-commitlint:
+        default: true
+        description: "Whether to run commitlint on the commit message"
         required: false
-        type: string
+        type: boolean
+
+      enable-terraform-tests:
+        default: true
+        description: "Whether to run terraform test"
+        required: false
+        type: boolean
+
+      enable-terraform-tests-credentials:
+        default: false
+        description: "Whether to run terraform test with AWS credentials"
+        required: false
+        type: boolean
+
       terraform-dir:
         default: "."
         description: "The directory to validate"
         required: false
         type: string
+
+      terraform-tests-aws-region:
+        default: "eu-west-1"
+        description: "The AWS region to use for the terraform tests"
+        required: false
+        type: string
+
+      terraform-tests-aws-role:
+        description: "The AWS role to assume for the terraform tests"
+        required: false
+        type: string
+
+      terraform-version:
+        default: "1.7.1"
+        description: "The version of terraform to use"
+        required: false
+        type: string
+
       working-directory:
         default: "."
         description: "Working directory"
         required: false
         type: string
 
+env:
+  AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/web_identity_token_file
+
 permissions:
   contents: read
   pull-requests: write
 
 jobs:
+  commitlint:
+    name: "Commitlint"
+    if: github.event_name == 'pull_request' && inputs.enable-commitlint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    outputs:
+      result: ${{ steps.commitlint.outcome }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 16
+      - name: Install Dependencies
+        run: npm install @commitlint/config-conventional @commitlint/cli
+      - name: Retrieve Commit Configuration
+        run: |
+          wget https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/config/commitlint.config.js -O commitlint.config.js
+      - name: Run Commitlint
+        id: commitlint
+        run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
+
   terraform-format:
     name: "Terraform Format"
     runs-on: ubuntu-latest
@@ -49,7 +124,7 @@ jobs:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Terraform Format
         id: format
-        run: terraform fmt -check
+        run: terraform -chdir=${{ inputs.terraform-dir }} fmt -check -recursive
 
   terraform-lint:
     name: "Terraform Lint"
@@ -63,12 +138,50 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
       - name: Setup Linter
-        uses: terraform-linters/setup-tflint@v3
+        uses: terraform-linters/setup-tflint@v4
+      - name: Terraform Init
+        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
+      - name: Setup Linter
+        uses: terraform-linters/setup-tflint@v4
       - name: Linter Initialize
         run: tflint --init
       - name: Linting Code
         id: lint
         run: tflint -f compact
+
+  terraform-tests:
+    name: "Terraform Unit Tests"
+    runs-on: ubuntu-latest
+    if: inputs.enable-terraform-tests
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    outputs:
+      result: ${{ steps.tests.outcome }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+      - name: Retrieve Web Identity Token for AWS Authentication
+        if: inputs.enable-terraform-tests-credentials
+        run: |
+          curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value' > $AWS_WEB_IDENTITY_TOKEN_FILE
+      - name: Authenticate with AWS
+        if: inputs.enable-terraform-tests-credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ inputs.terraform-tests-aws-region }}
+          role-session-name: ${{ github.event.repository.name }}
+          role-to-assume: ${{ inputs.terraform-tests-aws-role }}
+          mask-aws-account-id: "no"
+      - name: Terraform Init
+        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
+      - name: Run Tests
+        id: tests
+        run: terraform -chdir=${{ inputs.terraform-dir }} test
 
   terraform-init:
     name: "Terraform Init"
@@ -138,10 +251,41 @@ jobs:
           output: "trivy-results.sarif"
           scan-type: "config"
           severity: "CRITICAL,HIGH"
+  
+  terraform-validate-examples:
+    name: "Terraform Validate Examples"
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.validate-examples.outcome }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 16
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+      - name: Validate Examples
+        id: validate-examples
+        run: |
+          for dir in examples/*; do
+            if [ -d "$dir" ]; then
+              echo "--> Validating $dir"
+              terraform -chdir=${dir} init -backend=false
+              terraform -chdir=${dir} validate -no-color
+            fi
+          done
 
   terraform-docs:
     name: "Terraform Docs"
     runs-on: ubuntu-latest
+    if: ${{ github.actor != 'dependabot[bot]' }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     outputs:
       result: ${{ steps.docs.outcome }}
     steps:
@@ -149,14 +293,12 @@ jobs:
         uses: actions/checkout@v4
       - name: Terraform Docs
         id: docs
-        uses: terraform-docs/gh-actions@v1.0.0
+        uses: terraform-docs/gh-actions@v1.1.0
         with:
           fail-on-diff: true
-          output-file: README.md
-          output-method: inject
-          working-dir: ${{ inputs.working-directory }}
+          working-dir: ${{ inputs.terraform-dir }}
 
-  get-cost-estimate:
+  terraform-infracost:
     name: "Get Cost Estimate"
     if: github.event_name == 'pull_request' && inputs.enable-infracost
     runs-on: ubuntu-latest
@@ -214,13 +356,19 @@ jobs:
     name: "Update PR"
     if: github.event_name == 'pull_request' && (success() || failure())
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
     needs:
-      - terraform-format
-      - terraform-lint
-      - terraform-init
-      - terraform-validate
-      - terraform-security
+      - commitlint
       - terraform-docs
+      - terraform-format
+      - terraform-init
+      - terraform-lint
+      - terraform-tests
+      - terraform-security
+      - terraform-validate
+      - terraform-validate-examples
     steps:
       - name: Add PR Comment
         uses: actions/github-script@v6
@@ -238,12 +386,15 @@ jobs:
 
             // 2. Prepare format of the comment
             const output = `### Pull Request Review Status
-            * 🖌 <b>Terraform Format and Style:</b> \`${{ needs.terraform-format.outputs.result }}\`
-            * 🔍 <b>Terraform Linting:</b>          \`${{ needs.terraform-lint.outputs.result }}\`
-            * 🔧 <b>Terraform Initialisation:</b>   \`${{ needs.terraform-init.outputs.result }}\`
-            * 🤖 <b>Terraform Validation:</b>       \`${{ needs.terraform-validate.outputs.result }}\`
-            * 📁 <b>Terraform Security Check:</b>   \`${{ needs.terraform-security.outputs.result }}\`
-            * 📖 <b>Terraform Documentation:</b>    \`${{ needs.terraform-docs.outputs.result }}\`
+            * 🖌 <b>Terraform Format and Style:</b>     \`${{ needs.terraform-format.outputs.result }}\`
+            * 🔍 <b>Terraform Linting:</b>              \`${{ needs.terraform-lint.outputs.result }}\`
+            * 👮 <b>Terraform Security Check:</b>       \`${{ needs.terraform-security.outputs.result }}\`
+            * 🔘 <b>Terraform Tests:</b>                \`${{ needs.terraform-tests.outputs.result }}\`
+            * 🔧 <b>Terraform Initialisation:</b>       \`${{ needs.terraform-init.outputs.result }}\`
+            * 🤖 <b>Terraform Validation:</b>           \`${{ needs.terraform-validate.outputs.result }}\`
+            * 🤖 <b>Terraform Example Validation:</b>   \`${{ needs.terraform-validate-examples.outputs.result }}\`
+            * 📖 <b>Terraform Documentation:</b>        \`${{ needs.terraform-docs.outputs.result }}\`
+            * 🔖 <b>Commitlint:</b>                     \`${{ needs.commitlint.outputs.result }}\`
 
             *<b>Working Directory:</b> \`${{ inputs.working-directory }}\`*
             *<b>Pusher:</b> @${{ github.actor }}, <b>Action:</b> \`${{ github.event_name }}\`*
