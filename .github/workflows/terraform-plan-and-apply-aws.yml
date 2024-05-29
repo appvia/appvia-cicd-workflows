@@ -124,6 +124,12 @@ on:
         required: false
         type: string
 
+      trivy-ignore-policy:
+        description: "Rego file path to evaluate each vulnerability"
+        required: false
+        type: string
+
+
 env:
   AWS_ROLE: ${{ inputs.aws-role }}
   AWS_READONLY_OVERRIDE_ROLE: ${{ inputs.aws-read-role-name }}
@@ -369,6 +375,7 @@ jobs:
           output: "trivy-results.sarif"
           scan-type: "config"
           severity: "CRITICAL,HIGH"
+          ignore-policy: ${{ inputs.trivy-ignore-policy }}
 
   update-pr:
     name: "Update PR"
