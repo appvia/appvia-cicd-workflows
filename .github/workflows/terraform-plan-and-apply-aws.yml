@@ -348,6 +348,7 @@ jobs:
           name: additional-dir-${{ inputs.environment }}
           path: ${{ inputs.additional-dir }}
           retention-days: 14
+          if-no-files-found: error
 
   terraform-security:
     name: "Static Security Analysis"
