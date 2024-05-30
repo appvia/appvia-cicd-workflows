@@ -124,11 +124,11 @@ on:
         required: false
         type: string
 
-      trivy-ignore-policy:
-        description: "Rego file path to evaluate each vulnerability"
+      trivy-ignore-file:
+        default: ".trivyignore"
+        description: "Comma-separated list of relative paths to one or more .trivyignore files"
         required: false
         type: string
-
 
 env:
   AWS_ROLE: ${{ inputs.aws-role }}
@@ -375,7 +375,7 @@ jobs:
           output: "trivy-results.sarif"
           scan-type: "config"
           severity: "CRITICAL,HIGH"
-          ignore-policy: ${{ inputs.trivy-ignore-policy }}
+          trivyignores: ${{ inputs.trivy-ignore-file }}
 
   update-pr:
     name: "Update PR"
