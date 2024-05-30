@@ -252,13 +252,16 @@ jobs:
         with:
           exit-code: "1"
           format: "sarif"
-          hide-progress: true
           ignore-unfixed: true
           output: "trivy-results.sarif"
           scan-type: "config"
           scan-ref: ${{ inputs.working-directory }}
           severity: "CRITICAL,HIGH"
           trivyignores: ${{ steps.security-exceptions.outputs.filename }}
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
   
   terraform-validate-examples:
     name: "Terraform Validate Examples"
