@@ -206,21 +206,6 @@ jobs:
         id: lint
         run: tflint -f compact
 
-  terraform-security:
-    name: "Terraform Security"
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ inputs.working-directory }}
-    outputs:
-      result: ${{ steps.security.outcome }}
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-      - name: security
-        id: security
-        uses: aquasecurity/tfsec-action@v1.0.0
-
   terraform-infracost:
     name: "Get Cost Estimate"
     if: github.event_name == 'pull_request' && inputs.enable-infracost
@@ -364,6 +349,32 @@ jobs:
           path: ${{ inputs.additional-dir }}
           retention-days: 14
           if-no-files-found: error
+
+  terraform-security:
+    name: "Static Security Analysis"
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.security.outcome }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Check If Trivy Ignore File Exists
+        id: security-exceptions
+        run: |
+          if [ -e ".trivyignore" ]; then
+            echo filename=".trivyignore" >> $GITHUB_OUTPUT
+          fi
+      - name: Run Trivy vulnerability
+        id: security
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          exit-code: "1"
+          format: "table"
+          ignore-unfixed: true
+          scan-type: "config"
+          scan-ref: ${{ inputs.working-directory }}
+          severity: "CRITICAL,HIGH"
+          trivyignores: ${{ steps.security-exceptions.outputs.filename }}
 
   update-pr:
     name: "Update PR"

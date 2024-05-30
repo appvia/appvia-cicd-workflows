@@ -232,6 +232,32 @@ jobs:
         id: validate
         run: terraform -chdir=${{ inputs.terraform-dir }} validate -no-color
 
+  terraform-security:
+    name: "Static Security Analysis"
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.security.outcome }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Check If Trivy Ignore File Exists
+        id: security-exceptions
+        run: |
+          if [ -e ".trivyignore" ]; then
+            echo filename=".trivyignore" >> $GITHUB_OUTPUT
+          fi
+      - name: Run Trivy vulnerability
+        id: security
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          exit-code: "1"
+          format: "table"
+          ignore-unfixed: true
+          scan-type: "config"
+          scan-ref: ${{ inputs.working-directory }}
+          severity: "CRITICAL,HIGH"
+          trivyignores: ${{ steps.security-exceptions.outputs.filename }}
+  
   terraform-validate-examples:
     name: "Terraform Validate Examples"
     runs-on: ubuntu-latest
@@ -277,23 +303,6 @@ jobs:
         with:
           fail-on-diff: true
           working-dir: ${{ inputs.terraform-dir }}
-
-  terraform-security:
-    name: "Terraform Security"
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ inputs.working-directory }}
-    outputs:
-      result: ${{ steps.security.outcome }}
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-      - name: Terraform security
-        id: security
-        uses: aquasecurity/tfsec-action@v1.0.0
-        with:
-          working_directory: ${{ inputs.working-directory }}
 
   terraform-infracost:
     name: "Get Cost Estimate"
