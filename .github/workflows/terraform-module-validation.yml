@@ -72,6 +72,12 @@ on:
         required: false
         type: string
 
+      trivy-scan-dir:
+        default: "."
+        description: "The directory to target for trivy scans"
+        required: false
+        type: string
+
 env:
   AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/web_identity_token_file
 
@@ -256,6 +262,7 @@ jobs:
           ignore-unfixed: true
           output: "trivy-results.sarif"
           scan-type: "config"
+          scan-ref: ${{ inputs.trivy-scan-dir }}
           severity: "CRITICAL,HIGH"
           trivyignores: ${{ steps.security-exceptions.outputs.filename }}
   

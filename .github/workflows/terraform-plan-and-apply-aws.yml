@@ -124,6 +124,12 @@ on:
         required: false
         type: string
 
+      trivy-scan-dir:
+        default: "."
+        description: "The directory to target for trivy scans"
+        required: false
+        type: string
+
 env:
   AWS_ROLE: ${{ inputs.aws-role }}
   AWS_READONLY_OVERRIDE_ROLE: ${{ inputs.aws-read-role-name }}
@@ -374,6 +380,7 @@ jobs:
           ignore-unfixed: true
           output: "trivy-results.sarif"
           scan-type: "config"
+          scan-ref: ${{ inputs.trivy-scan-dir }}
           severity: "CRITICAL,HIGH"
           trivyignores: ${{ steps.security-exceptions.outputs.filename }}
 
