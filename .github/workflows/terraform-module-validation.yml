@@ -34,7 +34,7 @@ on:
       enable-terraform-tests:
         default: true
         description: "Whether to run terraform test"
-        required: false
+        required: true
         type: boolean
 
       enable-terraform-tests-credentials:
