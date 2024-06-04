@@ -34,7 +34,7 @@ on:
       enable-terraform-tests:
         default: true
         description: "Whether to run terraform test"
-        required: true
+        required: false
         type: boolean
 
       enable-terraform-tests-credentials:
@@ -257,7 +257,7 @@ jobs:
           scan-ref: ${{ inputs.working-directory }}
           severity: "CRITICAL,HIGH"
           trivyignores: ${{ steps.security-exceptions.outputs.filename }}
-  
+
   terraform-validate-examples:
     name: "Terraform Validate Examples"
     runs-on: ubuntu-latest
