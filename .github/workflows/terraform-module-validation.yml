@@ -60,6 +60,12 @@ on:
         required: false
         type: string
 
+      terraform-tests-dir:
+        default: "."
+        description: "The terraform test directory"
+        required: false
+        type: string
+
       terraform-version:
         default: "1.7.1"
         description: "The version of terraform to use"
@@ -178,10 +184,10 @@ jobs:
           role-to-assume: ${{ inputs.terraform-tests-aws-role }}
           mask-aws-account-id: "no"
       - name: Terraform Init
-        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
+        run: terraform -chdir=${{ inputs.terraform-tests-dir }} init -backend=false
       - name: Run Tests
         id: tests
-        run: terraform -chdir=${{ inputs.terraform-dir }} test
+        run: terraform -chdir=${{ inputs.terraform-tests-dir }} test
 
   terraform-init:
     name: "Terraform Init"
