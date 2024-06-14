@@ -37,26 +37,9 @@ on:
         required: false
         type: boolean
 
-      enable-terraform-tests-credentials:
-        default: false
-        description: "Whether to run terraform test with AWS credentials"
-        required: false
-        type: boolean
-
       terraform-dir:
         default: "."
         description: "The directory to validate"
-        required: false
-        type: string
-
-      terraform-tests-aws-region:
-        default: "eu-west-1"
-        description: "The AWS region to use for the terraform tests"
-        required: false
-        type: string
-
-      terraform-tests-aws-role:
-        description: "The AWS role to assume for the terraform tests"
         required: false
         type: string
 
@@ -171,18 +154,6 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform-version }}
-      - name: Retrieve Web Identity Token for AWS Authentication
-        if: inputs.enable-terraform-tests-credentials
-        run: |
-          curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value' > $AWS_WEB_IDENTITY_TOKEN_FILE
-      - name: Authenticate with AWS
-        if: inputs.enable-terraform-tests-credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-region: ${{ inputs.terraform-tests-aws-region }}
-          role-session-name: ${{ github.event.repository.name }}
-          role-to-assume: ${{ inputs.terraform-tests-aws-role }}
-          mask-aws-account-id: "no"
       - name: Terraform Init
         run: terraform -chdir=${{ inputs.terraform-tests-dir }} init -backend=false
       - name: Run Tests
