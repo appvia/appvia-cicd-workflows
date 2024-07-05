@@ -290,7 +290,7 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
     steps:
       - name: Setup Infracost
-        uses: infracost/actions/setup@v2
+        uses: infracost/actions/setup@v3
         with:
           api-key: ${{ secrets.infracost-api-key }}
           currency: GBP
