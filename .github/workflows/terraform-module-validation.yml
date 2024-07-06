@@ -354,7 +354,7 @@ jobs:
       - terraform-validate-examples
     steps:
       - name: Add PR Comment
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             // 1. Retrieve existing bot comments for the PR
