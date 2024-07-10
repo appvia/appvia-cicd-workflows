@@ -94,6 +94,12 @@ on:
         required: false
         type: string
 
+      terraform-lock-timeout:
+        default: "30s"
+        description: The time to wait for a lock
+        required: false
+        type: string
+
       terraform-log-level:
         default: ""
         description: "The log level of terraform"
@@ -326,7 +332,7 @@ jobs:
         id: plan
         run: |
           set -o pipefail
-          terraform -chdir=${{ inputs.terraform-dir }} plan -var-file=$TF_VAR_FILE -no-color -input=false -out=tfplan 2>&1 | tee tfplan.stdout
+          terraform -chdir=${{ inputs.terraform-dir }} plan -var-file=$TF_VAR_FILE -no-color -input=false -out=tfplan -lock-timeout={{ inputs.terraform-lock-timeout }} 2>&1 | tee tfplan.stdout
       - name: Terraform Plan JSON Output
         run: |
           terraform -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
@@ -537,4 +543,4 @@ jobs:
           name: additional-dir-${{ inputs.environment }}
           path: ${{ inputs.additional-dir }}
       - name: Terraform Apply
-        run: terraform apply -auto-approve -input=false tfplan
+        run: terraform apply -auto-approve -input=false -lock-timeout={{ inputs.terraform-lock-timeout }} tfplan
