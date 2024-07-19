@@ -5,6 +5,7 @@ This GitHub Actions workflow template ([terraform-module-release.yml](../.github
 ## Usage
 
 Create a new workflow file in your Terraform repository (e.g. `.github/workflows/release.yml`) with the below contents:
+
 ```yml
 name: Release
 

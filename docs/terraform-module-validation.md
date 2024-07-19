@@ -4,25 +4,25 @@ This GitHub Actions workflow template ([terraform-module-validation.yml](../.git
 
 ## Workflow Jobs
 
-- terraform-format
-- terraform-lint
-- terraform-init
-- terraform-validate
 - terraform-docs
+- terraform-format
+- terraform-init
+- terraform-lint
+- terraform-security
+- terraform-validate
+- terraform-validate-examples
+- terraform-infracost
 
 1. **Terraform Format:** Runs the terraform fmt command to check that all Terraform files are formatted correctly.
 2. **Terraform Lint:** Runs a terraform lint to check for deprecated syntax, unused declarations, invalid types, and enforcing best practices.
 3. **Terraform Init:** Provider plugins and modules are installed.
-4. **Terraform Validate:** The Terraform configuration files are run through validation to check for syntax errors and other issues.
-5. **Terraform Docs:** The terraform-docs utility is run to check that the documentation for the module is up to date.
-6. **Get Cost Estimate:** The infracost utility is run to get a cost estimate for the module. A comment will be added to the pull request with the cost estimate.
-7. **Add PR Comment:** If the workflow is triggered via a Pull Request, a comment will be added to the ticket containing the results of the previous steps.
-
-## Inputs
-
-| Input             | Required? | Default Value | Description                     |
-| ----------------- | --------- | ------------- | ------------------------------- |
-| terraform-version | No        | 1.5.2         | The version of Terraform to use |
+4. **Terraform Security:** The module code and dependencies are examined by a static analysis tool to identify and misconfiguration or potential security issues.
+5. **Terraform Validate:** The Terraform configuration files are run through validation to check for syntax errors and other issues.
+6. **Terraform Validate Examples:** Any examples found under the ./examples are validated to ensure against `terraform validate`
+7. **Terraform Docs:** The terraform-docs utility is run to check that the documentation for the module is up to date.
+8. **Get Cost Estimate:** The infracost utility is run to get a cost estimate for the module. A comment will be added to the pull request with the cost estimate.
+9. **Terraform Infracost:** the module is run through infracost to gauge an idea of the associated cloud costs.
+10. **Add PR Comment:** If the workflow is triggered via a Pull Request, a comment will be added to the ticket containing the results of the previous steps.
 
 ## Usage
 
@@ -43,9 +43,11 @@ jobs:
     uses: appvia/appvia-cicd-workflows/.github/workflows/terraform-module-validation.yml@main
     name: Module Validation
     secrets:
+      # Required if you want to run infracost
       infracost-api-key: ${{ secrets.ORG_INFRACOST_API_KEY }}
     with:
+      aws-account-id: <ACCOUNT_ID>
+      aws-region: <AWS_REGION>
+      # Optional toggle to enable infracost
       enable-infracost: true
 ```
-
-**Note:** This template may change over time, so it is recommended that you point to a tagged version rather than the main branch.
