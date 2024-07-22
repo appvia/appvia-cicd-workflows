@@ -70,6 +70,12 @@ on:
         required: false
         type: boolean
 
+      enable-terraform-apply:
+        default: true
+        description: "Whether to run terraform apply on merge to main"
+        required: false
+        type: boolean
+
       environment:
         default: "production"
         description: "The environment to deploy to"
@@ -478,7 +484,7 @@ jobs:
 
   terraform-apply:
     name: "Terraform Apply"
-    if: github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule"]'), github.event_name)
+    if: github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule"]'), github.event_name) && inputs.enable-terraform-apply
     environment: ${{ inputs.environment }}
     runs-on: ${{ inputs.runs-on }}
     defaults:
