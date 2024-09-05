@@ -1,0 +1,308 @@
+name: Terraform Destroy
+on:
+  workflow_call:
+    inputs:
+      confirmation:
+        description: Expects the name of the repository to be confirmed
+        required: true
+        type: string
+
+      additional-dir:
+        description: Uploads additional directory as an artifact from plan stage
+        required: false
+        type: string
+
+      additional-dir-optional:
+        default: false
+        description: Uploads additional directory as an artifact from plan stage
+        required: false
+        type: boolean
+
+      aws-account-id:
+        description: "The AWS account ID to deploy to"
+        required: true
+        type: string
+
+      aws-role:
+        default: "${{ github.event.repository.name }}"
+        description: "The AWS role to assume"
+        required: false
+        type: string
+
+      aws-read-role-name:
+        description: "Overrides the default behavior, and uses a custom role name for read-only access"
+        required: false
+        type: string
+
+      aws-write-role-name:
+        description: "Overrides the default behavior, and uses a custom role name for read-write access"
+        required: false
+        type: string
+
+      aws-region:
+        default: "eu-west-2"
+        description: "The AWS region to deploy to"
+        required: false
+        type: string
+
+      cicd-repository:
+        default: "appvia/appvia-cicd-workflows"
+        description: "The repository to pull the CI/CD workflows from"
+        required: false
+        type: string
+
+      cicd-branch:
+        default: "main"
+        description: "The branch to pull the CI/CD workflows from"
+        required: false
+        type: string
+
+      environment:
+        default: "production"
+        description: "The environment to deploy to"
+        required: false
+        type: string
+
+      use-env-as-suffix:
+        default: false
+        description: "Whether to use the environment as a suffix for the state file and iam roles"
+        required: false
+        type: boolean
+
+      runs-on:
+        default: "ubuntu-latest"
+        description: "Single label value for the GitHub runner to use (custom value only applies to Terraform Plan and Apply steps)"
+        required: false
+        type: string
+
+      terraform-dir:
+        default: "."
+        description: "The directory to validate"
+        required: false
+        type: string
+
+      terraform-lock-timeout:
+        default: "30s"
+        description: The time to wait for a lock
+        required: false
+        type: string
+
+      terraform-log-level:
+        default: ""
+        description: "The log level of terraform"
+        required: false
+        type: string
+
+      terraform-state-key:
+        default: ""
+        description: "The key of the terraform state (default: <repo-name>.tfstate)"
+        required: false
+        type: string
+
+      terraform-values-file:
+        default: ""
+        description: "The values file to use (default: <environment>.tfvars)"
+        required: false
+        type: string
+
+      terraform-version:
+        default: "1.7.1"
+        description: "The version of terraform to use"
+        required: false
+        type: string
+
+      working-directory:
+        default: "."
+        description: "The working directory to run terraform commands in"
+        required: false
+        type: string
+
+env:
+  AWS_ROLE: ${{ inputs.aws-role }}
+  AWS_READONLY_OVERRIDE_ROLE: ${{ inputs.aws-read-role-name }}
+  AWS_READWRITE_OVERRIDE_ROLE: ${{ inputs.aws-write-role-name }}
+  AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/web_identity_token_file
+  TF_LOG: ${{ inputs.terraform-log-level }}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  terraform-plan:
+    if: inputs.confirmation == github.repository
+    name: "Terraform Plan"
+    runs-on: ${{ inputs.runs-on }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    outputs:
+      result-auth: ${{ steps.auth.outcome }}
+      result-init: ${{ steps.init.outcome }}
+      result-validate: ${{ steps.validate.outcome }}
+      result-s3-backend-check: ${{ steps.s3-backend-check.outcome }}
+      result-plan: ${{ steps.plan.outcome }}
+      plan-stdout: ${{ steps.plan.outputs.stdout }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 16
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+      - name: Retrieve Web Identity Token for AWS Authentication
+        run: |
+          curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value' > $AWS_WEB_IDENTITY_TOKEN_FILE
+      - name: Determine AWS Role
+        id: role
+        run: |
+          if [ "${{ inputs.use-env-as-suffix }}" == "true" ]; then
+            role_suffix="-${{ inputs.environment }}"
+          else
+            role_suffix=""
+          fi
+          if [[ "${GITHUB_REF##*/}" == "main" ]]; then
+            echo "name=${AWS_READWRITE_OVERRIDE_ROLE:-${AWS_ROLE}${role_suffix}}" >> $GITHUB_OUTPUT
+          else
+            echo "name=${AWS_READONLY_OVERRIDE_ROLE:-${AWS_ROLE}${role_suffix}-ro}" >> $GITHUB_OUTPUT
+          fi
+      - name: Authenticate with AWS
+        id: auth
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ inputs.aws-region }}
+          role-session-name: ${{ github.event.repository.name }}
+          role-to-assume: arn:aws:iam::${{ inputs.aws-account-id }}:role/${{ steps.role.outputs.name }}
+          mask-aws-account-id: "no"
+      - name: Set terraform-state-key variable
+        id: state-key
+        run: |
+          if [ -n "${{ inputs.terraform-state-key }}" ]; then
+            echo "name=${{ inputs.terraform-state-key }}" >> $GITHUB_OUTPUT
+          else
+            if [ "${{ inputs.use-env-as-suffix }}" == "true" ]; then
+              echo "name=${{ github.event.repository.name }}-${{ inputs.environment }}.tfstate" >> $GITHUB_OUTPUT
+            else
+              echo "name=${{ github.event.repository.name }}.tfstate" >> $GITHUB_OUTPUT
+            fi
+          fi
+      - name: Terraform Init
+        id: init
+        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ steps.state-key.outputs.name }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
+      - name: Terraform Validate
+        id: validate
+        run: terraform -chdir=${{ inputs.terraform-dir }} validate -no-color
+      - name: Terraform S3 Backend Check
+        id: s3-backend-check
+        run: |
+          if grep -E '^[^#]*backend\s+"s3"' terraform.tf; then
+            echo "Terraform configuration references an S3 backend."
+          else
+            echo "Terraform configuration does not reference an S3 backend."
+            exit 1
+          fi
+      - name: Set terraform-values-file variable
+        run: |
+          if [ -n "${{ inputs.terraform-values-file }}" ]; then
+            echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> $GITHUB_ENV
+          else
+            echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> $GITHUB_ENV
+          fi
+      - name: Terraform Destroy Plan
+        id: plan
+        run: |
+          set -o pipefail
+          terraform -chdir=${{ inputs.terraform-dir }} plan -destroy -var-file=$TF_VAR_FILE -no-color -input=false -out=tfplan -lock-timeout=${{ inputs.terraform-lock-timeout }} 2>&1 | tee tfplan.stdout
+      - name: Terraform Plan JSON Output
+        run: |
+          terraform -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
+      - name: Upload tfplan
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ inputs.environment }}
+          path: "tfplan*"
+          retention-days: 14
+      - name: Optional Additional Directory Upload
+        if: inputs.additional-dir-optional && inputs.additional-dir != ''
+        run: |
+          mkdir -p ${{ inputs.additional-dir }}
+          touch ${{ inputs.additional-dir }}/.optional.file
+      - name: Upload additional directory
+        if: inputs.additional-dir
+        uses: actions/upload-artifact@v4
+        with:
+          name: additional-dir-${{ inputs.environment }}
+          path: ${{ inputs.additional-dir }}
+          retention-days: 14
+          if-no-files-found: error
+
+  terraform-apply:
+    if: inputs.confirmation == github.repository
+    name: "Terraform Destroy Apply"
+    environment: ${{ inputs.environment }}
+    runs-on: ${{ inputs.runs-on }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    needs:
+      - terraform-plan
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 16
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+      - name: Retrieve Web Identity Token for AWS Authentication
+        run: |
+          curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value' > $AWS_WEB_IDENTITY_TOKEN_FILE
+      - name: Determine AWS Role
+        id: role
+        run: |
+          if [ "${{ inputs.use-env-as-suffix }}" == "true" ]; then
+            echo "name=${AWS_READWRITE_OVERRIDE_ROLE:-${AWS_ROLE}-${{ inputs.environment }}}" >> $GITHUB_OUTPUT
+          else
+            echo "name=${AWS_READWRITE_OVERRIDE_ROLE:-${AWS_ROLE}}" >> $GITHUB_OUTPUT
+          fi
+      - name: Authenticate with AWS
+        id: auth
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ inputs.aws-region }}
+          role-session-name: ${{ github.event.repository.name }}
+          role-to-assume: arn:aws:iam::${{ inputs.aws-account-id }}:role/${{ steps.role.outputs.name }}
+      - name: Set terraform-state-key variable
+        id: state-key
+        run: |
+          if [ -n "${{ inputs.terraform-state-key }}" ]; then
+            echo "name=${{ inputs.terraform-state-key }}" >> $GITHUB_OUTPUT
+          else
+            if [ "${{ inputs.use-env-as-suffix }}" == "true" ]; then
+              echo "name=${{ github.event.repository.name }}-${{ inputs.environment }}.tfstate" >> $GITHUB_OUTPUT
+            else
+              echo "name=${{ github.event.repository.name }}.tfstate" >> $GITHUB_OUTPUT
+            fi
+          fi
+      - name: Terraform Init
+        id: init
+        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ steps.state-key.outputs.name }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
+      - name: Download tfplan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ inputs.environment }}
+      - name: Download Additional Directories
+        if: inputs.additional-dir
+        uses: actions/download-artifact@v4
+        with:
+          name: additional-dir-${{ inputs.environment }}
+          path: ${{ inputs.additional-dir }}
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -input=false -lock-timeout=${{ inputs.terraform-lock-timeout }} tfplan
