@@ -357,10 +357,11 @@ jobs:
         if: inputs.additional-dir
         uses: actions/upload-artifact@v4
         with:
+          if-no-files-found: error
+          include-hidden-files: true
           name: additional-dir-${{ inputs.environment }}
           path: ${{ inputs.additional-dir }}
           retention-days: 14
-          if-no-files-found: error
 
   terraform-security:
     name: "Static Security Analysis"
