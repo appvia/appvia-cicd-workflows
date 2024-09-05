@@ -2,6 +2,11 @@ name: Terraform Destroy
 on:
   workflow_call:
     inputs:
+      confirmation:
+        description: Expects the name of the repository to be confirmed
+        required: true
+        type: string
+
       additional-dir:
         description: Uploads additional directory as an artifact from plan stage
         required: false
@@ -125,6 +130,7 @@ permissions:
 
 jobs:
   terraform-plan:
+    if: inputs.confirmation == github.repository
     name: "Terraform Plan"
     runs-on: ${{ inputs.runs-on }}
     defaults:
@@ -236,6 +242,7 @@ jobs:
           if-no-files-found: error
 
   terraform-apply:
+    if: inputs.confirmation == github.repository
     name: "Terraform Destroy Apply"
     environment: ${{ inputs.environment }}
     runs-on: ${{ inputs.runs-on }}
