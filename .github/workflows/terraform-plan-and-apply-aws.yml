@@ -379,7 +379,7 @@ jobs:
           fi
       - name: Run Trivy vulnerability
         id: security
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@0.27.0
         with:
           exit-code: "1"
           format: "table"
