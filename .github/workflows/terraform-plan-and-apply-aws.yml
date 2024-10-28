@@ -130,6 +130,12 @@ on:
         required: false
         type: string
 
+      trivy-version:
+        default: "v0.56.2"
+        description: "The version of trivy to use"
+        required: false
+        type: string
+
       working-directory:
         default: "."
         description: "The working directory to run terraform commands in"
@@ -388,6 +394,7 @@ jobs:
           scan-ref: ${{ inputs.working-directory }}
           severity: "CRITICAL,HIGH"
           trivyignores: ${{ steps.security-exceptions.outputs.filename }}
+          version: ${{ inputs.trivy-version }}
 
   update-pr:
     name: "Update PR"

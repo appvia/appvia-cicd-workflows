@@ -55,6 +55,12 @@ on:
         required: false
         type: string
 
+      trivy-version:
+        default: "v0.56.2"
+        description: "The version of trivy to use"
+        required: false
+        type: string
+
       working-directory:
         default: "."
         description: "Working directory"
@@ -234,6 +240,7 @@ jobs:
           scan-ref: ${{ inputs.working-directory }}
           severity: "CRITICAL,HIGH"
           trivyignores: ${{ steps.security-exceptions.outputs.filename }}
+          version: ${{ inputs.trivy-version }}
 
   terraform-validate-examples:
     name: "Terraform Validate Examples"
