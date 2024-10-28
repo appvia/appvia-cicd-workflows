@@ -229,6 +229,13 @@ jobs:
           if [ -e ".trivyignore" ]; then
             echo filename=".trivyignore" >> $GITHUB_OUTPUT
           fi
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+      - name: Terraform Init
+        id: init
+        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
       - name: Run Trivy vulnerability
         id: security
         uses: aquasecurity/trivy-action@0.24.0
