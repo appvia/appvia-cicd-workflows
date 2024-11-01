@@ -125,7 +125,7 @@ on:
         type: string
 
       terraform-version:
-        default: "1.7.1"
+        default: "1.9.0"
         description: "The version of terraform to use"
         required: false
         type: string
