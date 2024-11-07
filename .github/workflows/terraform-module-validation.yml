@@ -143,6 +143,11 @@ jobs:
       - name: Linting Code
         id: lint
         run: tflint -f compact
+      - name: Linter Initialize - Baseline
+        run: tflint --config=./../../config/.tflint.hcl --init
+      - name: Linting Code - Baseline
+        id: lintBaseline
+        run: tflint --config=./../../config/.tflint.hcl -f compact
 
   terraform-tests:
     name: "Terraform Unit Tests"
