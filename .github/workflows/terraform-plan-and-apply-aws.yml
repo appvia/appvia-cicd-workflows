@@ -225,7 +225,7 @@ jobs:
         run: tflint -f compact
       - name: Retrieve Base Lint Configuration
         run: |
-          wget https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/config/tflint.hcl -O tflint-base.hcl
+          wget https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/config/.tflint.hcl -O .tflint-base.hcl
       - name: Linter Initialize - Baseline
         run: tflint --config=.tflint-base.hcl --init
       - name: Linting Code - Baseline
