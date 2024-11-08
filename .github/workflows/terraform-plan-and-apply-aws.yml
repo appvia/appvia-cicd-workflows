@@ -225,7 +225,7 @@ jobs:
         run: tflint -f compact
       - name: Retrieve Centralised Lint Configuration
         run: |
-          wget https://raw.githubusercontent.com/appvia/appvia-cicd-workflows/refs/heads/tflint-tags/config/.tflint.hcl -O .tflint-centralised.hcl
+          wget https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/config/.tflint.hcl -O .tflint-centralised.hcl
       - name: Linter Initialize - centralised
         run: tflint --config=.tflint-centralised.hcl --init
       - name: Linting Code - centralised
