@@ -223,6 +223,14 @@ jobs:
       - name: Linting Code
         id: lint
         run: tflint -f compact
+      - name: Retrieve Centralised Lint Configuration
+        run: |
+          wget https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/config/.tflint.hcl -O .tflint-centralised.hcl
+      - name: Linter Initialize - centralised
+        run: tflint --config=.tflint-centralised.hcl --init
+      - name: Linting Code - centralised
+        id: lintCentralised
+        run: tflint --config=.tflint-centralised.hcl -f compact
 
   terraform-infracost:
     name: "Get Cost Estimate"
