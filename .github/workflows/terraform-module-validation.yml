@@ -150,7 +150,7 @@ jobs:
         run: tflint --config=.tflint-centralised.hcl --init
       - name: Linting Code - centralised
         id: lintCentralised
-        run: tflint --config=.tflint-centralised.hcl -f compact
+        run: tflint --config=.tflint-centralised.hcl --var-file values/production.tfvars -f compact
 
   terraform-tests:
     name: "Terraform Unit Tests"
