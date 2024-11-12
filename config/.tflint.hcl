@@ -6,7 +6,7 @@ plugin "aws" {
 
 rule "aws_resource_missing_tags" {
   enabled = true
-  tags = ["Name","Product", "Environment", "Owner"]
+  tags    = ["Product", "Environment", "Owner"]
   exclude = []
 }
 
@@ -25,3 +25,4 @@ rule "terraform_unused_required_providers" {
 rule "terraform_standard_module_structure" {
   enabled = false
 }
+
