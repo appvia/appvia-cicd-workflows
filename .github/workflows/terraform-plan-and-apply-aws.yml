@@ -228,9 +228,16 @@ jobs:
           wget https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/config/.tflint.hcl -O .tflint-centralised.hcl
       - name: Linter Initialize - centralised
         run: tflint --config=.tflint-centralised.hcl --init
+      - name: Set terraform-values-file variable
+        run: |
+          if [ -n "${{ inputs.terraform-values-file }}" ]; then
+            echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> $GITHUB_ENV
+          else
+            echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> $GITHUB_ENV
+          fi
       - name: Linting Code - centralised
         id: lintCentralised
-        run: tflint --config=.tflint-centralised.hcl -f compact
+        run: tflint --config=.tflint-centralised.hcl -f compact --var-file=$TF_VAR_FILE
 
   terraform-infracost:
     name: "Get Cost Estimate"
