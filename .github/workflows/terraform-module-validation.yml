@@ -129,6 +129,7 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
     outputs:
       result: ${{ steps.lint.outcome }}
+      result_centralised_lint: ${{ steps.lintCentralised.outcome }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -148,9 +149,16 @@ jobs:
           wget https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/config/.tflint.hcl -O .tflint-centralised.hcl
       - name: Linter Initialize - centralised
         run: tflint --config=.tflint-centralised.hcl --init
+      - name: Set terraform-values-file variable
+        run: |
+          if [ -n "${{ inputs.terraform-values-file }}" ]; then
+            echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> $GITHUB_ENV
+          else
+            echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> $GITHUB_ENV
+          fi
       - name: Linting Code - centralised
         id: lintCentralised
-        run: tflint --config=.tflint-centralised.hcl -f compact
+        run: tflint --config=.tflint-centralised.hcl -f compact --var-file=$TF_VAR_FILE
 
   terraform-tests:
     name: "Terraform Unit Tests"
@@ -393,6 +401,7 @@ jobs:
             const output = `### Pull Request Review Status
             * 🖌 <b>Terraform Format and Style:</b>     \`${{ needs.terraform-format.outputs.result }}\`
             * 🔍 <b>Terraform Linting:</b>              \`${{ needs.terraform-lint.outputs.result }}\`
+            * 🔍 <b>Terraform Centralised Linting:</b>  \`${{ needs.terraform-lint.outputs.result_centralised_lint }}\`
             * 👮 <b>Terraform Security Check:</b>       \`${{ needs.terraform-security.outputs.result }}\`
             * 🔘 <b>Terraform Tests:</b>                \`${{ needs.terraform-tests.outputs.result }}\`
             * 🔧 <b>Terraform Initialisation:</b>       \`${{ needs.terraform-init.outputs.result }}\`
