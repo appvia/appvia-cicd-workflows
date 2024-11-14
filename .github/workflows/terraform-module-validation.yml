@@ -60,6 +60,12 @@ on:
         description: "The version of trivy to use"
         required: false
         type: string
+    
+      terraform-values-file:
+        default: ""
+        description: "The values file to use (default: <environment>.tfvars)"
+        required: false
+        type: string
 
       working-directory:
         default: "."
