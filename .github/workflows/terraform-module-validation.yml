@@ -160,7 +160,12 @@ jobs:
           if [ -n "${{ inputs.terraform-values-file }}" ]; then
             echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> $GITHUB_ENV
           else
-            echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> $GITHUB_ENV
+            if [ -f "example.tfvars" ]; then
+              echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> $GITHUB_ENV
+            else
+              wget https://raw.githubusercontent.com/appvia/appvia-cicd-workflows/refs/heads/tf-workflow/config/example.tfvars -O example.tfvars
+              echo "TF_VAR_FILE=example.tfvars" >> $GITHUB_ENV
+            fi
           fi
       - name: Linting Code - centralised
         id: lintCentralised
