@@ -209,6 +209,7 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
     outputs:
       result: ${{ steps.lint.outcome }}
+      result_centralised_lint: ${{ steps.lintCentralised.outcome }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -405,6 +406,13 @@ jobs:
       - name: Terraform Init
         id: init
         run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
+      - name: Set terraform-values-file variable
+        run: |
+          if [ -n "${{ inputs.terraform-values-file }}" ]; then
+            echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> $GITHUB_ENV
+          else
+            echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> $GITHUB_ENV
+          fi
       - name: Run Trivy vulnerability
         id: security
         uses: aquasecurity/trivy-action@0.28.0
@@ -417,6 +425,7 @@ jobs:
           severity: "CRITICAL,HIGH"
           trivyignores: ${{ steps.security-exceptions.outputs.filename }}
           version: ${{ inputs.trivy-version }}
+          tf-vars: $TF_VAR_FILE
 
   update-pr:
     name: "Update PR"
@@ -473,15 +482,16 @@ jobs:
 
             // 3. Prepare format of the comment
             const output = `### Pull Request Review Status (${{ inputs.environment }})
-            * 🖌 <b>Terraform Format and Style:</b> \`${{ needs.terraform-format.outputs.result }}\`
-            * 🔍 <b>Terraform Linting:</b>          \`${{ needs.terraform-lint.outputs.result }}\`
-            * 🔑 <b>AWS Authentication:</b>         \`${{ needs.terraform-plan.outputs.result-auth }}\`
-            * 👮 <b>Terraform Security Check:</b>   \`${{ needs.terraform-security.outputs.result }}\`
-            * 🔧 <b>Terraform Initialisation:</b>   \`${{ needs.terraform-plan.outputs.result-init }}\`
-            * 🤖 <b>Terraform Validation:</b>       \`${{ needs.terraform-plan.outputs.result-validate }}\`
-            * 📁 <b>Terraform S3 Backend:</b>       \`${{ needs.terraform-plan.outputs.result-s3-backend-check }}\`
-            * 📖 <b>Terraform Plan:</b>             \`${{ needs.terraform-plan.outputs.result-plan }}\`
-            * 🔖 <b>Commitlint:</b>                 \`${{ needs.commitlint.outputs.result }}\`
+            * 🖌 <b>Terraform Format and Style:</b>     \`${{ needs.terraform-format.outputs.result }}\`
+            * 🔍 <b>Terraform Linting:</b>              \`${{ needs.terraform-lint.outputs.result }}\`
+            * 🔍 <b>Terraform Centralised Linting:</b>  \`${{ needs.terraform-lint.outputs.result_centralised_lint }}\`
+            * 🔑 <b>AWS Authentication:</b>             \`${{ needs.terraform-plan.outputs.result-auth }}\`
+            * 👮 <b>Terraform Security Check:</b>       \`${{ needs.terraform-security.outputs.result }}\`
+            * 🔧 <b>Terraform Initialisation:</b>       \`${{ needs.terraform-plan.outputs.result-init }}\`
+            * 🤖 <b>Terraform Validation:</b>           \`${{ needs.terraform-plan.outputs.result-validate }}\`
+            * 📁 <b>Terraform S3 Backend:</b>           \`${{ needs.terraform-plan.outputs.result-s3-backend-check }}\`
+            * 📖 <b>Terraform Plan:</b>                 \`${{ needs.terraform-plan.outputs.result-plan }}\`
+            * 🔖 <b>Commitlint:</b>                     \`${{ needs.commitlint.outputs.result }}\`
 
             <details><summary><b>Output: 📖 Terraform Plan</b></summary>
 
