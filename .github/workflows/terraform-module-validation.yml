@@ -129,7 +129,6 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
     outputs:
       result: ${{ steps.lint.outcome }}
-      result_centralised_lint: ${{ steps.lintCentralised.outcome }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
