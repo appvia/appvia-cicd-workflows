@@ -60,12 +60,6 @@ on:
         description: "The version of trivy to use"
         required: false
         type: string
-    
-      terraform-values-file:
-        default: ""
-        description: "The values file to use (default: <environment>.tfvars)"
-        required: false
-        type: string
 
       working-directory:
         default: "."
@@ -150,26 +144,6 @@ jobs:
       - name: Linting Code
         id: lint
         run: tflint -f compact
-      - name: Retrieve Centralised Lint Configuration
-        run: |
-          wget https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/config/.tflint.hcl -O .tflint-centralised.hcl
-      - name: Linter Initialize - centralised
-        run: tflint --config=.tflint-centralised.hcl --init
-      - name: Set terraform-values-file variable
-        run: |
-          if [ -n "${{ inputs.terraform-values-file }}" ]; then
-            echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> $GITHUB_ENV
-          else
-            if [ -f "example.tfvars" ]; then
-              echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> $GITHUB_ENV
-            else
-              wget https://raw.githubusercontent.com/appvia/appvia-cicd-workflows/refs/heads/tf-workflow/config/example.tfvars -O example.tfvars
-              echo "TF_VAR_FILE=example.tfvars" >> $GITHUB_ENV
-            fi
-          fi
-      - name: Linting Code - centralised
-        id: lintCentralised
-        run: tflint --config=.tflint-centralised.hcl -f compact --var-file=$TF_VAR_FILE
 
   terraform-tests:
     name: "Terraform Unit Tests"
@@ -412,7 +386,6 @@ jobs:
             const output = `### Pull Request Review Status
             * 🖌 <b>Terraform Format and Style:</b>     \`${{ needs.terraform-format.outputs.result }}\`
             * 🔍 <b>Terraform Linting:</b>              \`${{ needs.terraform-lint.outputs.result }}\`
-            * 🔍 <b>Terraform Centralised Linting:</b>  \`${{ needs.terraform-lint.outputs.result_centralised_lint }}\`
             * 👮 <b>Terraform Security Check:</b>       \`${{ needs.terraform-security.outputs.result }}\`
             * 🔘 <b>Terraform Tests:</b>                \`${{ needs.terraform-tests.outputs.result }}\`
             * 🔧 <b>Terraform Initialisation:</b>       \`${{ needs.terraform-init.outputs.result }}\`
