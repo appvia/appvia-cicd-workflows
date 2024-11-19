@@ -217,7 +217,7 @@ jobs:
         uses: terraform-linters/setup-tflint@v4
       - name: Set up GitHub credentials
         run: |
-          git config --global url."https://x-access-token:${{ secrets.TF_VAR_GITHUB_TOKEN }}@github.com".insteadOf "https://github.com"
+          git config --global url."https://${{ secrets.PAT_USER }}:${{ secrets.PAT_TOKEN_GH }}@github.com/".insteadOf "https://github.com"
       - name: Terraform Init
         run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
       - name: Setup Linter
