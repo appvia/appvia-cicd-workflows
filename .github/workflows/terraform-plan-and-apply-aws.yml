@@ -148,7 +148,7 @@ on:
         required: false
         type: string
       
-       private-modules-included:
+      private-modules-included:
         description: Optional flag to state if terraform requires pulling private modules
         required: false
         default: false
