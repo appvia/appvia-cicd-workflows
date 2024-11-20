@@ -7,10 +7,10 @@ on:
         description: "The API key for infracost"
         required: false
       appvia-actions-secret:
-        description: "The API key for infracost"
+        description: "Appvia App secret for GH"
         required: false
       appvia-actions-id:
-        description: "The API key for infracost"
+        description: "Appvia App ID for GH"
         required: false
 
     inputs:
@@ -147,6 +147,12 @@ on:
         description: "The working directory to run terraform commands in"
         required: false
         type: string
+      
+       private-modules-included:
+        description: Optional flag to state if terraform requires pulling private modules
+        required: false
+        default: false
+        type: boolean
 
 env:
   AWS_ROLE: ${{ inputs.aws-role }}
@@ -224,12 +230,15 @@ jobs:
       # Short lived 60 min token
       - name: GetToken
         id: get_workflow_token
+        if: inputs.private-modules-included
         uses: peter-murray/workflow-application-token-action@v2
+        
         with:
           application_id: ${{secrets.appvia-actions-id}}
           application_private_key: ${{secrets.appvia-actions-secret}}
           organization: appvia
       - name: Set up GitHub credentials
+        if: inputs.private-modules-included
         run: |
           git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
       - name: Terraform Init
