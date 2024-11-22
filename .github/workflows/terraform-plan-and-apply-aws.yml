@@ -6,11 +6,11 @@ on:
       infracost-api-key:
         description: "The API key for infracost"
         required: false
-      appvia-actions-secret:
-        description: "Appvia App secret for GH"
-        required: false
       appvia-actions-id:
         description: "Appvia App ID for GH"
+        required: false
+      appvia-actions-secret:
+        description: "Appvia App secret for GH"
         required: false
 
     inputs:
@@ -88,17 +88,17 @@ on:
         default: false
         type: boolean
 
+      organization-name:
+        description: "The name of the Github organization"
+        required: false
+        type: string
+        default: "appvia"
+
       environment:
         default: "production"
         description: "The environment to deploy to"
         required: false
         type: string
-
-      use-env-as-suffix:
-        default: false
-        description: "Whether to use the environment as a suffix for the state file and iam roles"
-        required: false
-        type: boolean
 
       runs-on:
         default: "ubuntu-latest"
@@ -154,10 +154,10 @@ on:
         required: false
         type: string
 
-      private-modules-included:
-        description: Optional flag to state if terraform requires pulling private modules
-        required: false
+      use-env-as-suffix:
         default: false
+        description: "Whether to use the environment as a suffix for the state file and iam roles"
+        required: false
         type: boolean
 
 env:
@@ -238,9 +238,9 @@ jobs:
         if: inputs.enable-private-access
         uses: peter-murray/workflow-application-token-action@v2
         with:
-          application_id: ${{secrets.appvia-actions-id}}
-          application_private_key: ${{secrets.appvia-actions-secret}}
-          organization: appvia
+          application_id: ${{ secrets.appvia-actions-id }}
+          application_private_key: ${{ secrets.appvia-actions-secret }}
+          organization: ${{ inputs.organization-name }}
           revoke_token: true
       - name: Setup Credentials
         if: inputs.enable-private-access
@@ -370,9 +370,9 @@ jobs:
         if: inputs.enable-private-access
         uses: peter-murray/workflow-application-token-action@v2
         with:
-          application_id: ${{secrets.appvia-actions-id}}
-          application_private_key: ${{secrets.appvia-actions-secret}}
-          organization: appvia
+          application_id: ${{ secrets.appvia-actions-id }}
+          application_private_key: ${{ secrets.appvia-actions-secret }}
+          organization: ${{ inputs.organization-name }}
           revoke_token: true
       - name: Setup Credentials
         if: inputs.enable-private-access
@@ -452,9 +452,9 @@ jobs:
         if: inputs.enable-private-access
         uses: peter-murray/workflow-application-token-action@v2
         with:
-          application_id: ${{secrets.appvia-actions-id}}
-          application_private_key: ${{secrets.appvia-actions-secret}}
-          organization: appvia
+          application_id: ${{ secrets.appvia-actions-id }}
+          application_private_key: ${{ secrets.appvia-actions-secret }}
+          organization: ${{ inputs.organization-name }}
           revoke_token: true
       - name: Setup Credentials
         if: inputs.enable-private-access
@@ -637,9 +637,9 @@ jobs:
         if: inputs.enable-private-access
         uses: peter-murray/workflow-application-token-action@v2
         with:
-          application_id: ${{secrets.appvia-actions-id}}
-          application_private_key: ${{secrets.appvia-actions-secret}}
-          organization: appvia
+          application_id: ${{ secrets.appvia-actions-id }}
+          application_private_key: ${{ secrets.appvia-actions-secret }}
+          organization: ${{ inputs.organization-name }}
           revoke_token: true
       - name: Setup Credentials
         if: inputs.enable-private-access

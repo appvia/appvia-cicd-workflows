@@ -77,6 +77,12 @@ on:
         default: false
         type: boolean
 
+      organization-name:
+        default: "appvia"
+        description: "The name of the GitHub organization"
+        required: false
+        type: string
+
       use-env-as-suffix:
         default: false
         description: "Whether to use the environment as a suffix for the state file and iam roles"
@@ -209,9 +215,9 @@ jobs:
         if: inputs.enable-private-access
         uses: peter-murray/workflow-application-token-action@v2
         with:
-          application_id: ${{secrets.appvia-actions-id}}
-          application_private_key: ${{secrets.appvia-actions-secret}}
-          organization: appvia
+          application_id: ${{ secrets.appvia-actions-id }}
+          application_private_key: ${{ secrets.appvia-actions-secret }}
+          organization: ${{ inputs.organization-name }}
           revoke_token: true
       - name: Setup Credentials
         if: inputs.enable-private-access
@@ -323,9 +329,9 @@ jobs:
         if: inputs.enable-private-access
         uses: peter-murray/workflow-application-token-action@v2
         with:
-          application_id: ${{secrets.appvia-actions-id}}
-          application_private_key: ${{secrets.appvia-actions-secret}}
-          organization: appvia
+          application_id: ${{ secrets.appvia-actions-id }}
+          application_private_key: ${{ secrets.appvia-actions-secret }}
+          organization: ${{ inputs.organization-name }}
           revoke_token: true
       - name: Setup Credentials
         if: inputs.enable-private-access
