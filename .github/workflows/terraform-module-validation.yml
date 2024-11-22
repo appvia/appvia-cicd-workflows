@@ -157,7 +157,7 @@ jobs:
       - name: Enable Private Modules
         id: get_workflow_token
         if: inputs.enable-private-access
-        uses: peter-murray/workflow-application-token-action@v2
+        uses: peter-murray/workflow-application-token-action@v4
         with:
           application_id: ${{ secrets.appvia-actions-id }}
           application_private_key: ${{ secrets.appvia-actions-secret }}
@@ -196,7 +196,7 @@ jobs:
       - name: Enable Private Modules
         id: get_workflow_token
         if: inputs.enable-private-access
-        uses: peter-murray/workflow-application-token-action@v2
+        uses: peter-murray/workflow-application-token-action@v4
         with:
           application_id: ${{ secrets.appvia-actions-id }}
           application_private_key: ${{ secrets.appvia-actions-secret }}
@@ -234,7 +234,7 @@ jobs:
       - name: Enable Private Modules
         id: get_workflow_token
         if: inputs.enable-private-access
-        uses: peter-murray/workflow-application-token-action@v2
+        uses: peter-murray/workflow-application-token-action@v4
         with:
           application_id: ${{ secrets.appvia-actions-id }}
           application_private_key: ${{ secrets.appvia-actions-secret }}
@@ -270,7 +270,7 @@ jobs:
       - name: Enable Private Modules
         id: get_workflow_token
         if: inputs.enable-private-access
-        uses: peter-murray/workflow-application-token-action@v2
+        uses: peter-murray/workflow-application-token-action@v4
         with:
           application_id: ${{ secrets.appvia-actions-id }}
           application_private_key: ${{ secrets.appvia-actions-secret }}
@@ -308,7 +308,7 @@ jobs:
       - name: Enable Private Modules
         id: get_workflow_token
         if: inputs.enable-private-access
-        uses: peter-murray/workflow-application-token-action@v2
+        uses: peter-murray/workflow-application-token-action@v4
         with:
           application_id: ${{secrets.appvia-actions-id}}
           application_private_key: ${{secrets.appvia-actions-secret}}
