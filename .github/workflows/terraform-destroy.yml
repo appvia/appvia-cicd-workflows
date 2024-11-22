@@ -1,6 +1,14 @@
 name: Terraform Destroy
 on:
   workflow_call:
+    secrets:
+      appvia-actions-secret:
+        description: "Appvia App secret for GH"
+        required: false
+      appvia-actions-id:
+        description: "Appvia App ID for GH"
+        required: false
+
     inputs:
       confirmation:
         description: Expects the name of the repository to be confirmed
