@@ -6,6 +6,13 @@ on:
       infracost-api-key:
         description: "The API key for infracost"
         required: false
+      appvia-actions-secret:
+        description: "Appvia App secret for GH"
+        required: false
+      appvia-actions-id:
+        description: "Appvia App ID for GH"
+        required: false
+
     inputs:
       cicd-repository:
         default: "appvia/appvia-cicd-workflows"
@@ -31,11 +38,23 @@ on:
         required: false
         type: boolean
 
+      enable-private-access:
+        description: Optional flag to state if terraform requires pulling private modules
+        required: false
+        default: false
+        type: boolean
+
       enable-terraform-tests:
         default: true
         description: "Whether to run terraform test"
         required: false
         type: boolean
+
+      organization-name:
+        default: "appvia"
+        description: "The name of the GitHub organization"
+        required: false
+        type: string
 
       terraform-dir:
         default: "."
@@ -68,6 +87,7 @@ on:
         type: string
 
 env:
+  ## Location of the AWS Web Identity Token file
   AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/web_identity_token_file
 
 permissions:
@@ -134,6 +154,19 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup Linter
         uses: terraform-linters/setup-tflint@v4
+      - name: Enable Private Modules
+        id: get_workflow_token
+        if: inputs.enable-private-access
+        uses: peter-murray/workflow-application-token-action@v4
+        with:
+          application_id: ${{ secrets.appvia-actions-id }}
+          application_private_key: ${{ secrets.appvia-actions-secret }}
+          organization: ${{ inputs.organization-name }}
+          revoke_token: true
+      - name: Setup Credentials
+        if: inputs.enable-private-access
+        run: |
+          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
       - name: Terraform Init
         run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
       - name: Setup Linter
@@ -160,6 +193,19 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform-version }}
+      - name: Enable Private Modules
+        id: get_workflow_token
+        if: inputs.enable-private-access
+        uses: peter-murray/workflow-application-token-action@v4
+        with:
+          application_id: ${{ secrets.appvia-actions-id }}
+          application_private_key: ${{ secrets.appvia-actions-secret }}
+          organization: ${{ inputs.organization-name }}
+          revoke_token: true
+      - name: Setup Credentials
+        if: inputs.enable-private-access
+        run: |
+          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
       - name: Terraform Init
         run: terraform -chdir=${{ inputs.terraform-tests-dir }} init -backend=false
       - name: Run Tests
@@ -185,6 +231,19 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform-version }}
+      - name: Enable Private Modules
+        id: get_workflow_token
+        if: inputs.enable-private-access
+        uses: peter-murray/workflow-application-token-action@v4
+        with:
+          application_id: ${{ secrets.appvia-actions-id }}
+          application_private_key: ${{ secrets.appvia-actions-secret }}
+          organization: ${{ inputs.organization-name }}
+          revoke_token: true
+      - name: Setup Credentials
+        if: inputs.enable-private-access
+        run: |
+          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
       - name: Terraform Init
         id: init
         run: terraform -chdir=${{ inputs.terraform-dir }} init
@@ -208,6 +267,19 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform-version }}
+      - name: Enable Private Modules
+        id: get_workflow_token
+        if: inputs.enable-private-access
+        uses: peter-murray/workflow-application-token-action@v4
+        with:
+          application_id: ${{ secrets.appvia-actions-id }}
+          application_private_key: ${{ secrets.appvia-actions-secret }}
+          organization: ${{ inputs.organization-name }}
+          revoke_token: true
+      - name: Setup Credentials
+        if: inputs.enable-private-access
+        run: |
+          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
       - name: Terraform Init
         id: init
         run: terraform -chdir=${{ inputs.terraform-dir }} init
@@ -233,6 +305,19 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform-version }}
+      - name: Enable Private Modules
+        id: get_workflow_token
+        if: inputs.enable-private-access
+        uses: peter-murray/workflow-application-token-action@v4
+        with:
+          application_id: ${{secrets.appvia-actions-id}}
+          application_private_key: ${{secrets.appvia-actions-secret}}
+          organization: appvia
+          revoke_token: true
+      - name: Setup Credentials
+        if: inputs.enable-private-access
+        run: |
+          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
       - name: Terraform Init
         id: init
         run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
@@ -261,6 +346,19 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 16
+      - name: Enable Private Modules
+        id: get_workflow_token
+        if: inputs.enable-private-access
+        uses: peter-murray/workflow-application-token-action@v4
+        with:
+          application_id: ${{ secrets.appvia-actions-id }}
+          application_private_key: ${{ secrets.appvia-actions-secret }}
+          organization: ${{ inputs.organization-name }}
+          revoke_token: true
+      - name: Setup Credentials
+        if: inputs.enable-private-access
+        run: |
+          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:

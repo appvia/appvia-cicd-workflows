@@ -1,6 +1,14 @@
 name: Terraform Destroy
 on:
   workflow_call:
+    secrets:
+      appvia-actions-secret:
+        description: "Appvia App secret for GH"
+        required: false
+      appvia-actions-id:
+        description: "Appvia App ID for GH"
+        required: false
+
     inputs:
       confirmation:
         description: Expects the name of the repository to be confirmed
@@ -60,6 +68,18 @@ on:
       environment:
         default: "production"
         description: "The environment to deploy to"
+        required: false
+        type: string
+
+      enable-private-access:
+        description: Optional flag to state if terraform requires pulling private modules
+        required: false
+        default: false
+        type: boolean
+
+      organization-name:
+        default: "appvia"
+        description: "The name of the GitHub organization"
         required: false
         type: string
 
@@ -190,6 +210,19 @@ jobs:
               echo "name=${{ github.event.repository.name }}.tfstate" >> $GITHUB_OUTPUT
             fi
           fi
+      - name: Enable Private Modules
+        id: get_workflow_token
+        if: inputs.enable-private-access
+        uses: peter-murray/workflow-application-token-action@v4
+        with:
+          application_id: ${{ secrets.appvia-actions-id }}
+          application_private_key: ${{ secrets.appvia-actions-secret }}
+          organization: ${{ inputs.organization-name }}
+          revoke_token: true
+      - name: Setup Credentials
+        if: inputs.enable-private-access
+        run: |
+          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
       - name: Terraform Init
         id: init
         run: terraform -chdir=${{ inputs.terraform-dir }} init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ steps.state-key.outputs.name }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
@@ -291,6 +324,19 @@ jobs:
               echo "name=${{ github.event.repository.name }}.tfstate" >> $GITHUB_OUTPUT
             fi
           fi
+      - name: Enable Private Modules
+        id: get_workflow_token
+        if: inputs.enable-private-access
+        uses: peter-murray/workflow-application-token-action@v4
+        with:
+          application_id: ${{ secrets.appvia-actions-id }}
+          application_private_key: ${{ secrets.appvia-actions-secret }}
+          organization: ${{ inputs.organization-name }}
+          revoke_token: true
+      - name: Setup Credentials
+        if: inputs.enable-private-access
+        run: |
+          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
       - name: Terraform Init
         id: init
         run: terraform -chdir=${{ inputs.terraform-dir }} init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ steps.state-key.outputs.name }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
