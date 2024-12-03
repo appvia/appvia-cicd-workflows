@@ -323,7 +323,7 @@ jobs:
         run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
       - name: Run Trivy vulnerability
         id: security
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.29.0
         with:
           exit-code: "1"
           format: "table"
