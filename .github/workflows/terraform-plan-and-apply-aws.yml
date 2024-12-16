@@ -400,34 +400,34 @@ jobs:
           else
             echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> $GITHUB_ENV
           fi
-      - name: Terraform Plan
-        id: plan
-        run: |
-          set -o pipefail
-          terraform -chdir=${{ inputs.terraform-dir }} plan -var-file=$TF_VAR_FILE -no-color -input=false -out=tfplan -lock-timeout=${{ inputs.terraform-lock-timeout }} 2>&1 | tee tfplan.stdout
-      - name: Terraform Plan JSON Output
-        run: |
-          terraform -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
-      - name: Upload tfplan
-        uses: actions/upload-artifact@v4
-        with:
-          name: tfplan-${{ inputs.environment }}
-          path: "tfplan*"
-          retention-days: 14
-      - name: Optional Additional Directory Upload
-        if: inputs.additional-dir-optional && inputs.additional-dir != ''
-        run: |
-          mkdir -p ${{ inputs.additional-dir }}
-          touch ${{ inputs.additional-dir }}/.optional.file
-      - name: Upload additional directory
-        if: inputs.additional-dir
-        uses: actions/upload-artifact@v4
-        with:
-          if-no-files-found: error
-          include-hidden-files: true
-          name: additional-dir-${{ inputs.environment }}
-          path: ${{ inputs.additional-dir }}
-          retention-days: 14
+#      - name: Terraform Plan
+#        id: plan
+#        run: |
+#          set -o pipefail
+#          terraform -chdir=${{ inputs.terraform-dir }} plan -var-file=$TF_VAR_FILE -no-color -input=false -out=tfplan -lock-timeout=${{ inputs.terraform-lock-timeout }} 2>&1 | tee tfplan.stdout
+#      - name: Terraform Plan JSON Output
+#        run: |
+#          terraform -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
+#      - name: Upload tfplan
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: tfplan-${{ inputs.environment }}
+#          path: "tfplan*"
+#          retention-days: 14
+#      - name: Optional Additional Directory Upload
+#        if: inputs.additional-dir-optional && inputs.additional-dir != ''
+#        run: |
+#          mkdir -p ${{ inputs.additional-dir }}
+#          touch ${{ inputs.additional-dir }}/.optional.file
+#      - name: Upload additional directory
+#        if: inputs.additional-dir
+#        uses: actions/upload-artifact@v4
+#        with:
+#          if-no-files-found: error
+#          include-hidden-files: true
+#          name: additional-dir-${{ inputs.environment }}
+#          path: ${{ inputs.additional-dir }}
+#          retention-days: 14
 
   terraform-security:
     name: "Static Security Analysis"
