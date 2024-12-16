@@ -499,6 +499,7 @@ jobs:
       - commitlint
     steps:
       - name: Download tfplan
+        if: terraform-plan == success()
         uses: actions/download-artifact@v4
         with:
           name: tfplan-${{ inputs.environment }}
