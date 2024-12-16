@@ -499,10 +499,14 @@ jobs:
       - commitlint
     steps:
       - name: Download tfplan
-        if: terraform-plan == success()
+        id: tfplan
         uses: actions/download-artifact@v4
         with:
           name: tfplan-${{ inputs.environment }}
+        continue-on-error: true
+      - name: "WARNING: NO TFPLAN AVAILABLE"
+        if: steps.tfplan.conclusion == 'failure'
+        run: echo "NO TFPLAN AVAILABLE TO DOWNLOAD, CHECK TERRAFORM-PLAN JOB"
       - name: Add PR Comment
         uses: actions/github-script@v7
         with:
