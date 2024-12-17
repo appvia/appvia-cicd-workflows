@@ -167,6 +167,10 @@ jobs:
         if: inputs.enable-private-access
         run: |
           git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
       - name: Terraform Init
         run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
       - name: Setup Linter
