@@ -541,7 +541,8 @@ jobs:
                 planOutput = "Terraform Plan output is too large, please view the workflow run logs directly."
               }
             } else {
-                console.log("tfplan not found, please view the workflow run logs directly.")
+                var plan_non_existant = "Terraform Plan Output File not found, please view the workflow run logs directly."
+                console.log(plan_non_existant)
             }
 
             // 3. Prepare format of the comment
@@ -560,11 +561,19 @@ jobs:
             <details><summary><b>Output: 📖 Terraform Plan</b></summary>
 
             \`\`\`
-            ${planOutput}
+            if (plan_exists) {
+              ${planOutput}
+            } else {
+                ${plan_non_existant}
+            }
             \`\`\`
             </details>
 
-            <b>Plan Summary:</b> ${planSummary}
+            <b>Plan Summary:</b> if (plan_exists) {
+              ${planSummary}
+            } else {
+                ${plan_non_existant}
+            }
 
             *<b>Pusher:</b> @${{ github.actor }}, <b>Action:</b> \`${{ github.event_name }}\`*
             *<b>Workflow Run Link:</b> ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}*`;
