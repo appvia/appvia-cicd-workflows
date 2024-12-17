@@ -499,7 +499,6 @@ jobs:
       - commitlint
     steps:
       - name: Download tfplan
-        id: tfplan
         uses: actions/download-artifact@v4
         with:
           name: tfplan-${{ inputs.environment }}
