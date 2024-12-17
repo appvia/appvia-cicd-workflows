@@ -542,6 +542,8 @@ jobs:
               }
             } else {
                 var plan_non_existant = "Terraform Plan Output File not found, please view the workflow run logs directly."
+                planOutput = plan_non_existant
+                planSummary = plan_non_existant
                 console.log(plan_non_existant)
             }
 
@@ -561,19 +563,11 @@ jobs:
             <details><summary><b>Output: 📖 Terraform Plan</b></summary>
 
             \`\`\`
-            if (plan_exists) {
-              ${planOutput}
-            } else {
-                ${plan_non_existant}
-            }
+            ${planOutput}
             \`\`\`
             </details>
 
-            <b>Plan Summary:</b> if (plan_exists) {
-              ${planSummary}
-            } else {
-                ${plan_non_existant}
-            }
+            <b>Plan Summary:</b> ${planSummary}
 
             *<b>Pusher:</b> @${{ github.actor }}, <b>Action:</b> \`${{ github.event_name }}\`*
             *<b>Workflow Run Link:</b> ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}*`;
