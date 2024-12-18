@@ -540,10 +540,9 @@ jobs:
                 planOutput = "Terraform Plan output is too large, please view the workflow run logs directly."
               }
             } else {
-                var plan_non_existant = "Terraform Plan Output File not found, please view the workflow run logs directly."
+                const plan_non_existant = "Terraform Plan Output File not found, please view the workflow run logs directly."
                 planOutput = plan_non_existant
                 planSummary = plan_non_existant
-                console.log(plan_non_existant)
             }
 
             // 3. Prepare format of the comment
