@@ -506,6 +506,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: tfplan-${{ inputs.environment }}
+        continue-on-error: true
       - name: Add PR Comment
         uses: actions/github-script@v7
         with:
@@ -522,23 +523,30 @@ jobs:
 
             // 2. Check output length
             const fs = require("fs");
-            const plan = fs.readFileSync("tfplan.stdout", "utf8");
-            const excludedStrings = ["Terraform used the selected providers", "No changes", "Refreshing state...", "Reading...", "Read complete after"];
-            const filteredLines = plan.split('\n').filter(line =>
-              !excludedStrings.some(excludedStr => line.includes(excludedStr))
-            );
-            var planOutput = filteredLines.join('\n').trim();
-
-            const planRegex = /Plan: (\d+) to add, (\d+) to change, (\d+) to destroy\./;
-            const planMatch = planOutput.match(planRegex);
-            var planSummary = "Not found, please view the workflow run logs directly."
-            if (planMatch) {
-              planSummary = `${planMatch[1]} to add, ${planMatch[2]} to change, ${planMatch[3]} to destroy.`
-            }
-
-            const MAX_GITHUB_COMMENT_LENGTH = 65536 - 800; // 800 characters for the comment template
-            if (planOutput.length < 1 || planOutput.length > MAX_GITHUB_COMMENT_LENGTH) {
-              planOutput = "Terraform Plan output is too large, please view the workflow run logs directly."
+            const plan_exists = fs.existsSync("tfplan.stdout");
+            if (plan_exists) {
+              const plan = fs.readFileSync("tfplan.stdout", "utf8");
+              const excludedStrings = ["Terraform used the selected providers", "No changes", "Refreshing state...", "Reading...", "Read complete after"];
+              const filteredLines = plan.split('\n').filter(line =>
+                !excludedStrings.some(excludedStr => line.includes(excludedStr))
+              );
+              var planOutput = filteredLines.join('\n').trim();
+  
+              const planRegex = /Plan: (\d+) to add, (\d+) to change, (\d+) to destroy\./;
+              const planMatch = planOutput.match(planRegex);
+              var planSummary = "Not found, please view the workflow run logs directly."
+              if (planMatch) {
+                planSummary = `${planMatch[1]} to add, ${planMatch[2]} to change, ${planMatch[3]} to destroy.`
+              }
+  
+              const MAX_GITHUB_COMMENT_LENGTH = 65536 - 800; // 800 characters for the comment template
+              if (planOutput.length < 1 || planOutput.length > MAX_GITHUB_COMMENT_LENGTH) {
+                planOutput = "Terraform Plan output is too large, please view the workflow run logs directly."
+              }
+            } else {
+                const plan_non_existant = "Terraform Plan Output File not found, please view the workflow run logs directly."
+                planOutput = plan_non_existant
+                planSummary = plan_non_existant
             }
 
             // 3. Prepare format of the comment
