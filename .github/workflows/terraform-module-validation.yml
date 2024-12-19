@@ -338,6 +338,50 @@ jobs:
           trivyignores: ${{ steps.security-exceptions.outputs.filename }}
           version: ${{ inputs.trivy-version }}
 
+  terraform-checkov:
+    name: "Static Security Analysis - Checkov"
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.security.outcome }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+      - name: Enable Private Modules
+        id: get_workflow_token
+        if: inputs.enable-private-access
+        uses: peter-murray/workflow-application-token-action@v4
+        with:
+          application_id: ${{ secrets.appvia-actions-id }}
+          application_private_key: ${{ secrets.appvia-actions-secret }}
+          organization: ${{ inputs.organization-name }}
+          revoke_token: true
+      - name: Setup Credentials
+        if: inputs.enable-private-access
+        run: |
+          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
+      - name: Terraform Init
+        id: init
+        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
+      - name: Set terraform-values-file variable
+        run: |
+          if [ -n "${{ inputs.terraform-values-file }}" ]; then
+            echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> $GITHUB_ENV
+          else
+            echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> $GITHUB_ENV
+          fi
+      - name: Run Checkov
+        id: security
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: ${{ inputs.working-directory }}
+          framework: terraform
+          output_format: cli,sarif
+          var_file: ${TF_VAR_FILE}
+
   terraform-validate-examples:
     name: "Terraform Validate Examples"
     runs-on: ubuntu-latest
@@ -466,6 +510,7 @@ jobs:
       - terraform-lint
       - terraform-tests
       - terraform-security
+      - terraform-checkov
       - terraform-validate
       - terraform-validate-examples
     steps:
@@ -488,6 +533,7 @@ jobs:
             * 🖌 <b>Terraform Format and Style:</b>     \`${{ needs.terraform-format.outputs.result }}\`
             * 🔍 <b>Terraform Linting:</b>              \`${{ needs.terraform-lint.outputs.result }}\`
             * 👮 <b>Terraform Security Check:</b>       \`${{ needs.terraform-security.outputs.result }}\`
+            * 👮 <b>Terraform Security Checkov:</b>     \`${{ needs.terraform-checkov.outputs.result }}\`
             * 🔘 <b>Terraform Tests:</b>                \`${{ needs.terraform-tests.outputs.result }}\`
             * 🔧 <b>Terraform Initialisation:</b>       \`${{ needs.terraform-init.outputs.result }}\`
             * 🤖 <b>Terraform Validation:</b>           \`${{ needs.terraform-validate.outputs.result }}\`

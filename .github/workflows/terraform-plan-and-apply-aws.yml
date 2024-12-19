@@ -433,6 +433,50 @@ jobs:
           path: ${{ inputs.additional-dir }}
           retention-days: 14
 
+  terraform-checkov:
+    name: "Static Security Analysis - Checkov"
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.security.outcome }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+      - name: Enable Private Modules
+        id: get_workflow_token
+        if: inputs.enable-private-access
+        uses: peter-murray/workflow-application-token-action@v4
+        with:
+          application_id: ${{ secrets.appvia-actions-id }}
+          application_private_key: ${{ secrets.appvia-actions-secret }}
+          organization: ${{ inputs.organization-name }}
+          revoke_token: true
+      - name: Setup Credentials
+        if: inputs.enable-private-access
+        run: |
+          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
+      - name: Terraform Init
+        id: init
+        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
+      - name: Set terraform-values-file variable
+        run: |
+          if [ -n "${{ inputs.terraform-values-file }}" ]; then
+            echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> $GITHUB_ENV
+          else
+            echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> $GITHUB_ENV
+          fi
+      - name: Run Checkov
+        id: security
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: ${{ inputs.working-directory }}
+          framework: terraform
+          output_format: cli,sarif
+          var_file: ${TF_VAR_FILE}
+
   terraform-security:
     name: "Static Security Analysis"
     runs-on: ubuntu-latest
@@ -500,6 +544,7 @@ jobs:
       - terraform-lint
       - terraform-plan
       - terraform-security
+      - terraform-checkov
       - commitlint
     steps:
       - name: Download tfplan
@@ -531,14 +576,14 @@ jobs:
                 !excludedStrings.some(excludedStr => line.includes(excludedStr))
               );
               var planOutput = filteredLines.join('\n').trim();
-  
+
               const planRegex = /Plan: (\d+) to add, (\d+) to change, (\d+) to destroy\./;
               const planMatch = planOutput.match(planRegex);
               var planSummary = "Not found, please view the workflow run logs directly."
               if (planMatch) {
                 planSummary = `${planMatch[1]} to add, ${planMatch[2]} to change, ${planMatch[3]} to destroy.`
               }
-  
+
               const MAX_GITHUB_COMMENT_LENGTH = 65536 - 800; // 800 characters for the comment template
               if (planOutput.length < 1 || planOutput.length > MAX_GITHUB_COMMENT_LENGTH) {
                 planOutput = "Terraform Plan output is too large, please view the workflow run logs directly."
@@ -556,6 +601,7 @@ jobs:
             * 🔍 <b>Terraform Centralised Linting:</b>  \`${{ needs.terraform-lint.outputs.result_centralised_lint }}\`
             * 🔑 <b>AWS Authentication:</b>             \`${{ needs.terraform-plan.outputs.result-auth }}\`
             * 👮 <b>Terraform Security Check:</b>       \`${{ needs.terraform-security.outputs.result }}\`
+            * 👮 <b>Terraform Security Checkov:</b>     \`${{ needs.terraform-checkov.outputs.result }}\`
             * 🔧 <b>Terraform Initialisation:</b>       \`${{ needs.terraform-plan.outputs.result-init }}\`
             * 🤖 <b>Terraform Validation:</b>           \`${{ needs.terraform-plan.outputs.result-validate }}\`
             * 📁 <b>Terraform S3 Backend:</b>           \`${{ needs.terraform-plan.outputs.result-s3-backend-check }}\`
