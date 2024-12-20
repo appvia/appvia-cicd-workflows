@@ -303,7 +303,7 @@ jobs:
         id: security-exceptions
         run: |
           if [ -e ".trivyignore" ]; then
-            echo filename=".trivyignore" >> $GITHUB_OUTPUT
+            echo filename=".trivyignore" >> "${GITHUB_OUTPUT}"
           fi
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -373,8 +373,8 @@ jobs:
           for dir in examples/*; do
             if [ -d "$dir" ]; then
               echo "--> Validating $dir"
-              terraform -chdir=${dir} init -backend=false
-              terraform -chdir=${dir} validate -no-color
+              terraform -chdir="${dir}" init -backend=false
+              terraform -chdir="${dir}" validate -no-color
             fi
           done
 
@@ -417,15 +417,15 @@ jobs:
       - name: Check For TF Files
         id: baseline
         run: |
-          if ls *.tf 2>/dev/null; then
-            echo "exists=true" >> $GITHUB_OUTPUT
+          if ls ./*.tf 2>/dev/null; then
+            echo "exists=true" >> "${GITHUB_OUTPUT}"
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "exists=false" >> "${GITHUB_OUTPUT}"
           fi
       - name: Generate Cost Estimate Baseline
         if: steps.baseline.outputs.exists == 'true'
         run: |
-          infracost breakdown --path=${TF_ROOT} \
+          infracost breakdown --path="${TF_ROOT}" \
             --format=json \
             --out-file=/tmp/infracost-base.json
       - name: Checkout PR branch
@@ -433,20 +433,20 @@ jobs:
       - name: Generate Cost Estimate Difference
         if: steps.baseline.outputs.exists == 'true'
         run: |
-          infracost diff --path=${TF_ROOT} \
+          infracost diff --path="${TF_ROOT}" \
             --format=json \
             --compare-to=/tmp/infracost-base.json \
             --out-file=/tmp/infracost.json
       - name: Generate Infracost Cost Estimate
         if: steps.baseline.outputs.exists == 'false'
         run: |
-          infracost breakdown --path=${TF_ROOT} \
+          infracost breakdown --path="$}{TF_ROOT}" \
             --format=json \
             --out-file=/tmp/infracost.json
       - name: Post Infracost comment
         run: |
           infracost comment github --path=/tmp/infracost.json \
-            --repo=$GITHUB_REPOSITORY \
+            --repo="${GITHUB_REPOSITORY}" \
             --github-token=${{github.token}} \
             --pull-request=${{github.event.pull_request.number}} \
             --behavior=update

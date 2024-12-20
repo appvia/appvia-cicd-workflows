@@ -1,3 +1,4 @@
+---
 name: Terraform Destroy
 on:
   workflow_call:
@@ -176,7 +177,7 @@ jobs:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Retrieve Web Identity Token for AWS Authentication
         run: |
-          curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value' > $AWS_WEB_IDENTITY_TOKEN_FILE
+          curl -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" | jq -r '.value' > "${AWS_WEB_IDENTITY_TOKEN_FILE}"
       - name: Determine AWS Role
         id: role
         run: |
@@ -186,9 +187,9 @@ jobs:
             role_suffix=""
           fi
           if [[ "${GITHUB_REF##*/}" == "main" ]]; then
-            echo "name=${AWS_READWRITE_OVERRIDE_ROLE:-${AWS_ROLE}${role_suffix}}" >> $GITHUB_OUTPUT
+            echo "name=${AWS_READWRITE_OVERRIDE_ROLE:-${AWS_ROLE}${role_suffix}}" >> "$GITHUB_OUTPUT"
           else
-            echo "name=${AWS_READONLY_OVERRIDE_ROLE:-${AWS_ROLE}${role_suffix}-ro}" >> $GITHUB_OUTPUT
+            echo "name=${AWS_READONLY_OVERRIDE_ROLE:-${AWS_ROLE}${role_suffix}-ro}" >> "$GITHUB_OUTPUT"
           fi
       - name: Authenticate with AWS
         id: auth
@@ -202,12 +203,12 @@ jobs:
         id: state-key
         run: |
           if [ -n "${{ inputs.terraform-state-key }}" ]; then
-            echo "name=${{ inputs.terraform-state-key }}" >> $GITHUB_OUTPUT
+            echo "name=${{ inputs.terraform-state-key }}" >> "$GITHUB_OUTPUT"
           else
             if [ "${{ inputs.use-env-as-suffix }}" == "true" ]; then
-              echo "name=${{ github.event.repository.name }}-${{ inputs.environment }}.tfstate" >> $GITHUB_OUTPUT
+              echo "name=${{ github.event.repository.name }}-${{ inputs.environment }}.tfstate" >> "$GITHUB_OUTPUT"
             else
-              echo "name=${{ github.event.repository.name }}.tfstate" >> $GITHUB_OUTPUT
+              echo "name=${{ github.event.repository.name }}.tfstate" >> "$GITHUB_OUTPUT"
             fi
           fi
       - name: Enable Private Modules
@@ -241,15 +242,15 @@ jobs:
       - name: Set terraform-values-file variable
         run: |
           if [ -n "${{ inputs.terraform-values-file }}" ]; then
-            echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> $GITHUB_ENV
+            echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> "${GITHUB_ENV}"
           else
-            echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> $GITHUB_ENV
+            echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> "${GITHUB_ENV}"
           fi
       - name: Terraform Destroy Plan
         id: plan
         run: |
           set -o pipefail
-          terraform -chdir=${{ inputs.terraform-dir }} plan -destroy -var-file=$TF_VAR_FILE -no-color -input=false -out=tfplan -lock-timeout=${{ inputs.terraform-lock-timeout }} 2>&1 | tee tfplan.stdout
+          terraform -chdir=${{ inputs.terraform-dir }} plan -destroy -var-file="${TF_VAR_FILE}" -no-color -input=false -out=tfplan -lock-timeout=${{ inputs.terraform-lock-timeout }} 2>&1 | tee tfplan.stdout
       - name: Terraform Plan JSON Output
         run: |
           terraform -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
@@ -296,14 +297,14 @@ jobs:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Retrieve Web Identity Token for AWS Authentication
         run: |
-          curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value' > $AWS_WEB_IDENTITY_TOKEN_FILE
+          curl -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" | jq -r '.value' > "${AWS_WEB_IDENTITY_TOKEN_FILE}"
       - name: Determine AWS Role
         id: role
         run: |
           if [ "${{ inputs.use-env-as-suffix }}" == "true" ]; then
-            echo "name=${AWS_READWRITE_OVERRIDE_ROLE:-${AWS_ROLE}-${{ inputs.environment }}}" >> $GITHUB_OUTPUT
+            echo "name=${AWS_READWRITE_OVERRIDE_ROLE:-${AWS_ROLE}-${{ inputs.environment }}}" >> "${GITHUB_OUTPUT}"
           else
-            echo "name=${AWS_READWRITE_OVERRIDE_ROLE:-${AWS_ROLE}}" >> $GITHUB_OUTPUT
+            echo "name=${AWS_READWRITE_OVERRIDE_ROLE:-${AWS_ROLE}}" >> "${GITHUB_OUTPUT}"
           fi
       - name: Authenticate with AWS
         id: auth
@@ -316,12 +317,12 @@ jobs:
         id: state-key
         run: |
           if [ -n "${{ inputs.terraform-state-key }}" ]; then
-            echo "name=${{ inputs.terraform-state-key }}" >> $GITHUB_OUTPUT
+            echo "name=${{ inputs.terraform-state-key }}" >> "${GITHUB_OUTPUT}"
           else
             if [ "${{ inputs.use-env-as-suffix }}" == "true" ]; then
-              echo "name=${{ github.event.repository.name }}-${{ inputs.environment }}.tfstate" >> $GITHUB_OUTPUT
+              echo "name=${{ github.event.repository.name }}-${{ inputs.environment }}.tfstate" >> "${GITHUB_OUTPUT}"
             else
-              echo "name=${{ github.event.repository.name }}.tfstate" >> $GITHUB_OUTPUT
+              echo "name=${{ github.event.repository.name }}.tfstate" >> "${GITHUB_OUTPUT}"
             fi
           fi
       - name: Enable Private Modules
