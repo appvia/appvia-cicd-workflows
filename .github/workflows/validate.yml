@@ -1,0 +1,63 @@
+---
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  commitlint:
+    name: "Commitlint"
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 16
+      - name: Install Dependencies
+        run: npm install @commitlint/config-conventional @commitlint/cli
+      - name: Run Commitlint
+        id: commitlint
+        run: npx commitlint --config .commitlintrc.yaml --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
+
+  actionlint:
+    name: "Linting Actions"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Lint Actions
+        uses: raven-actions/actionlint@v2
+        with:
+          fail-on-error: true
+          flags: "-ignore SC2086"
+          shellcheck: true
+
+  yamllint:
+    name: "Linting YAML"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Lint Actions
+        uses: karancode/yamllint-github-action@master
+        with:
+          yamllint_comment: false
+          yamllint_config_filepath: .yamllint.yaml
+          yamllint_file_or_dir: .github/workflows
+          yamllint_strict: false
