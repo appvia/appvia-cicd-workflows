@@ -373,13 +373,6 @@ jobs:
       - name: Terraform Init
         id: init
         run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
-      - name: Set terraform-values-file variable
-        run: |
-          if [ -n "${{ inputs.terraform-values-file }}" ]; then
-            echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> $GITHUB_ENV
-          else
-            echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> $GITHUB_ENV
-          fi
       - name: Run Checkov
         id: security
         uses: bridgecrewio/checkov-action@v12
@@ -387,7 +380,6 @@ jobs:
           directory: ${{ inputs.working-directory }}
           framework: terraform
           output_format: cli,sarif
-          var_file: ${TF_VAR_FILE}
 
   terraform-validate-examples:
     name: "Terraform Validate Examples"
