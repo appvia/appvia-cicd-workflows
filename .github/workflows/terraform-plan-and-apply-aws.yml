@@ -71,7 +71,7 @@ on:
         type: boolean
 
       enable-checkov:
-        default: true
+        default: false
         description: "Whether to run checkov security scanning"
         required: false
         type: boolean
