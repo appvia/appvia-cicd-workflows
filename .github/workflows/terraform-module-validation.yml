@@ -38,6 +38,12 @@ on:
         required: false
         type: boolean
 
+      enable-checkov:
+        default: true
+        description: "Whether to run checkov security scanning"
+        required: false
+        type: boolean
+
       enable-private-access:
         description: Optional flag to state if terraform requires pulling private modules
         required: false
@@ -341,6 +347,7 @@ jobs:
   terraform-checkov:
     name: "Static Security Analysis - Checkov"
     runs-on: ubuntu-latest
+    if: inputs.enable-checkov
     outputs:
       result: ${{ steps.security.outcome }}
     steps:
