@@ -353,6 +353,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+      - name: Ensure Checkov Configuration
+        run: touch .checkov.yml
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -377,6 +379,7 @@ jobs:
         id: security
         uses: bridgecrewio/checkov-action@v12
         with:
+          config_file: .checkov.yml
           directory: ${{ inputs.working-directory }}
           framework: terraform
           output_format: cli,sarif
