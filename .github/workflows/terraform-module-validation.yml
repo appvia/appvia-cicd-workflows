@@ -39,7 +39,7 @@ on:
         type: boolean
 
       enable-checkov:
-        default: false
+        default: true
         description: "Whether to run checkov security scanning"
         required: false
         type: boolean
@@ -380,6 +380,7 @@ jobs:
           directory: ${{ inputs.working-directory }}
           framework: terraform
           output_format: cli,sarif
+          soft_fail: true
 
   terraform-validate-examples:
     name: "Terraform Validate Examples"
