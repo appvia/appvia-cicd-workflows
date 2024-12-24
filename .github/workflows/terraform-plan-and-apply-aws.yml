@@ -142,6 +142,12 @@ on:
         required: false
         type: string
 
+      terraform-parallelism:
+        default: 20
+        description: "The number of parallel operations to run"
+        required: false
+        type: number
+
       terraform-version:
         default: "1.9.0"
         description: "The version of terraform to use"
@@ -414,7 +420,12 @@ jobs:
         id: plan
         run: |
           set -o pipefail
-          terraform -chdir=${{ inputs.terraform-dir }} plan -var-file="${TF_VAR_FILE}" -no-color -input=false -out=tfplan -lock-timeout=${{ inputs.terraform-lock-timeout }} 2>&1 | tee tfplan.stdout
+          terraform -chdir=${{ inputs.terraform-dir }} plan \
+            -var-file="${TF_VAR_FILE}" \
+            -no-color -input=false \
+            -out=tfplan \
+            -parallelism=${{ inputs.terraform-parallelism }} \
+            -lock-timeout=${{ inputs.terraform-lock-timeout }} 2>&1 | tee tfplan.stdout
       - name: Terraform Plan JSON Output
         run: |
           terraform -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
@@ -728,4 +739,9 @@ jobs:
           name: additional-dir-${{ inputs.environment }}
           path: ${{ inputs.additional-dir }}
       - name: Terraform Apply
-        run: terraform apply -auto-approve -input=false -lock-timeout=${{ inputs.terraform-lock-timeout }} tfplan
+        run: |
+          terraform apply \
+            -auto-approve \
+            -input=false \
+            -parallelism=${{ inputs.terraform-parallelism }} \
+            -lock-timeout=${{ inputs.terraform-lock-timeout }} tfplan
