@@ -460,7 +460,8 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
       - name: Ensure Checkov Configuration
-        run: touch .checkov.yml
+        run: |
+          [[ ! -f ".checkov.yml" ]] && echo "{}" > .checkov.yml
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
