@@ -2,13 +2,19 @@
 name: Terraform Drift Detection
 
 on:
-  workflow_dispatch:
+  workflow_call:
     secrets:
       slack-webhook-url:
         description: "The Slack webhook URL"
         required: false
 
     inputs:
+      runs-on:
+        default: "ubuntu-latest"
+        description: "Single label value for the GitHub runner to use (custom value only applies to Terraform Plan and Apply steps)"
+        required: false
+        type: string
+
       aws-account-id:
         description: "The AWS account ID to deploy to"
         required: true
@@ -130,8 +136,9 @@ jobs:
           fi
       - name: Send Slack notification if drift is detected
         if: steps.check-drift.outputs.DRIFT_STATUS == 'drift'
-        uses: slackapi/slack-github-action@v1.24.0
+        uses: slackapi/slack-github-action@v2.0.0
         with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           payload: |
             {
               "channel": "#${{ secrets.SLACK_CHANNEL }}",
@@ -139,5 +146,3 @@ jobs:
               "text": "🚨 Drift Detected (${{ github.repository }})",
               "icon_emoji": ":warning:"
             }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.slack-webhook-url }}
