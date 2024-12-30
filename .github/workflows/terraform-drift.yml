@@ -20,6 +20,22 @@ on:
         required: false
         type: string
 
+      aws-role:
+        default: "${{ github.event.repository.name }}"
+        description: "The AWS role to assume"
+        required: false
+        type: string
+
+      aws-read-role-name:
+        description: "Overrides the default behavior, and uses a custom role name for read-only access"
+        required: false
+        type: string
+
+      aws-write-role-name:
+        description: "Overrides the default behavior, and uses a custom role name for read-write access"
+        required: false
+        type: string
+
       environment:
         default: "production"
         description: "The environment to deploy to"
@@ -73,6 +89,17 @@ on:
         description: "The working directory to run terraform commands in"
         required: false
         type: string
+
+env:
+  AWS_ROLE: ${{ inputs.aws-role }}
+  AWS_READONLY_OVERRIDE_ROLE: ${{ inputs.aws-read-role-name }}
+  AWS_READWRITE_OVERRIDE_ROLE: ${{ inputs.aws-write-role-name }}
+  AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/web_identity_token_file
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
 
 jobs:
   terraform-plan:
