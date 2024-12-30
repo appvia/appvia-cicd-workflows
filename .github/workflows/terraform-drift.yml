@@ -190,9 +190,7 @@ jobs:
           else
             echo "Drift detected!"
             echo "DRIFT_STATUS=drift" >> "$GITHUB_OUTPUT"
-            exit 1  # Fail if drift is detected
           fi
-        continue-on-error: true
       - name: Send Slack notification if drift is detected
         if: steps.check-drift.outputs.DRIFT_STATUS == 'drift'
         uses: slackapi/slack-github-action@v2.0.0
