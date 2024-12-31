@@ -333,7 +333,6 @@ jobs:
       result-validate: ${{ steps.validate.outcome }}
       result-s3-backend-check: ${{ steps.s3-backend-check.outcome }}
       result-plan: ${{ steps.plan.outcome }}
-      plan-stdout: ${{ steps.plan.outputs.stdout }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
