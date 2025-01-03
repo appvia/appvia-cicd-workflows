@@ -432,6 +432,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tfplan-${{ inputs.environment }}
+          compression-level: 9
           path: "tfplan*"
           retention-days: 14
       - name: Optional Additional Directory Upload
@@ -443,9 +444,10 @@ jobs:
         if: inputs.additional-dir
         uses: actions/upload-artifact@v4
         with:
+          name: additional-dir-${{ inputs.environment }}
+          compression-level: 9
           if-no-files-found: error
           include-hidden-files: true
-          name: additional-dir-${{ inputs.environment }}
           path: ${{ inputs.additional-dir }}
           retention-days: 14
 
