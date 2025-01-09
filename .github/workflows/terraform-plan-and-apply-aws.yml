@@ -435,6 +435,15 @@ jobs:
           compression-level: 9
           path: "tfplan*"
           retention-days: 14
+
+      - name: Upload TF Providers and Modules
+        uses: actions/upload-artifact@v4
+        with:
+          name: tf-providers-modules
+          compression-level: 9
+          path: ${{ inputs.working-directory }}/.terraform
+          retention-days: 14
+
       - name: Optional Additional Directory Upload
         if: inputs.additional-dir-optional && inputs.additional-dir != ''
         run: |
@@ -727,9 +736,17 @@ jobs:
         if: inputs.enable-private-access
         run: |
           git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
-      - name: Terraform Init
-        id: init
-        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ steps.state-key.outputs.name }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
+
+#      - name: Terraform Init
+#        id: init
+#        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ steps.state-key.outputs.name }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
+
+      - name: Download .terraform
+        uses: actions/download-artifact@v4
+        with:
+          name: tf-providers-modules
+          path: ${{ inputs.working-directory }}/.terraform
+
       - name: Download tfplan
         uses: actions/download-artifact@v4
         with:
