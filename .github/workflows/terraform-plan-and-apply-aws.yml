@@ -436,13 +436,15 @@ jobs:
           path: "tfplan*"
           retention-days: 14
 
+      - name: 'Tar files'
+        run: tar -cvf .terraform.tar .terraform
+
       - name: Upload TF Providers and Modules
         uses: actions/upload-artifact@v4
         with:
           name: tf-providers-modules
           compression-level: 9
-          path: .terraform
-          include-hidden-files: true
+          path: .terraform.tar
           retention-days: 14
 
       - name: Optional Additional Directory Upload
@@ -742,11 +744,11 @@ jobs:
 #        id: init
 #        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ steps.state-key.outputs.name }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
 
-      - name: Download .terraform
+      - name: Download TF Providers and Modules
         uses: actions/download-artifact@v4
         with:
           name: tf-providers-modules
-          path: ${{ inputs.working-directory }}/.terraform
+          path: ${{ inputs.working-directory }}
 
       - name: Download tfplan
         uses: actions/download-artifact@v4
