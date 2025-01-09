@@ -749,7 +749,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: tf-providers-modules
-          path: ${{ inputs.working-directory }}
+          path: ${{ inputs.working-directory }}/.terraform
 
       - name: Download tfplan
         uses: actions/download-artifact@v4
