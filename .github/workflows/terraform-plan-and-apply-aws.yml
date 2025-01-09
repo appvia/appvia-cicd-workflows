@@ -673,7 +673,7 @@ jobs:
 
   terraform-apply:
     name: "Terraform Apply"
-    if: github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule"]'), github.event_name) && inputs.enable-terraform-apply
+#    if: github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule"]'), github.event_name) && inputs.enable-terraform-apply
     environment: ${{ inputs.environment }}
     runs-on: ${{ inputs.runs-on }}
     defaults:
