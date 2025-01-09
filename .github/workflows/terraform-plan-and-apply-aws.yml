@@ -445,6 +445,7 @@ jobs:
           name: tf-providers-modules
           compression-level: 9
           path: .terraform.tar
+          include-hidden-files: 'true'
           retention-days: 14
 
       - name: Optional Additional Directory Upload
