@@ -441,7 +441,7 @@ jobs:
         with:
           name: tf-providers-modules
           compression-level: 9
-          path: ${{ inputs.working-directory }}/.terraform
+          path: .terraform
           retention-days: 14
 
       - name: Optional Additional Directory Upload
