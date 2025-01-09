@@ -738,15 +738,15 @@ jobs:
         run: |
           git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
 
-      - name: Terraform Init
-        id: init
-        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ steps.state-key.outputs.name }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
-
       - name: Download TF Providers and Modules
         uses: actions/download-artifact@v4
         with:
           name: tf-providers-modules
           path: ${{ inputs.working-directory }}/.terraform
+
+      - name: Terraform Init
+        id: init
+        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ steps.state-key.outputs.name }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
 
       - name: Download tfplan
         uses: actions/download-artifact@v4
