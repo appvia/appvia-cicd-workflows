@@ -745,7 +745,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: tf-providers-modules
-          path: .terraform.tar
+          path: .terraform
 
 #      - name: Terraform Init
 #        id: init
