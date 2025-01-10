@@ -441,7 +441,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tf-providers-modules
-          compression-level: 0
+          compression-level: 6
           path: tf-providers-modules.tar
           include-hidden-files: 'true'
           retention-days: 14
