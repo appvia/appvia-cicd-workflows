@@ -435,10 +435,8 @@ jobs:
           compression-level: 9
           path: "tfplan*"
           retention-days: 14
-
       - name: Tar TF Providers and Modules
         run: tar -cvf tf-providers-modules.tar .terraform
-
       - name: Upload TF Providers and Modules
         uses: actions/upload-artifact@v4
         with:
@@ -447,7 +445,6 @@ jobs:
           path: tf-providers-modules.tar
           include-hidden-files: 'true'
           retention-days: 14
-
       - name: Optional Additional Directory Upload
         if: inputs.additional-dir-optional && inputs.additional-dir != ''
         run: |
@@ -676,7 +673,7 @@ jobs:
 
   terraform-apply:
     name: "Terraform Apply"
-#    if: github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule"]'), github.event_name) && inputs.enable-terraform-apply
+    if: github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule"]'), github.event_name) && inputs.enable-terraform-apply
     environment: ${{ inputs.environment }}
     runs-on: ${{ inputs.runs-on }}
     defaults:
@@ -740,15 +737,12 @@ jobs:
         if: inputs.enable-private-access
         run: |
           git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
-
       - name: Download TF Providers and Modules
         uses: actions/download-artifact@v4
         with:
           name: tf-providers-modules
-
       - name: Extract Tar TF Providers and Modules
         run: tar -xvf tf-providers-modules.tar
-
       - name: Download tfplan
         uses: actions/download-artifact@v4
         with:
@@ -759,10 +753,6 @@ jobs:
         with:
           name: additional-dir-${{ inputs.environment }}
           path: ${{ inputs.additional-dir }}
-
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
-
       - name: Terraform Apply
         run: |
           terraform apply \
