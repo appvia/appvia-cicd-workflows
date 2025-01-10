@@ -444,7 +444,7 @@ jobs:
         with:
           name: tf-providers-modules
           compression-level: 9
-          path: .terraform.tar
+          path: tf-providers-modules.tar
           include-hidden-files: 'true'
           retention-days: 14
 
