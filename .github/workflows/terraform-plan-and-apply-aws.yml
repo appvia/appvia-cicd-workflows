@@ -435,13 +435,13 @@ jobs:
           compression-level: 9
           path: "tfplan*"
           retention-days: 14
-      - name: Tar TF Providers and Modules
+      - name: Tar Archive TF Providers and Modules
         run: tar -cvf tf-providers-modules.tar .terraform
       - name: Upload TF Providers and Modules
         uses: actions/upload-artifact@v4
         with:
           name: tf-providers-modules
-          compression-level: 9
+          compression-level: 0
           path: tf-providers-modules.tar
           include-hidden-files: 'true'
           retention-days: 14
@@ -673,7 +673,7 @@ jobs:
 
   terraform-apply:
     name: "Terraform Apply"
-    if: github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule"]'), github.event_name) && inputs.enable-terraform-apply
+#    if: github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule"]'), github.event_name) && inputs.enable-terraform-apply
     environment: ${{ inputs.environment }}
     runs-on: ${{ inputs.runs-on }}
     defaults:
