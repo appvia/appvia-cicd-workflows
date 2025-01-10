@@ -436,12 +436,15 @@ jobs:
           path: "tfplan*"
           retention-days: 14
 
+      - name: Tar TF Providers and Modules
+        run: tar -cvf tf-providers-modules.tar .terraform
+
       - name: Upload TF Providers and Modules
         uses: actions/upload-artifact@v4
         with:
           name: tf-providers-modules
           compression-level: 9
-          path: .terraform
+          path: .terraform.tar
           include-hidden-files: 'true'
           retention-days: 14
 
@@ -742,7 +745,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: tf-providers-modules
-          path: .terraform
+          path: .terraform.tar
 
 #      - name: Terraform Init
 #        id: init
