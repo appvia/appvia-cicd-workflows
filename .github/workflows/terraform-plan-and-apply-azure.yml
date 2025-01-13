@@ -1,0 +1,664 @@
+---
+name: Terraform Validate, Plan & Apply
+on:
+  workflow_call:
+    secrets:
+      infracost-api-key:
+        description: "The API key for infracost"
+        required: false
+      appvia-actions-id:
+        description: "Appvia App ID for GH"
+        required: false
+      appvia-actions-secret:
+        description: "Appvia App secret for GH"
+        required: false
+
+    inputs:
+      additional-dir:
+        description: Uploads additional directory as an artifact from plan stage
+        required: false
+        type: string
+
+      additional-dir-optional:
+        default: false
+        description: Uploads additional directory as an artifact from plan stage
+        required: false
+        type: boolean
+
+      azure-client-id:
+        description: "The Azure Client ID"
+        required: true
+        type: string
+
+      azure-tenant-id:
+        description: "The Azure tenant ID"
+        required: true
+        type: string
+
+      terraform-subscription-id:
+        description: 'Azure subscription ID'
+        type: string
+        required: true
+
+      terraform-backend-subscription-id:
+        description: 'Azure subscription ID for the backend storage account'
+        type: string
+        required: true
+
+      terraform-backend-storage-account-name:
+        description: 'Name of the backend storage account'
+        type: string
+        required: true
+        
+      terraform-backend-container-name:
+        description: 'Name of the backend container'
+        type: string
+        required: false
+        default: 'tfstate'
+
+      terraform-backend-filename:
+        description: 'Name of the backend file'
+        required: true
+        type: string
+
+      cicd-repository:
+        default: "appvia/appvia-cicd-workflows"
+        description: "The repository to pull the CI/CD workflows from"
+        required: false
+        type: string
+
+      cicd-branch:
+        default: "main"
+        description: "The branch to pull the CI/CD workflows from"
+        required: false
+        type: string
+
+      enable-infracost:
+        default: false
+        description: "Whether to run infracost on the Terraform Plan (secrets.infracost-api-key must be set if enabled)"
+        required: false
+        type: boolean
+
+      enable-commitlint:
+        default: true
+        description: "Whether to run commitlint on the commit message"
+        required: false
+        type: boolean
+
+      enable-terraform-apply:
+        default: true
+        description: "Whether to run terraform apply on merge to main"
+        required: false
+        type: boolean
+
+      enable-private-access:
+        description: Optional flag to state if terraform requires pulling private modules
+        required: false
+        default: false
+        type: boolean
+
+      organization-name:
+        description: "The name of the Github organization"
+        required: false
+        type: string
+        default: "appvia"
+
+      environment:
+        default: "prod"
+        description: "The environment to deploy to"
+        required: false
+        type: string
+
+      runs-on:
+        default: "ubuntu-latest"
+        description: "Single label value for the GitHub runner to use (custom value only applies to Terraform Plan and Apply steps)"
+        required: false
+        type: string
+
+      terraform-dir:
+        default: "."
+        description: "The directory to validate"
+        required: false
+        type: string
+
+      terraform-lock-timeout:
+        default: "30s"
+        description: The time to wait for a lock
+        required: false
+        type: string
+
+      terraform-log-level:
+        default: ""
+        description: "The log level of terraform"
+        required: false
+        type: string
+
+      terraform-state-key:
+        default: ""
+        description: "The key of the terraform state (default: <repo-name>.tfstate)"
+        required: false
+        type: string
+
+      terraform-values-file:
+        default: ""
+        description: "The values file to use (default: <environment>.tfvars)"
+        required: false
+        type: string
+
+      terraform-version:
+        default: "1.9.0"
+        description: "The version of terraform to use"
+        required: false
+        type: string
+
+      trivy-version:
+        default: "v0.56.2"
+        description: "The version of trivy to use"
+        required: false
+        type: string
+
+      working-directory:
+        default: "."
+        description: "The working directory to run terraform commands in"
+        required: false
+        type: string
+
+      use-env-as-suffix:
+        default: false
+        description: "Whether to use the environment as a suffix for the state file and iam roles"
+        required: false
+        type: boolean
+
+env:
+  TF_LOG: ${{ inputs.terraform-log-level }}
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  commitlint:
+    name: "Commitlint"
+    if: github.event_name == 'pull_request' && inputs.enable-commitlint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    outputs:
+      result: ${{ steps.commitlint.outcome }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 16
+      - name: Install Dependencies
+        run: npm install @commitlint/config-conventional @commitlint/cli
+      - name: Retrieve Commit Configuration
+        run: |
+          wget https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/config/commitlint.config.js -O commitlint.config.js
+      - name: Run Commitlint
+        id: commitlint
+        run: npx commitlint --config commitlint.config.js --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
+
+  terraform-format:
+    name: "Terraform Format"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    outputs:
+      result: ${{ steps.format.outcome }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+      - name: Terraform Format
+        id: format
+        uses: dflook/terraform-fmt-check@v1
+
+  terraform-lint:
+    name: "Terraform Lint"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    outputs:
+      result: ${{ steps.lint.outcome }}
+      result_centralised_lint: ${{ steps.lintCentralised.outcome }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Linter
+        uses: terraform-linters/setup-tflint@v4
+      - name: Enable Private Modules
+        id: get_workflow_token
+        if: inputs.enable-private-access
+        uses: peter-murray/workflow-application-token-action@v4
+        with:
+          application_id: ${{ secrets.appvia-actions-id }}
+          application_private_key: ${{ secrets.appvia-actions-secret }}
+          organization: ${{ inputs.organization-name }}
+          revoke_token: true
+      - name: Setup Credentials
+        if: inputs.enable-private-access
+        run: |
+          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+      - name: Terraform Init
+        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
+      - name: Setup Linter
+        uses: terraform-linters/setup-tflint@v4
+      - name: Linter Initialize
+        run: tflint --init
+      - name: Linting Code
+        id: lint
+        run: tflint -f compact
+      - name: Retrieve Centralised Lint Configuration
+        run: |
+          wget https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/config/.tflint.hcl -O .tflint-centralised.hcl
+      - name: Linter Initialize - centralised
+        run: tflint --config=.tflint-centralised.hcl --init
+      - name: Set terraform-values-file variable
+        run: |
+          if [ -n "${{ inputs.terraform-values-file }}" ]; then
+            echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> $GITHUB_ENV
+          else
+            echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> $GITHUB_ENV
+          fi
+      - name: Linting Code - centralised
+        id: lintCentralised
+        run: tflint --config=.tflint-centralised.hcl -f compact --var-file=$TF_VAR_FILE
+
+  terraform-infracost:
+    name: "Get Cost Estimate"
+    if: github.event_name == 'pull_request' && inputs.enable-infracost
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    needs:
+      - terraform-plan
+    steps:
+      - name: Setup Infracost
+        uses: infracost/actions/setup@v3
+        with:
+          api-key: ${{ secrets.infracost-api-key }}
+          currency: GBP
+      - name: Download tfplan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ inputs.environment }}
+      - name: Generate Infracost Cost Estimate
+        run: |
+          infracost breakdown --path=tfplan.json \
+            --format=json \
+            --out-file=/tmp/infracost.json
+      - name: Post Infracost comment
+        run: |
+          infracost comment github --path=/tmp/infracost.json \
+            --repo=$GITHUB_REPOSITORY \
+            --github-token=${{github.token}} \
+            --pull-request=${{github.event.pull_request.number}} \
+            --behavior=update \
+            --tag=${{ inputs.environment }}
+
+  terraform-plan:
+    name: "Terraform Plan"
+    if: (github.event_name == 'pull_request') || (github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule"]'), github.event_name))
+    runs-on: ${{ inputs.runs-on }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    outputs:
+      result-auth: ${{ steps.auth.outcome }}
+      result-init: ${{ steps.init.outcome }}
+      result-validate: ${{ steps.validate.outcome }}
+      result-azurerm-backend-check: ${{ steps.azurerm-backend-check.outcome }}
+      result-plan: ${{ steps.plan.outcome }}
+      plan-stdout: ${{ steps.plan.outputs.stdout }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 16
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+      - name: Login via Az module
+        id: auth
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ inputs.terraform-subscription-id }}
+      - name: Set terraform-state-key variable
+        id: state-key
+        run: |
+          if [ -n "${{ inputs.terraform-state-key }}" ]; then
+            echo "name=${{ inputs.terraform-state-key }}" >> $GITHUB_OUTPUT
+          else
+            if [ "${{ inputs.use-env-as-suffix }}" == "true" ]; then
+              echo "name=${{ github.event.repository.name }}-${{ inputs.environment }}.tfstate" >> $GITHUB_OUTPUT
+            else
+              echo "name=${{ github.event.repository.name }}.tfstate" >> $GITHUB_OUTPUT
+            fi
+          fi
+      - name: Enable Private Modules
+        id: get_workflow_token
+        if: inputs.enable-private-access
+        uses: peter-murray/workflow-application-token-action@v4
+        with:
+          application_id: ${{ secrets.appvia-actions-id }}
+          application_private_key: ${{ secrets.appvia-actions-secret }}
+          organization: ${{ inputs.organization-name }}
+          revoke_token: true
+      - name: Setup Credentials
+        if: inputs.enable-private-access
+        run: |
+          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
+      - name: Terraform Init
+        id: init
+        run: |
+          terraform -chdir=${{ inputs.terraform-dir }} init -lock=false \
+            -backend-config="subscription_id=${{ inputs.terraform-backend-subscription-id }}" \
+            -backend-config="storage_account_name=${{ inputs.terraform-backend-storage-account-name }}" \
+            -backend-config="container_name=${{ inputs.terraform-backend-container-name }}" \
+            -backend-config="key=${{ inputs.terraform-backend-filename }}" \
+            -backend-config="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
+            -backend-config="client_id=${{ secrets.AZURE_CLIENT_ID }}"
+      - name: Terraform Validate
+        id: validate
+        run: terraform -chdir=${{ inputs.terraform-dir }} validate -no-color
+      - name: Terraform AzureRM Backend Check
+        id: azurerm-backend-check
+        run: |
+          if grep -E '^[^#]*backend\s+"azurerm"' terraform.tf; then
+            echo "Terraform configuration references an AzureRM backend."
+          else
+            echo "Terraform configuration does not reference an AzureRM backend."
+            exit 1
+          fi
+      - name: Set terraform-values-file variable
+        run: |
+          if [ -n "${{ inputs.terraform-values-file }}" ]; then
+            echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> $GITHUB_ENV
+          else
+            echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> $GITHUB_ENV
+          fi
+      - name: Terraform Plan
+        id: plan
+        run: |
+          set -o pipefail
+          terraform -chdir=${{ inputs.terraform-dir }} plan -var-file=$TF_VAR_FILE -no-color -input=false -out=tfplan -lock-timeout=${{ inputs.terraform-lock-timeout }} 2>&1 | tee tfplan.stdout
+      - name: Terraform Plan JSON Output
+        run: |
+          terraform -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
+      - name: Upload tfplan
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ inputs.environment }}
+          path: "tfplan*"
+          retention-days: 14
+      - name: Optional Additional Directory Upload
+        if: inputs.additional-dir-optional && inputs.additional-dir != ''
+        run: |
+          mkdir -p ${{ inputs.additional-dir }}
+          touch ${{ inputs.additional-dir }}/.optional.file
+      - name: Upload additional directory
+        if: inputs.additional-dir
+        uses: actions/upload-artifact@v4
+        with:
+          if-no-files-found: error
+          include-hidden-files: true
+          name: additional-dir-${{ inputs.environment }}
+          path: ${{ inputs.additional-dir }}
+          retention-days: 14
+
+  terraform-security:
+    name: "Static Security Analysis"
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.security.outcome }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Check If Trivy Ignore File Exists
+        id: security-exceptions
+        run: |
+          if [ -e ".trivyignore" ]; then
+            echo filename=".trivyignore" >> $GITHUB_OUTPUT
+          fi
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+      - name: Enable Private Modules
+        id: get_workflow_token
+        if: inputs.enable-private-access
+        uses: peter-murray/workflow-application-token-action@v4
+        with:
+          application_id: ${{ secrets.appvia-actions-id }}
+          application_private_key: ${{ secrets.appvia-actions-secret }}
+          organization: ${{ inputs.organization-name }}
+          revoke_token: true
+      - name: Setup Credentials
+        if: inputs.enable-private-access
+        run: |
+          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
+      - name: Terraform Init
+        id: init
+        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
+      - name: Set terraform-values-file variable
+        run: |
+          if [ -n "${{ inputs.terraform-values-file }}" ]; then
+            echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> $GITHUB_ENV
+          else
+            echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> $GITHUB_ENV
+          fi
+      - name: Run Trivy vulnerability
+        id: security
+        uses: aquasecurity/trivy-action@0.29.0
+        with:
+          exit-code: "1"
+          format: "table"
+          ignore-unfixed: true
+          scan-type: "config"
+          scan-ref: ${{ inputs.working-directory }}
+          severity: "CRITICAL,HIGH"
+          trivyignores: ${{ steps.security-exceptions.outputs.filename }}
+          version: ${{ inputs.trivy-version }}
+          tf-vars: $TF_VAR_FILE
+
+  update-pr:
+    name: "Update PR"
+    if: github.event_name == 'pull_request' && (success() || failure())
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    needs:
+      - terraform-format
+      - terraform-lint
+      - terraform-plan
+      - terraform-security
+      - commitlint
+    steps:
+      - name: Download tfplan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ inputs.environment }}
+        continue-on-error: true
+      - name: Add PR Comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // 1. Retrieve existing bot comments for the PR
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            })
+            const botComment = comments.find(comment => {
+              return comment.user.type === 'Bot' && comment.body.includes('Pull Request Review Status (${{ inputs.environment }})')
+            })
+
+            // 2. Check output length
+            const fs = require("fs");
+            const plan_exists = fs.existsSync("tfplan.stdout");
+            if (plan_exists) {
+              const plan = fs.readFileSync("tfplan.stdout", "utf8");
+              const excludedStrings = ["Terraform used the selected providers", "No changes", "Refreshing state...", "Reading...", "Read complete after"];
+              const filteredLines = plan.split('\n').filter(line =>
+                !excludedStrings.some(excludedStr => line.includes(excludedStr))
+              );
+              var planOutput = filteredLines.join('\n').trim();
+  
+              const planRegex = /Plan: (\d+) to add, (\d+) to change, (\d+) to destroy\./;
+              const planMatch = planOutput.match(planRegex);
+              var planSummary = "Not found, please view the workflow run logs directly."
+              if (planMatch) {
+                planSummary = `${planMatch[1]} to add, ${planMatch[2]} to change, ${planMatch[3]} to destroy.`
+              }
+  
+              const MAX_GITHUB_COMMENT_LENGTH = 65536 - 800; // 800 characters for the comment template
+              if (planOutput.length < 1 || planOutput.length > MAX_GITHUB_COMMENT_LENGTH) {
+                planOutput = "Terraform Plan output is too large, please view the workflow run logs directly."
+              }
+            } else {
+                const plan_non_existant = "Terraform Plan Output File not found, please view the workflow run logs directly."
+                planOutput = plan_non_existant
+                planSummary = plan_non_existant
+            }
+
+            // 3. Prepare format of the comment
+            const output = `### Pull Request Review Status (${{ inputs.environment }})
+            * 🖌 <b>Terraform Format and Style:</b>     \`${{ needs.terraform-format.outputs.result }}\`
+            * 🔍 <b>Terraform Linting:</b>              \`${{ needs.terraform-lint.outputs.result }}\`
+            * 🔍 <b>Terraform Centralised Linting:</b>  \`${{ needs.terraform-lint.outputs.result_centralised_lint }}\`
+            * 🔑 <b>AWS Authentication:</b>             \`${{ needs.terraform-plan.outputs.result-auth }}\`
+            * 👮 <b>Terraform Security Check:</b>       \`${{ needs.terraform-security.outputs.result }}\`
+            * 🔧 <b>Terraform Initialisation:</b>       \`${{ needs.terraform-plan.outputs.result-init }}\`
+            * 🤖 <b>Terraform Validation:</b>           \`${{ needs.terraform-plan.outputs.result-validate }}\`
+            * 📁 <b>Terraform AzureRM Backend:</b>      \`${{ needs.terraform-plan.outputs.result-azurerm-backend-check }}\`
+            * 📖 <b>Terraform Plan:</b>                 \`${{ needs.terraform-plan.outputs.result-plan }}\`
+            * 🔖 <b>Commitlint:</b>                     \`${{ needs.commitlint.outputs.result }}\`
+
+            <details><summary><b>Output: 📖 Terraform Plan</b></summary>
+
+            \`\`\`
+            ${planOutput}
+            \`\`\`
+            </details>
+
+            <b>Plan Summary:</b> ${planSummary}
+
+            *<b>Pusher:</b> @${{ github.actor }}, <b>Action:</b> \`${{ github.event_name }}\`*
+            *<b>Workflow Run Link:</b> ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}*`;
+
+            // 4. If we have a comment, update it, otherwise create a new one
+            if (botComment) {
+              github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: output
+              })
+            } else {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: output
+              })
+            }
+
+  terraform-apply:
+    name: "Terraform Apply"
+    if: github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule"]'), github.event_name) && inputs.enable-terraform-apply
+    environment: ${{ inputs.environment }}
+    runs-on: ${{ inputs.runs-on }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    needs:
+      - terraform-format
+      - terraform-lint
+      - terraform-plan
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 16
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform-version }}      
+      - name: Login via Az module
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ inputs.terraform-subscription-id }}
+      - name: Set terraform-state-key variable
+        id: state-key
+        run: |
+          if [ -n "${{ inputs.terraform-state-key }}" ]; then
+            echo "name=${{ inputs.terraform-state-key }}" >> $GITHUB_OUTPUT
+          else
+            if [ "${{ inputs.use-env-as-suffix }}" == "true" ]; then
+              echo "name=${{ github.event.repository.name }}-${{ inputs.environment }}.tfstate" >> $GITHUB_OUTPUT
+            else
+              echo "name=${{ github.event.repository.name }}.tfstate" >> $GITHUB_OUTPUT
+            fi
+          fi
+      - name: Enable Private Modules
+        id: get_workflow_token
+        if: inputs.enable-private-access
+        uses: peter-murray/workflow-application-token-action@v4
+        with:
+          application_id: ${{ secrets.appvia-actions-id }}
+          application_private_key: ${{ secrets.appvia-actions-secret }}
+          organization: ${{ inputs.organization-name }}
+          revoke_token: true
+      - name: Setup Credentials
+        if: inputs.enable-private-access
+        run: |
+          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
+      - name: Terraform Init
+        id: init
+        run: |
+          terraform -chdir=${{ inputs.terraform-dir }} init -lock=false \
+            -backend-config="subscription_id=${{ inputs.terraform-backend-subscription-id }}" \
+            -backend-config="storage_account_name=${{ inputs.terraform-backend-storage-account-name }}" \
+            -backend-config="container_name=${{ inputs.terraform-backend-container-name }}" \
+            -backend-config="key=${{ inputs.terraform-backend-filename }}" \
+            -backend-config="tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
+            -backend-config="client_id=${{ secrets.AZURE_CLIENT_ID }}"
+      - name: Download tfplan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ inputs.environment }}
+      - name: Download Additional Directories
+        if: inputs.additional-dir
+        uses: actions/download-artifact@v4
+        with:
+          name: additional-dir-${{ inputs.environment }}
+          path: ${{ inputs.additional-dir }}
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -input=false -lock-timeout=${{ inputs.terraform-lock-timeout }} tfplan
