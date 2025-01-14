@@ -85,6 +85,12 @@ on:
         required: false
         type: boolean
 
+      enable-terraform-plan:
+        default: true
+        description: "Whether to run terraform plan"
+        required: false
+        type: boolean
+
       enable-terraform-apply:
         default: true
         description: "Whether to run terraform apply on merge to main"
@@ -148,6 +154,12 @@ on:
       terraform-version:
         default: "1.9.0"
         description: "The version of terraform to use"
+        required: false
+        type: string
+
+      terraform-command-options:
+        default: ""
+        description: "Additional options to pass to the terraform command"
         required: false
         type: string
 
@@ -315,7 +327,7 @@ jobs:
 
   terraform-plan:
     name: "Terraform Plan"
-    if: (github.event_name == 'pull_request') || (github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule"]'), github.event_name))
+    if: (github.event_name == 'pull_request') || (github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule"]'), github.event_name)) && inputs.enable-terraform-plan
     runs-on: ${{ inputs.runs-on }}
     defaults:
       run:
@@ -403,7 +415,7 @@ jobs:
         id: plan
         run: |
           set -o pipefail
-          terraform -chdir=${{ inputs.terraform-dir }} plan -var-file=$TF_VAR_FILE -no-color -input=false -out=tfplan -lock-timeout=${{ inputs.terraform-lock-timeout }} 2>&1 | tee tfplan.stdout
+          terraform -chdir=${{ inputs.terraform-dir }} plan ${{ inputs.terraform-command-options }} -var-file=$TF_VAR_FILE -no-color -input=false -out=tfplan -lock-timeout=${{ inputs.terraform-lock-timeout }} 2>&1 | tee tfplan.stdout
       - name: Terraform Plan JSON Output
         run: |
           terraform -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
