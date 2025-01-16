@@ -428,6 +428,15 @@ jobs:
       - name: Terraform Plan JSON Output
         run: |
           terraform -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
+      - name: Simple Plan Output
+        run: |
+          terraform show -no-color tfplan | tee tfplan-simple
+          sed -i -e '1,/Terraform will perform the following actions:/d' -e '/^[[:space:]]*$/d' tfplan-simple
+          if grep -q 'Plan:' tfplan-simple; then
+            plan_changes=$(grep 'Plan:' tfplan-simple)
+            sed -i '/Plan:/d' tfplan-simple
+            echo "${plan_changes}" > tfplan-summary
+          fi
       - name: Upload tfplan
         uses: actions/upload-artifact@v4
         with:
@@ -592,20 +601,18 @@ jobs:
 
             // 2. Check output length
             const fs = require("fs");
-            const plan_exists = fs.existsSync("tfplan.stdout");
+            const plan_exists = fs.existsSync("tfplan-simple");
             if (plan_exists) {
-              const plan = fs.readFileSync("tfplan.stdout", "utf8");
-              const excludedStrings = ["Terraform used the selected providers", "No changes", "Refreshing state...", "Reading...", "Read complete after"];
-              const filteredLines = plan.split('\n').filter(line =>
-                !excludedStrings.some(excludedStr => line.includes(excludedStr))
-              );
-              var planOutput = filteredLines.join('\n').trim();
+              var planOutput = fs.readFileSync("tfplan-simple", "utf8");
 
-              const planRegex = /Plan: (\d+) to add, (\d+) to change, (\d+) to destroy\./;
-              const planMatch = planOutput.match(planRegex);
-              var planSummary = "Not found, please view the workflow run logs directly."
-              if (planMatch) {
-                planSummary = `${planMatch[1]} to add, ${planMatch[2]} to change, ${planMatch[3]} to destroy.`
+              const planSummaryExists = fs.existsSync("tfplan-summary");
+              if (planSummaryExists) {
+                var planSummaryContents = fs.readFileSync("tfplan-summary", "utf8");
+                const planSummaryRegex = /Plan: (\d+) to add, (\d+) to change, (\d+) to destroy\./;
+                const planSummaryMatch = planSummaryContents.match(planSummaryRegex);
+                var planSummaryMsg = `${planSummaryMatch[1]} to add, ${planSummaryMatch[2]} to change, ${planSummaryMatch[3]} to destroy.`
+              } else {
+                var planSummaryMsg = "No changes detected."
               }
 
               const MAX_GITHUB_COMMENT_LENGTH = 65536 - 800; // 800 characters for the comment template
@@ -614,8 +621,8 @@ jobs:
               }
             } else {
                 const plan_non_existant = "Terraform Plan Output File not found, please view the workflow run logs directly."
-                planOutput = plan_non_existant
-                planSummary = plan_non_existant
+                var planOutput = plan_non_existant
+                planSummaryMsg = plan_non_existant
             }
 
             // 3. Prepare format of the comment
@@ -639,7 +646,7 @@ jobs:
             \`\`\`
             </details>
 
-            <b>Plan Summary:</b> ${planSummary}
+            <b>Plan Summary:</b> \`${planSummaryMsg}\`
 
             *<b>Pusher:</b> @${{ github.actor }}, <b>Action:</b> \`${{ github.event_name }}\`*
             *<b>Workflow Run Link:</b> ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}*`;
