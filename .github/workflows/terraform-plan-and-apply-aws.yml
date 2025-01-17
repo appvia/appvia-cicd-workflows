@@ -428,6 +428,8 @@ jobs:
       - name: Terraform Plan JSON Output
         run: |
           terraform -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
+      - name: Calculate Plan Checksum
+        run: sha256sum tfplan > tfplan.checksum
       - name: Upload tfplan
         uses: actions/upload-artifact@v4
         with:
@@ -740,6 +742,10 @@ jobs:
         with:
           name: additional-dir-${{ inputs.environment }}
           path: ${{ inputs.additional-dir }}
+      - name: Validate Plan Checksum
+        run: |
+          echo "Validating checksum..."
+          sha256sum -c tfplan.checksum
       - name: Terraform Apply
         run: |
           terraform apply \
