@@ -601,8 +601,8 @@ jobs:
 
             // 2. Check output length
             const fs = require("fs");
-            const plan_exists = fs.existsSync("tfplan-simple");
-            if (plan_exists) {
+            const planExists = fs.existsSync("tfplan-simple");
+            if (planExists) {
               var planOutput = fs.readFileSync("tfplan-simple", "utf8");
 
               const planSummaryExists = fs.existsSync("tfplan-summary");
