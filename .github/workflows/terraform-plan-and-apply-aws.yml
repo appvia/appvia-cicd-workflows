@@ -305,7 +305,7 @@ jobs:
       - name: Download tfplan
         uses: actions/download-artifact@v4
         with:
-          name: tfplan-${{ inputs.environment }}
+          name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
       - name: Generate Infracost Cost Estimate
         run: |
           infracost breakdown --path=tfplan.json \
@@ -433,7 +433,7 @@ jobs:
       - name: Upload tfplan
         uses: actions/upload-artifact@v4
         with:
-          name: tfplan-${{ inputs.environment }}
+          name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
           compression-level: 9
           path: "tfplan*"
           retention-days: 14
@@ -576,7 +576,7 @@ jobs:
       - name: Download tfplan
         uses: actions/download-artifact@v4
         with:
-          name: tfplan-${{ inputs.environment }}
+          name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
         continue-on-error: true
       - name: Add PR Comment
         uses: actions/github-script@v7
@@ -735,7 +735,14 @@ jobs:
       - name: Download tfplan
         uses: actions/download-artifact@v4
         with:
-          name: tfplan-${{ inputs.environment }}
+          name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
+        continue-on-error: true
+      - name: Check Artifact Availability
+        run: |
+          if [ ! -f tfplan ]; then
+            echo "tfplan artifact not found. Please regenerate the plan."
+            exit 1
+          fi
       - name: Download Additional Directories
         if: inputs.additional-dir
         uses: actions/download-artifact@v4
@@ -744,8 +751,12 @@ jobs:
           path: ${{ inputs.additional-dir }}
       - name: Validate Plan Checksum
         run: |
+          if [ ! -f tfplan.checksum ]; then
+            echo "Checksum file missing. Halting apply phase."
+            exit 1
+          fi
           echo "Validating checksum..."
-          sha256sum -c tfplan.checksum
+          sha256sum -c tfplan.checksum || { echo "Checksum mismatch. Halting Terraform Apply phase."; exit 1; }
       - name: Terraform Apply
         run: |
           terraform apply \
