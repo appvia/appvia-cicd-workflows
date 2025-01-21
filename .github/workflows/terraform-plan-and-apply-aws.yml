@@ -757,9 +757,6 @@ jobs:
         with:
           name: additional-dir-${{ inputs.environment }}
           path: ${{ inputs.additional-dir }}
-      - name: Mock Tamper with tfplan
-        run: |
-          echo "tampered" >> tfplan
       - name: Validate Plan Checksum
         run: |
           if [ ! -f tfplan.checksum ]; then
