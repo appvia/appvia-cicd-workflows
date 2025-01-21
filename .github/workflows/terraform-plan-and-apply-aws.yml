@@ -772,12 +772,8 @@ jobs:
           fi
       - name: Terraform Apply
         run: |
-          # terraform apply \
-          #   -auto-approve \
-          #   -input=false \
-          #   -parallelism=${{ inputs.terraform-parallelism }} \
-          #   -lock-timeout=${{ inputs.terraform-lock-timeout }} tfplan
-          echo "Simulating terraform apply..."
-          # Extract and display the summary of changes
-          summary=$(terraform show -no-color tfplan | grep -E 'Plan: [0-9]+ to add, [0-9]+ to change, [0-9]+ to destroy' || echo "No changes to apply.")
-          echo "Terraform Apply Summary: ${summary}"
+          terraform apply \
+            -auto-approve \
+            -input=false \
+            -parallelism=${{ inputs.terraform-parallelism }} \
+            -lock-timeout=${{ inputs.terraform-lock-timeout }} tfplan
