@@ -1,6 +1,15 @@
 ---
 name: Terraform Validate, Plan & Apply
 on:
+  ##
+  workflow_dispatch:
+    inputs:
+      enable-apply:
+        description: "Manually enable tf apply"
+        required: false
+        default: false
+        type: boolean
+  ##
   workflow_call:
     secrets:
       infracost-api-key:
@@ -672,7 +681,8 @@ jobs:
 
   terraform-apply:
     name: "Terraform Apply"
-    if: github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule"]'), github.event_name) && inputs.enable-terraform-apply
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main' && inputs.enable-terraform-apply) || github.event_name == 'workflow_dispatch'
+    # if: github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule"]'), github.event_name) && inputs.enable-terraform-apply
     environment: ${{ inputs.environment }}
     runs-on: ${{ inputs.runs-on }}
     defaults:
@@ -766,8 +776,12 @@ jobs:
           sha256sum -c tfplan.checksum || { echo "Checksum mismatch. Halting Terraform Apply phase."; exit 1; }
       - name: Terraform Apply
         run: |
-          terraform apply \
-            -auto-approve \
-            -input=false \
-            -parallelism=${{ inputs.terraform-parallelism }} \
-            -lock-timeout=${{ inputs.terraform-lock-timeout }} tfplan
+          # terraform apply \
+          #   -auto-approve \
+          #   -input=false \
+          #   -parallelism=${{ inputs.terraform-parallelism }} \
+          #   -lock-timeout=${{ inputs.terraform-lock-timeout }} tfplan
+          run: |
+          echo "Simulating terraform apply..."
+          echo "Terraform apply would have been executed with the following plan:"
+          terraform show -json tfplan | jq
