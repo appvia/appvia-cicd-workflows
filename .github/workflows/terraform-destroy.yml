@@ -96,9 +96,21 @@ on:
         required: false
         type: string
 
+      terraform-apply-extra-args:
+        default: ""
+        description: "Extra arguments to pass to terraform apply"
+        required: false
+        type: string
+
       terraform-dir:
         default: "."
         description: "The directory to validate"
+        required: false
+        type: string
+
+      terraform-init-extra-args:
+        default: ""
+        description: "Extra arguments to pass to terraform init"
         required: false
         type: string
 
@@ -111,6 +123,12 @@ on:
       terraform-log-level:
         default: ""
         description: "The log level of terraform"
+        required: false
+        type: string
+
+      terraform-plan-extra-args:
+        default: ""
+        description: "Extra arguments to pass to terraform plan"
         required: false
         type: string
 
@@ -226,7 +244,14 @@ jobs:
           git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
       - name: Terraform Init
         id: init
-        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ steps.state-key.outputs.name }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
+        run: |
+          terraform -chdir=${{ inputs.terraform-dir }} init \
+          -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" \
+          -backend-config="key=${{ steps.state-key.outputs.name }}" \
+          -backend-config="encrypt=true" \
+          -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" \
+          -backend-config="region=${{ inputs.aws-region }}" \
+          ${{ inputs.terraform-init-extra-args }}
       - name: Terraform Validate
         id: validate
         run: terraform -chdir=${{ inputs.terraform-dir }} validate -no-color
@@ -250,7 +275,14 @@ jobs:
         id: plan
         run: |
           set -o pipefail
-          terraform -chdir=${{ inputs.terraform-dir }} plan -destroy -var-file="${TF_VAR_FILE}" -no-color -input=false -out=tfplan -lock-timeout=${{ inputs.terraform-lock-timeout }} 2>&1 | tee tfplan.stdout
+          terraform -chdir=${{ inputs.terraform-dir }} plan \
+          -destroy -var-file="${TF_VAR_FILE}" \
+          -no-color \
+          -input=false \
+          -out=tfplan \
+          -lock-timeout=${{ inputs.terraform-lock-timeout }} \
+          ${{ inputs.terraform-plan-extra-args }} \
+          2>&1 | tee tfplan.stdout
       - name: Terraform Plan JSON Output
         run: |
           terraform -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
@@ -340,7 +372,14 @@ jobs:
           git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
       - name: Terraform Init
         id: init
-        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ steps.state-key.outputs.name }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
+        run: |
+          terraform -chdir=${{ inputs.terraform-dir }} init \
+          -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" \
+          -backend-config="key=${{ steps.state-key.outputs.name }}" \
+          -backend-config="encrypt=true" \
+          -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" \
+          -backend-config="region=${{ inputs.aws-region }}" \
+          ${{ inputs.terraform-init-extra-args }}
       - name: Download tfplan
         uses: actions/download-artifact@v4
         with:
@@ -352,4 +391,8 @@ jobs:
           name: additional-dir-${{ inputs.environment }}
           path: ${{ inputs.additional-dir }}
       - name: Terraform Apply
-        run: terraform apply -auto-approve -input=false -lock-timeout=${{ inputs.terraform-lock-timeout }} tfplan
+        run: |
+          terraform apply -auto-approve -input=false \
+          -lock-timeout=${{ inputs.terraform-lock-timeout }} \
+          ${{ inputs.terraform-apply-extra-args }} \
+          tfplan

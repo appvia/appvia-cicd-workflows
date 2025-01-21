@@ -112,9 +112,21 @@ on:
         required: false
         type: string
 
+      terraform-apply-extra-args:
+        default: ""
+        description: "Extra arguments to pass to terraform apply"
+        required: false
+        type: string
+
       terraform-dir:
         default: "."
         description: "The directory to validate"
+        required: false
+        type: string
+
+      terraform-init-extra-args:
+        default: ""
+        description: "Extra arguments to pass to terraform init"
         required: false
         type: string
 
@@ -127,6 +139,12 @@ on:
       terraform-log-level:
         default: ""
         description: "The log level of terraform"
+        required: false
+        type: string
+
+      terraform-plan-extra-args:
+        default: ""
+        description: "Extra arguments to pass to terraform plan"
         required: false
         type: string
 
@@ -177,7 +195,6 @@ env:
   AWS_READONLY_OVERRIDE_ROLE: ${{ inputs.aws-read-role-name }}
   AWS_READWRITE_OVERRIDE_ROLE: ${{ inputs.aws-write-role-name }}
   AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/web_identity_token_file
-  TF_LOG: ${{ inputs.terraform-log-level }}
 
 permissions:
   id-token: write
@@ -185,6 +202,25 @@ permissions:
   pull-requests: write
 
 jobs:
+  debug-mode:
+    name: "Debug Mode"
+    runs-on: ubuntu-latest
+    outputs:
+      tf_log: ${{ steps.debug.outputs.tf_log }}
+    steps:
+      - name: Debug Mode Vars
+        id: debug
+        run: |
+          if "${{ runner.debug == true }}"; then
+            if [ "${{ inputs.terraform-log-level }}" == "TRACE" ]; then
+              echo "tf_log=TRACE" >> $GITHUB_ENV
+            else
+              echo "tf_log=DEBUG" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "tf_log=${{ inputs.terraform-log-level }}" >> $GITHUB_OUTPUT
+          fi
+
   commitlint:
     name: "Commitlint"
     if: github.event_name == 'pull_request' && inputs.enable-commitlint
@@ -263,7 +299,7 @@ jobs:
         with:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Terraform Init
-        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
+        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false ${{ inputs.terraform-init-extra-args }}
       - name: Setup Linter
         uses: terraform-linters/setup-tflint@v4
       - name: Linter Initialize
@@ -327,12 +363,16 @@ jobs:
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
+    needs:
+      - debug-mode
     outputs:
       result-auth: ${{ steps.auth.outcome }}
       result-init: ${{ steps.init.outcome }}
       result-validate: ${{ steps.validate.outcome }}
       result-s3-backend-check: ${{ steps.s3-backend-check.outcome }}
       result-plan: ${{ steps.plan.outcome }}
+    env:
+      TF_LOG: ${{ needs.debug-mode.outputs.tf_log }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -424,7 +464,9 @@ jobs:
             -no-color -input=false \
             -out=tfplan \
             -parallelism=${{ inputs.terraform-parallelism }} \
-            -lock-timeout=${{ inputs.terraform-lock-timeout }} 2>&1 | tee tfplan.stdout
+            -lock-timeout=${{ inputs.terraform-lock-timeout }} \
+            ${{ inputs.terraform-plan-extra-args }} \
+            2>&1 | tee tfplan.stdout
       - name: Terraform Plan JSON Output
         run: |
           terraform -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
@@ -676,10 +718,13 @@ jobs:
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
+    env:
+      TF_LOG: ${{ needs.debug-mode.outputs.tf_log }}
     needs:
       - terraform-format
       - terraform-lint
       - terraform-plan
+      - debug-mode
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -753,4 +798,6 @@ jobs:
             -auto-approve \
             -input=false \
             -parallelism=${{ inputs.terraform-parallelism }} \
-            -lock-timeout=${{ inputs.terraform-lock-timeout }} tfplan
+            -lock-timeout=${{ inputs.terraform-lock-timeout }} \
+            ${{ inputs.terraform-apply-extra-args }} \
+            tfplan
