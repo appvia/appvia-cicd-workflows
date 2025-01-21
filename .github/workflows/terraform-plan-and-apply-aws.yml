@@ -766,7 +766,6 @@ jobs:
             echo "Checksum file is missing. The tfplan artifact may not have been generated or uploaded correctly. Halting Terraform Apply phase."
             exit 1
           fi
-      
           echo "Validating the checksum of the tfplan artifact..."
           if sha256sum -c tfplan.checksum; then
             echo "Checksum validation succeeded. The tfplan artifact is intact and matches the original plan."
@@ -775,7 +774,6 @@ jobs:
             echo "Halting Terraform Apply phase to ensure the integrity of the deployment process."
             exit 1
           fi
-        
       - name: Terraform Apply
         run: |
           # terraform apply \
