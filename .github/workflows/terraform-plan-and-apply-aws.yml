@@ -760,7 +760,6 @@ jobs:
       - name: Mock Tamper with tfplan
         run: |
           echo "tampered" >> tfplan
-          sha256sum tfplan > tfplan.checksum
       - name: Validate Plan Checksum
         run: |
           if [ ! -f tfplan.checksum ]; then
