@@ -305,7 +305,7 @@ jobs:
       - name: Download tfplan
         uses: actions/download-artifact@v4
         with:
-          name: tfplan-${{ inputs.environment }}
+          name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
       - name: Generate Infracost Cost Estimate
         run: |
           infracost breakdown --path=tfplan.json \
@@ -437,10 +437,12 @@ jobs:
             sed -i '/Plan:/d' tfplan-simple
             echo "${plan_changes}" > tfplan-summary
           fi
+      - name: Calculate Plan Checksum
+        run: sha256sum tfplan > tfplan.checksum
       - name: Upload tfplan
         uses: actions/upload-artifact@v4
         with:
-          name: tfplan-${{ inputs.environment }}
+          name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
           compression-level: 9
           path: "tfplan*"
           retention-days: 14
@@ -583,7 +585,7 @@ jobs:
       - name: Download tfplan
         uses: actions/download-artifact@v4
         with:
-          name: tfplan-${{ inputs.environment }}
+          name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
         continue-on-error: true
       - name: Add PR Comment
         uses: actions/github-script@v7
@@ -740,13 +742,34 @@ jobs:
       - name: Download tfplan
         uses: actions/download-artifact@v4
         with:
-          name: tfplan-${{ inputs.environment }}
+          name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
+        continue-on-error: true
+      - name: Check Artifact Availability
+        run: |
+          if [ ! -f tfplan ]; then
+            echo "tfplan artifact not found. Please regenerate the plan."
+            exit 1
+          fi
       - name: Download Additional Directories
         if: inputs.additional-dir
         uses: actions/download-artifact@v4
         with:
           name: additional-dir-${{ inputs.environment }}
           path: ${{ inputs.additional-dir }}
+      - name: Validate Plan Checksum
+        run: |
+          if [ ! -f tfplan.checksum ]; then
+            echo "Checksum file is missing. The tfplan artifact may not have been generated or uploaded correctly. Halting Terraform Apply phase."
+            exit 1
+          fi
+          echo "Validating the checksum of the tfplan artifact..."
+          if sha256sum -c tfplan.checksum; then
+            echo "Checksum validation succeeded. The tfplan artifact is intact and matches the original plan."
+          else
+            echo "Checksum validation failed. The tfplan artifact has been modified or tampered with since the plan was generated."
+            echo "Halting Terraform Apply phase to ensure the integrity of the deployment process."
+            exit 1
+          fi
       - name: Terraform Apply
         run: |
           terraform apply \
