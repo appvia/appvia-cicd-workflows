@@ -82,6 +82,12 @@ on:
         required: false
         type: boolean
 
+      enable-python:
+        default: false
+        description: "Whether to install python3"
+        required: false
+        type: boolean
+
       enable-terraform-apply:
         default: true
         description: "Whether to run terraform apply on merge to main"
@@ -103,6 +109,12 @@ on:
       environment:
         default: "production"
         description: "The environment to deploy to"
+        required: false
+        type: string
+
+      python-version:
+        default: "3.13"
+        description: "The version of python to use when enabled"
         required: false
         type: string
 
@@ -384,6 +396,11 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform-version }}
+      - name: Install Python3
+        if: inputs.enable-python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
       - name: Retrieve Web Identity Token for AWS Authentication
         run: |
           curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" | jq -r '.value' > "${AWS_WEB_IDENTITY_TOKEN_FILE}"
@@ -738,6 +755,11 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform-version }}
+      - name: Install Python3
+        if: inputs.enable-python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
       - name: Retrieve Web Identity Token for AWS Authentication
         run: |
           curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value' > "${AWS_WEB_IDENTITY_TOKEN_FILE}"
