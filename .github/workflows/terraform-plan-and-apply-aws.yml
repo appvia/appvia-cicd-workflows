@@ -452,7 +452,7 @@ jobs:
           git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
       - name: Terraform Init
         id: init
-        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ steps.state-key.outputs.name }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
+        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ steps.state-key.outputs.name }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}" ${{ inputs.terraform-init-extra-args }}
       - name: Terraform Validate
         id: validate
         run: terraform -chdir=${{ inputs.terraform-dir }} validate -no-color
@@ -805,7 +805,7 @@ jobs:
           git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
       - name: Terraform Init
         id: init
-        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ steps.state-key.outputs.name }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
+        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ steps.state-key.outputs.name }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}" ${{ inputs.terraform-init-extra-args }}
       - name: Download tfplan
         uses: actions/download-artifact@v4
         with:
