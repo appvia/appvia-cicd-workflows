@@ -1,0 +1,56 @@
+name: 'Terraform bootstrap'
+description: 'Terraform bootstrapping including init, no auth required'
+inputs:
+  appvia-actions-id:
+    description: "The application ID for the workflow token"
+    required: false
+    type: string
+  appvia-actions-secret:
+    description: "The application secret for the workflow token"
+    required: false
+    type: string
+  enable-private-access:
+    description: Optional flag to state if terraform requires pulling private modules
+    type: boolean
+  organization-name:
+    description: "The name of the Github organization"
+    type: string
+  terraform-dir:
+    description: "The directory to validate"
+    type: string
+  terraform-init-extra-args:
+    description: "Extra arguments to pass to terraform init"
+    type: string
+  terraform-version:
+    description: "The version of terraform to use"
+    type: string
+outputs:
+  outcome-init:
+    description: "Outcome of the init step"
+    value: ${{ steps.init.outcome }}
+
+runs:
+  using: "composite"
+  steps:
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+      - name: Enable Private Modules
+        id: get_workflow_token
+        if: inputs.enable-private-access == true
+        uses: peter-murray/workflow-application-token-action@v4
+        with:
+          application_id: ${{ inputs.appvia-actions-id }}
+          application_private_key: ${{ inputs.appvia-actions-secret }}
+          organization: ${{ inputs.organization-name }}
+          revoke_token: true
+      - name: Setup Credentials
+        if: inputs.enable-private-access == true
+        shell: bash
+        run: |
+          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
+      - name: Terraform Init
+        id: init
+        shell: bash
+        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false ${{ inputs.terraform-init-extra-args }}

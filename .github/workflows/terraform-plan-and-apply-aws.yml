@@ -82,12 +82,6 @@ on:
         required: false
         type: boolean
 
-      enable-python:
-        default: false
-        description: "Whether to install python3"
-        required: false
-        type: boolean
-
       enable-terraform-apply:
         default: true
         description: "Whether to run terraform apply on merge to main"
@@ -109,12 +103,6 @@ on:
       environment:
         default: "production"
         description: "The environment to deploy to"
-        required: false
-        type: string
-
-      python-version:
-        default: "3.13"
-        description: "The version of python to use when enabled"
         required: false
         type: string
 
@@ -204,8 +192,6 @@ on:
 
 env:
   AWS_ROLE: ${{ inputs.aws-role }}
-  AWS_READONLY_OVERRIDE_ROLE: ${{ inputs.aws-read-role-name }}
-  AWS_READWRITE_OVERRIDE_ROLE: ${{ inputs.aws-write-role-name }}
   AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/web_identity_token_file
 
 permissions:
@@ -291,27 +277,17 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-      - name: Setup Linter
-        uses: terraform-linters/setup-tflint@v4
-      - name: Enable Private Modules
-        id: get_workflow_token
-        if: inputs.enable-private-access
-        uses: peter-murray/workflow-application-token-action@v4
+      - name: Terraform Bootstrap
+        id: bootstrap
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@s3-state-locking
         with:
-          application_id: ${{ secrets.appvia-actions-id }}
-          application_private_key: ${{ secrets.appvia-actions-secret }}
-          organization: ${{ inputs.organization-name }}
-          revoke_token: true
-      - name: Setup Credentials
-        if: inputs.enable-private-access
-        run: |
-          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ inputs.terraform-version }}
-      - name: Terraform Init
-        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false ${{ inputs.terraform-init-extra-args }}
+          appvia-actions-id: ${{ secrets.appvia-actions-id }}
+          appvia-actions-secret: ${{ secrets.appvia-actions-secret }}
+          enable-private-access: ${{ inputs.enable-private-access }}
+          organization-name: ${{ inputs.organization-name }}
+          terraform-dir: ${{ inputs.terraform-dir }}
+          terraform-init-extra-args: ${{ inputs.terraform-init-extra-args }}
+          terraform-version: ${{ inputs.terraform-version }}
       - name: Setup Linter
         uses: terraform-linters/setup-tflint@v4
       - name: Linter Initialize
@@ -378,8 +354,8 @@ jobs:
     needs:
       - debug-mode
     outputs:
-      result-auth: ${{ steps.auth.outcome }}
-      result-init: ${{ steps.init.outcome }}
+      result-auth: ${{ steps.bootstrap.outputs.outcome-auth }}
+      result-init: ${{ steps.bootstrap.outputs.outcome-init }}
       result-validate: ${{ steps.validate.outcome }}
       result-s3-backend-check: ${{ steps.s3-backend-check.outcome }}
       result-plan: ${{ steps.plan.outcome }}
@@ -388,77 +364,26 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-      - name: Setup node
-        uses: actions/setup-node@v4
+      - name: Terraform Bootstrap
+        id: bootstrap
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap@s3-state-locking
         with:
-          node-version: 16
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ inputs.terraform-version }}
-      - name: Install Python3
-        if: inputs.enable-python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ inputs.python-version }}
-      - name: Retrieve Web Identity Token for AWS Authentication
-        run: |
-          curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" | jq -r '.value' > "${AWS_WEB_IDENTITY_TOKEN_FILE}"
-      - name: Determine AWS Role
-        id: role
-        run: |
-          if [ "${{ inputs.use-env-as-suffix }}" == "true" ]; then
-            role_suffix="-${{ inputs.environment }}"
-          else
-            role_suffix=""
-          fi
-          if [[ "${GITHUB_REF##*/}" == "main" ]]; then
-            echo "name=${AWS_READWRITE_OVERRIDE_ROLE:-${AWS_ROLE}${role_suffix}}" >> "${GITHUB_OUTPUT}"
-          else
-            echo "name=${AWS_READONLY_OVERRIDE_ROLE:-${AWS_ROLE}${role_suffix}-ro}" >> "${GITHUB_OUTPUT}"
-          fi
-      - name: Authenticate with AWS
-        id: auth
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
+          appvia-actions-id: ${{ secrets.appvia-actions-id }}
+          appvia-actions-secret: ${{ secrets.appvia-actions-secret }}
+          aws-account-id: ${{ inputs.aws-account-id }}
+          aws-read-role-name: ${{ inputs.aws-read-role-name }}
           aws-region: ${{ inputs.aws-region }}
-          role-session-name: ${{ github.event.repository.name }}
-          role-to-assume: arn:aws:iam::${{ inputs.aws-account-id }}:role/${{ steps.role.outputs.name }}
-          mask-aws-account-id: "no"
-      - name: Set terraform-state-key variable
-        id: state-key
-        run: |
-          if [ -n "${{ inputs.terraform-state-key }}" ]; then
-            echo "name=${{ inputs.terraform-state-key }}" >> "${GITHUB_OUTPUT}"
-          else
-            if [ "${{ inputs.use-env-as-suffix }}" == "true" ]; then
-              echo "name=${{ github.event.repository.name }}-${{ inputs.environment }}.tfstate" >> "${GITHUB_OUTPUT}"
-            else
-              echo "name=${{ github.event.repository.name }}.tfstate" >> "${GITHUB_OUTPUT}"
-            fi
-          fi
-      - name: Enable Private Modules
-        id: get_workflow_token
-        if: inputs.enable-private-access
-        uses: peter-murray/workflow-application-token-action@v4
-        with:
-          application_id: ${{ secrets.appvia-actions-id }}
-          application_private_key: ${{ secrets.appvia-actions-secret }}
-          organization: ${{ inputs.organization-name }}
-          revoke_token: true
-      - name: Setup Credentials
-        if: inputs.enable-private-access
-        run: |
-          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
-      - name: Terraform Init
-        id: init
-        run: |
-          terraform -chdir=${{ inputs.terraform-dir }} init \
-          -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" \
-          -backend-config="key=${{ steps.state-key.outputs.name }}" \
-          -backend-config="encrypt=true" \
-          -backend-config="use_lockfile=true" \
-          -backend-config="region=${{ inputs.aws-region }}"
+          aws-role: ${{ inputs.aws-role }}
+          aws-web-identity-token-file: ${{ env.AWS_WEB_IDENTITY_TOKEN_FILE }}
+          aws-write-role-name: ${{ inputs.aws-write-role-name }}
+          enable-private-access: ${{ inputs.enable-private-access }}
+          environment: ${{ inputs.environment }}
+          organization-name: ${{ inputs.organization-name }}
+          terraform-dir: ${{ inputs.terraform-dir }}
+          terraform-init-extra-args: ${{ inputs.terraform-init-extra-args }}
+          terraform-state-key: ${{ inputs.terraform-state-key }}
+          terraform-version: ${{ inputs.terraform-version }}
+          use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
       - name: Terraform Validate
         id: validate
         run: terraform -chdir=${{ inputs.terraform-dir }} validate -no-color
@@ -539,26 +464,17 @@ jobs:
       - name: Ensure Checkov Configuration
         run: |
           [ -f ".checkov.yml" ] || echo "{}" > .checkov.yml
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - name: Terraform Bootstrap
+        id: bootstrap
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@s3-state-locking
         with:
-          terraform_version: ${{ inputs.terraform-version }}
-      - name: Enable Private Modules
-        id: get_workflow_token
-        if: inputs.enable-private-access
-        uses: peter-murray/workflow-application-token-action@v4
-        with:
-          application_id: ${{ secrets.appvia-actions-id }}
-          application_private_key: ${{ secrets.appvia-actions-secret }}
-          organization: ${{ inputs.organization-name }}
-          revoke_token: true
-      - name: Setup Credentials
-        if: inputs.enable-private-access
-        run: |
-          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
-      - name: Terraform Init
-        id: init
-        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
+          appvia-actions-id: ${{ secrets.appvia-actions-id }}
+          appvia-actions-secret: ${{ secrets.appvia-actions-secret }}
+          enable-private-access: ${{ inputs.enable-private-access }}
+          organization-name: ${{ inputs.organization-name }}
+          terraform-dir: ${{ inputs.terraform-dir }}
+          terraform-init-extra-args: ${{ inputs.terraform-init-extra-args }}
+          terraform-version: ${{ inputs.terraform-version }}
       - name: Set terraform-values-file variable
         run: |
           if [ -n "${{ inputs.terraform-values-file }}" ]; then
@@ -591,26 +507,17 @@ jobs:
           if [ -e ".trivyignore" ]; then
             echo filename=".trivyignore" >> "${GITHUB_OUTPUT}"
           fi
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - name: Terraform Bootstrap
+        id: bootstrap
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@s3-state-locking
         with:
-          terraform_version: ${{ inputs.terraform-version }}
-      - name: Enable Private Modules
-        id: get_workflow_token
-        if: inputs.enable-private-access
-        uses: peter-murray/workflow-application-token-action@v4
-        with:
-          application_id: ${{ secrets.appvia-actions-id }}
-          application_private_key: ${{ secrets.appvia-actions-secret }}
-          organization: ${{ inputs.organization-name }}
-          revoke_token: true
-      - name: Setup Credentials
-        if: inputs.enable-private-access
-        run: |
-          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
-      - name: Terraform Init
-        id: init
-        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
+          appvia-actions-id: ${{ secrets.appvia-actions-id }}
+          appvia-actions-secret: ${{ secrets.appvia-actions-secret }}
+          enable-private-access: ${{ inputs.enable-private-access }}
+          organization-name: ${{ inputs.organization-name }}
+          terraform-dir: ${{ inputs.terraform-dir }}
+          terraform-init-extra-args: ${{ inputs.terraform-init-extra-args }}
+          terraform-version: ${{ inputs.terraform-version }}
       - name: Set terraform-values-file variable
         run: |
           if [ -n "${{ inputs.terraform-values-file }}" ]; then
@@ -671,6 +578,9 @@ jobs:
             const planExists = fs.existsSync("tfplan-simple");
             if (planExists) {
               var planOutput = fs.readFileSync("tfplan-simple", "utf8");
+              if (!planOutput.trim()) {
+                planOutput = "No changes detected."
+              }
 
               const planSummaryExists = fs.existsSync("tfplan-summary");
               if (planSummaryExists) {
@@ -753,71 +663,26 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-      - name: Setup node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 16
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ inputs.terraform-version }}
-      - name: Install Python3
-        if: inputs.enable-python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ inputs.python-version }}
-      - name: Retrieve Web Identity Token for AWS Authentication
-        run: |
-          curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value' > "${AWS_WEB_IDENTITY_TOKEN_FILE}"
-      - name: Determine AWS Role
-        id: role
-        run: |
-          if [ "${{ inputs.use-env-as-suffix }}" == "true" ]; then
-            echo "name=${AWS_READWRITE_OVERRIDE_ROLE:-${AWS_ROLE}-${{ inputs.environment }}}" >> "${GITHUB_OUTPUT}"
-          else
-            echo "name=${AWS_READWRITE_OVERRIDE_ROLE:-${AWS_ROLE}}" >> "${GITHUB_OUTPUT}"
-          fi
-      - name: Authenticate with AWS
-        id: auth
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-region: ${{ inputs.aws-region }}
-          role-session-name: ${{ github.event.repository.name }}
-          role-to-assume: arn:aws:iam::${{ inputs.aws-account-id }}:role/${{ steps.role.outputs.name }}
-      - name: Set terraform-state-key variable
-        id: state-key
-        run: |
-          if [ -n "${{ inputs.terraform-state-key }}" ]; then
-            echo "name=${{ inputs.terraform-state-key }}" >> "${GITHUB_OUTPUT}"
-          else
-            if [ "${{ inputs.use-env-as-suffix }}" == "true" ]; then
-              echo "name=${{ github.event.repository.name }}-${{ inputs.environment }}.tfstate" >> "${GITHUB_OUTPUT}"
-            else
-              echo "name=${{ github.event.repository.name }}.tfstate" >> "${GITHUB_OUTPUT}"
-            fi
-          fi
-      - name: Enable Private Modules
-        id: get_workflow_token
-        if: inputs.enable-private-access
-        uses: peter-murray/workflow-application-token-action@v4
-        with:
-          application_id: ${{ secrets.appvia-actions-id }}
-          application_private_key: ${{ secrets.appvia-actions-secret }}
-          organization: ${{ inputs.organization-name }}
-          revoke_token: true
-      - name: Setup Credentials
-        if: inputs.enable-private-access
-        run: |
-          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
-      - name: Terraform Init
+      - name: Terraform Bootstrap
         id: init
-        run: |
-          terraform -chdir=${{ inputs.terraform-dir }} init \
-          -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" \
-          -backend-config="key=${{ steps.state-key.outputs.name }}" \
-          -backend-config="encrypt=true" \
-          -backend-config="use_lockfile=true" \
-          -backend-config="region=${{ inputs.aws-region }}"
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap@s3-state-locking
+        with:
+          appvia-actions-id: ${{ secrets.appvia-actions-id }}
+          appvia-actions-secret: ${{ secrets.appvia-actions-secret }}
+          aws-account-id: ${{ inputs.aws-account-id }}
+          aws-read-role-name: ${{ inputs.aws-read-role-name }}
+          aws-region: ${{ inputs.aws-region }}
+          aws-role: ${{ inputs.aws-role }}
+          aws-web-identity-token-file: ${{ env.AWS_WEB_IDENTITY_TOKEN_FILE }}
+          aws-write-role-name: ${{ inputs.aws-write-role-name }}
+          enable-private-access: ${{ inputs.enable-private-access }}
+          environment: ${{ inputs.environment }}
+          organization-name: ${{ inputs.organization-name }}
+          terraform-dir: ${{ inputs.terraform-dir }}
+          terraform-init-extra-args: ${{ inputs.terraform-init-extra-args }}
+          terraform-state-key: ${{ inputs.terraform-state-key }}
+          terraform-version: ${{ inputs.terraform-version }}
+          use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
       - name: Download tfplan
         uses: actions/download-artifact@v4
         with:
