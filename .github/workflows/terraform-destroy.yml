@@ -145,7 +145,7 @@ on:
         type: string
 
       terraform-version:
-        default: "1.7.1"
+        default: "1.11.2"
         description: "The version of terraform to use"
         required: false
         type: string
@@ -249,7 +249,7 @@ jobs:
           -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" \
           -backend-config="key=${{ steps.state-key.outputs.name }}" \
           -backend-config="encrypt=true" \
-          -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" \
+          -backend-config="use_lockfile=true" \
           -backend-config="region=${{ inputs.aws-region }}" \
           ${{ inputs.terraform-init-extra-args }}
       - name: Terraform Validate
@@ -377,7 +377,7 @@ jobs:
           -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" \
           -backend-config="key=${{ steps.state-key.outputs.name }}" \
           -backend-config="encrypt=true" \
-          -backend-config="dynamodb_table=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tflock" \
+          -backend-config="use_lockfile=true" \
           -backend-config="region=${{ inputs.aws-region }}" \
           ${{ inputs.terraform-init-extra-args }}
       - name: Download tfplan
