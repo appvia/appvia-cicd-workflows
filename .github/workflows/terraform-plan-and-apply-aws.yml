@@ -458,7 +458,8 @@ jobs:
           -backend-config="key=${{ steps.state-key.outputs.name }}" \
           -backend-config="encrypt=true" \
           -backend-config="use_lockfile=true" \
-          -backend-config="region=${{ inputs.aws-region }}"
+          -backend-config="region=${{ inputs.aws-region }}" \
+           ${{ inputs.terraform-init-extra-args }}
       - name: Terraform Validate
         id: validate
         run: terraform -chdir=${{ inputs.terraform-dir }} validate -no-color
@@ -817,7 +818,8 @@ jobs:
           -backend-config="key=${{ steps.state-key.outputs.name }}" \
           -backend-config="encrypt=true" \
           -backend-config="use_lockfile=true" \
-          -backend-config="region=${{ inputs.aws-region }}"
+          -backend-config="region=${{ inputs.aws-region }}" \
+           ${{ inputs.terraform-init-extra-args }}
       - name: Download tfplan
         uses: actions/download-artifact@v4
         with:
