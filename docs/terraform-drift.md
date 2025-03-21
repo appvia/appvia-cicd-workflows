@@ -55,7 +55,7 @@ OPTIONAL INPUTS:
 - `terraform-lock-timeout` - Default: "30s"
 - `terraform-state-key` - Default: <repo-name>.tfstate
 - `terraform-values-file` - Default: <environment>.tfvars
-- `terraform-version` - Default: "1.7.1"
+- `terraform-version` - Default: "1.11.2"
 - `working-directory` - Default: "."
 
 **Note:** This template may change over time, so it is recommended that you point to a tagged version rather than the main branch.
