@@ -186,7 +186,7 @@ jobs:
     if: inputs.enable-terraform-tests
     defaults:
       run:
-        working-directory: ${{ inputs.working-directory }}
+        working-directory: .
     outputs:
       result: ${{ steps.tests.outcome }}
     steps:
