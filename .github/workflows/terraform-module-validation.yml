@@ -203,7 +203,7 @@ jobs:
           terraform-dir: ${{ inputs.terraform-dir }}
           terraform-init-extra-args: ${{ inputs.terraform-init-extra-args }}
           terraform-version: ${{ inputs.terraform-version }}
-          working-directory: ${{ inputs.working-directory }}
+          working-directory: tests
       - name: Run Tests
         id: tests
         run: terraform -chdir=${{ inputs.terraform-tests-dir }} test
