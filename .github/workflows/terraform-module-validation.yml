@@ -186,7 +186,7 @@ jobs:
     if: inputs.enable-terraform-tests
     defaults:
       run:
-        working-directory: .
+        working-directory: ${{ inputs.working-directory }}
     outputs:
       result: ${{ steps.tests.outcome }}
     steps:
@@ -200,10 +200,10 @@ jobs:
           appvia-actions-secret: ${{ secrets.appvia-actions-secret }}
           enable-private-access: ${{ inputs.enable-private-access }}
           organization-name: ${{ inputs.organization-name }}
-          terraform-dir: .
+          terraform-dir: ${{ inputs.terraform-dir }}
           terraform-init-extra-args: ${{ inputs.terraform-init-extra-args }}
           terraform-version: ${{ inputs.terraform-version }}
-          working-directory: .
+          working-directory: ${{ inputs.terraform-tests-dir}}
       - name: Run Tests
         id: tests
         run: terraform -chdir=${{ inputs.terraform-tests-dir }} test
