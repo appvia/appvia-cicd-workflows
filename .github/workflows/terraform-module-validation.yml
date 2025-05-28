@@ -194,7 +194,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Terraform Bootstrap
         id: bootstrap
-        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap@main
         with:
           appvia-actions-id: ${{ secrets.appvia-actions-id }}
           appvia-actions-secret: ${{ secrets.appvia-actions-secret }}
