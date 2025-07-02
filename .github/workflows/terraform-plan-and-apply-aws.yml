@@ -420,6 +420,7 @@ jobs:
             echo "GITHUB_APP_ID=${{ secrets.github-provider-app-id}}" >> "${GITUB_ENV}"
             echo "GITHUB_APP_INSTALLATION_ID=${{ secrets.github-provider-installation-id}}" >> "${GITUB_ENV}"
             echo "GITHUB_APP_PEM_FILE='${{ secrets.github-provider-private-key}}'" >> "${GITHUB_ENV}"
+          fi
       - name: Terraform Plan
         id: plan
         run: |
@@ -738,9 +739,9 @@ jobs:
       - name: Add GitHub provider credentials to environment
         run: |
           if [ -n "${{ secrets.github-provider-app-id }}" && -n "${{ secrets.github-provider-installation-id }}" && -n "${{ secrets.github-provider-private-key}}" ]; then
-            echo "GITHUB_PROVIDER_APP_ID=${{ secrets.github-provider-app-id}}" >> "${GITUB_ENV}"
-            echo "GITHUB_PROVIDER_INSTALLATION_ID=${{ secrets.github-provider-installation-id}}" >> "${GITUB_ENV}"
-            echo "GITHUB_PROVIDER_PRIVATE_KEY='${{ secrets.github-provider-private-key}}'" >> "${GITHUB_ENV}"
+            echo "GITHUB_APP_ID=${{ secrets.github-provider-app-id}}" >> "${GITUB_ENV}"
+            echo "GITHUB_APP_INSTALLATION_ID=${{ secrets.github-provider-installation-id}}" >> "${GITUB_ENV}"
+            echo "GITHUB_APP_PEM_FILE='${{ secrets.github-provider-private-key}}'" >> "${GITHUB_ENV}"
           fi
       - name: Terraform Apply
         run: |
