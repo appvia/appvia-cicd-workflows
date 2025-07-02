@@ -12,6 +12,15 @@ on:
       appvia-actions-secret:
         description: "Appvia App secret for GH"
         required: false
+      github-provider-app-id:
+        description: "GitHub provider app ID"
+        required: false
+      github-provider-installation-id:
+        description: "GitHub provider installation ID"
+        required: false
+      github-provider-private-key:
+        description: "Base64 encoded private key for GitHub provider app"
+        required: false
 
     inputs:
       additional-dir:
@@ -405,6 +414,15 @@ jobs:
           else
             echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> "${GITHUB_ENV}"
           fi
+      - name: Add GitHub provider credentials to environment
+        run: |
+          if [ -n "${{ secrets.github-provider-app-id }}" ] && [ -n "${{ secrets.github-provider-installation-id }}" ] && [ -n "${{ secrets.github-provider-private-key }}" ]; then
+            echo "GITHUB_APP_ID=${{ secrets.github-provider-app-id }}" >> "${GITHUB_ENV}"
+            echo "GITHUB_APP_INSTALLATION_ID=${{ secrets.github-provider-installation-id }}" >> "${GITHUB_ENV}"
+            # Decode base64 encoded private key and write to file
+            echo "${{ secrets.github-provider-private-key }}" | base64 -d > /tmp/github-app-private-key.pem
+            echo "GITHUB_APP_PEM_FILE=/tmp/github-app-private-key.pem" >> "${GITHUB_ENV}"
+          fi
       - name: Terraform Plan
         id: plan
         run: |
@@ -719,6 +737,15 @@ jobs:
             echo "Checksum validation failed. The tfplan artifact has been modified or tampered with since the plan was generated."
             echo "Halting Terraform Apply phase to ensure the integrity of the deployment process."
             exit 1
+          fi
+      - name: Add GitHub provider credentials to environment
+        run: |
+          if [ -n "${{ secrets.github-provider-app-id }}" ] && [ -n "${{ secrets.github-provider-installation-id }}" ] && [ -n "${{ secrets.github-provider-private-key }}" ]; then
+            echo "GITHUB_APP_ID=${{ secrets.github-provider-app-id }}" >> "${GITHUB_ENV}"
+            echo "GITHUB_APP_INSTALLATION_ID=${{ secrets.github-provider-installation-id }}" >> "${GITHUB_ENV}"
+            # Decode base64 encoded private key and write to file
+            echo "${{ secrets.github-provider-private-key }}" | base64 -d > /tmp/github-app-private-key.pem
+            echo "GITHUB_APP_PEM_FILE=/tmp/github-app-private-key.pem" >> "${GITHUB_ENV}"
           fi
       - name: Terraform Apply
         run: |
