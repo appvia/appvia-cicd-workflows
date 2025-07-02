@@ -19,6 +19,8 @@ This GitHub Actions workflow template ([terraform-plan-and-apply-aws.yml](../.gi
 
 ## Usage
 
+**Note:** This template may change over time, so it is recommended that you point to a tagged version rather than the main branch.
+
 Create a new workflow file in your Terraform repository (e.g. `.github/workflows/terraform.yml`) with the below contents:
 
 ```yml
@@ -42,7 +44,22 @@ jobs:
       aws-role: <IAM_ROLE_NAME>
       enable-infracost: true
 ```
-
 The `aws-role` inputs are optional and will default to the repository name.
 
-**Note:** This template may change over time, so it is recommended that you point to a tagged version rather than the main branch.
+### GitHub provider support
+
+The Terraform GitHub provider requires a GitHub App to be configured in GitHub with the permissions necessary depending on the resources used. The workflow supports the following secrets to configure the provider:
+
+- `github_provider_app_id` - The GitHub App ID to be used by the provider.
+- `github_provider_installation_id` - The GitHub App installation ID.
+- `github_provider_private_key` - The generated private key for the provider GitHub App.
+
+These secrets are then automatically made available to the provider through environment variables, example provider configuration:
+
+```
+provider "github" {
+  owner = "my-organisation"
+  app_auth {}
+}
+```
+
