@@ -420,8 +420,8 @@ jobs:
             echo "GITHUB_APP_ID=${{ secrets.gh-provider-app-id }}" >> "${GITHUB_ENV}"
             echo "GITHUB_APP_INSTALLATION_ID=${{ secrets.gh-provider-installation-id }}" >> "${GITHUB_ENV}"
             # Decode base64 encoded private key and write to file
-            echo "${{ secrets.gh-provider-private-key }}" | base64 -d > /tmp/github-app-private-key.pem
-            echo "GITHUB_APP_PEM_FILE=/tmp/github-app-private-key.pem" >> "${GITHUB_ENV}"
+            echo "${{ secrets.gh-provider-private-key }}" | base64 -d > ${RUNNER_TEMP}/github-app-private-key.pem
+            echo "GITHUB_APP_PEM_FILE=${RUNNER_TEMP}/github-app-private-key.pem" >> "${GITHUB_ENV}"
           else
             echo "GitHub provider credentials not provided."
           fi
@@ -746,8 +746,8 @@ jobs:
             echo "GITHUB_APP_ID=${{ secrets.gh-provider-app-id }}" >> "${GITHUB_ENV}"
             echo "GITHUB_APP_INSTALLATION_ID=${{ secrets.gh-provider-installation-id }}" >> "${GITHUB_ENV}"
             # Decode base64 encoded private key and write to file
-            echo "${{ secrets.gh-provider-private-key }}" | base64 -d > /tmp/github-app-private-key.pem
-            echo "GITHUB_APP_PEM_FILE=/tmp/github-app-private-key.pem" >> "${GITHUB_ENV}"
+            echo "${{ secrets.gh-provider-private-key }}" | base64 -d > ${RUNNER_TEMP}/github-app-private-key.pem
+            echo "GITHUB_APP_PEM_FILE=${RUNNER_TEMP}/github-app-private-key.pem" >> "${GITHUB_ENV}"
           fi
       - name: Terraform Apply
         run: |
