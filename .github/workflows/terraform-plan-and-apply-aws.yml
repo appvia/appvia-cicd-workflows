@@ -422,6 +422,8 @@ jobs:
             # Decode base64 encoded private key and write to file
             echo "${{ secrets.gh-provider-private-key }}" | base64 -d > /tmp/github-app-private-key.pem
             echo "GITHUB_APP_PEM_FILE=/tmp/github-app-private-key.pem" >> "${GITHUB_ENV}"
+          else
+            echo "GitHub provider credentials not provided."
           fi
       - name: Terraform Plan
         id: plan
