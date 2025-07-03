@@ -65,9 +65,9 @@ The workflow supports the Terraform GitHub provider through GitHub App authentic
    base64 github-app-private-key.pem > github-app-private-key-base64.txt
    ```
 4. Store the following as GitHub secrets in your repository:
-   - `GITHUB_PROVIDER_APP_ID` - The GitHub App ID
-   - `GITHUB_PROVIDER_INSTALLATION_ID` - The GitHub App installation ID
-   - `GITHUB_PROVIDER_PRIVATE_KEY` - The base64 encoded private key from step 3
+   - `GH_PROVIDER_APP_ID` - The GitHub App ID
+   - `GH_PROVIDER_INSTALLATION_ID` - The GitHub App installation ID
+   - `GH_PROVIDER_PRIVATE_KEY` - The base64 encoded private key from step 3
 
 5. Pass these secrets to the workflow:
    ```yml
@@ -76,9 +76,9 @@ The workflow supports the Terraform GitHub provider through GitHub App authentic
        uses: appvia/appvia-cicd-workflows/.github/workflows/terraform-plan-and-apply-aws.yml@main
        name: Plan and Apply
        secrets:
-         github-provider-app-id: ${{ secrets.GITHUB_PROVIDER_APP_ID }}
-         github-provider-installation-id: ${{ secrets.GITHUB_PROVIDER_INSTALLATION_ID }}
-         github-provider-private-key: ${{ secrets.GITHUB_PROVIDER_PRIVATE_KEY }}
+         gh-provider-app-id: ${{ secrets.GH_PROVIDER_APP_ID }}
+         gh-provider-installation-id: ${{ secrets.GH_PROVIDER_INSTALLATION_ID }}
+         gh-provider-private-key: ${{ secrets.GH_PROVIDER_PRIVATE_KEY }}
        with:
          aws-account: 123456789012
          # ... other inputs

@@ -12,13 +12,13 @@ on:
       appvia-actions-secret:
         description: "Appvia App secret for GH"
         required: false
-      github-provider-app-id:
+      gh-provider-app-id:
         description: "GitHub provider app ID"
         required: false
-      github-provider-installation-id:
+      gh-provider-installation-id:
         description: "GitHub provider installation ID"
         required: false
-      github-provider-private-key:
+      gh-provider-private-key:
         description: "Base64 encoded private key for GitHub provider app"
         required: false
 
@@ -416,11 +416,11 @@ jobs:
           fi
       - name: Add GitHub provider credentials to environment
         run: |
-          if [ -n "${{ secrets.github-provider-app-id }}" ] && [ -n "${{ secrets.github-provider-installation-id }}" ] && [ -n "${{ secrets.github-provider-private-key }}" ]; then
-            echo "GITHUB_APP_ID=${{ secrets.github-provider-app-id }}" >> "${GITHUB_ENV}"
-            echo "GITHUB_APP_INSTALLATION_ID=${{ secrets.github-provider-installation-id }}" >> "${GITHUB_ENV}"
+          if [ -n "${{ secrets.gh-provider-app-id }}" ] && [ -n "${{ secrets.gh-provider-installation-id }}" ] && [ -n "${{ secrets.gh-provider-private-key }}" ]; then
+            echo "GITHUB_APP_ID=${{ secrets.gh-provider-app-id }}" >> "${GITHUB_ENV}"
+            echo "GITHUB_APP_INSTALLATION_ID=${{ secrets.gh-provider-installation-id }}" >> "${GITHUB_ENV}"
             # Decode base64 encoded private key and write to file
-            echo "${{ secrets.github-provider-private-key }}" | base64 -d > /tmp/github-app-private-key.pem
+            echo "${{ secrets.gh-provider-private-key }}" | base64 -d > /tmp/github-app-private-key.pem
             echo "GITHUB_APP_PEM_FILE=/tmp/github-app-private-key.pem" >> "${GITHUB_ENV}"
           fi
       - name: Terraform Plan
@@ -740,11 +740,11 @@ jobs:
           fi
       - name: Add GitHub provider credentials to environment
         run: |
-          if [ -n "${{ secrets.github-provider-app-id }}" ] && [ -n "${{ secrets.github-provider-installation-id }}" ] && [ -n "${{ secrets.github-provider-private-key }}" ]; then
-            echo "GITHUB_APP_ID=${{ secrets.github-provider-app-id }}" >> "${GITHUB_ENV}"
-            echo "GITHUB_APP_INSTALLATION_ID=${{ secrets.github-provider-installation-id }}" >> "${GITHUB_ENV}"
+          if [ -n "${{ secrets.gh-provider-app-id }}" ] && [ -n "${{ secrets.gh-provider-installation-id }}" ] && [ -n "${{ secrets.gh-provider-private-key }}" ]; then
+            echo "GITHUB_APP_ID=${{ secrets.gh-provider-app-id }}" >> "${GITHUB_ENV}"
+            echo "GITHUB_APP_INSTALLATION_ID=${{ secrets.gh-provider-installation-id }}" >> "${GITHUB_ENV}"
             # Decode base64 encoded private key and write to file
-            echo "${{ secrets.github-provider-private-key }}" | base64 -d > /tmp/github-app-private-key.pem
+            echo "${{ secrets.gh-provider-private-key }}" | base64 -d > /tmp/github-app-private-key.pem
             echo "GITHUB_APP_PEM_FILE=/tmp/github-app-private-key.pem" >> "${GITHUB_ENV}"
           fi
       - name: Terraform Apply
