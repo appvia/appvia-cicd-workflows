@@ -402,7 +402,7 @@ jobs:
             echo "GITHUB_APP_INSTALLATION_ID=${{ secrets.gh-provider-installation-id }}" >> "${GITHUB_ENV}"
             # Decode base64 encoded private key and write to file
             echo "${{ secrets.gh-provider-private-key }}" | base64 -d > ${RUNNER_TEMP}/github-app-private-key.pem
-            echo "GITHUB_APP_PEM_FILE=${RUNNER_TEMP}/github-app-private-key.pem" >> "${GITHUB_ENV}"
+            echo "GITHUB_APP_PEM_FILE=$(cat ${RUNNER_TEMP}/github-app-private-key.pem)" >> "${GITHUB_ENV}"
           else
             echo "GitHub provider credentials not provided."
           fi
