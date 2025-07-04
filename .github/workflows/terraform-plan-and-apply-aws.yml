@@ -395,6 +395,17 @@ jobs:
           terraform-version: ${{ inputs.terraform-version }}
           working-directory: ${{ inputs.working-directory }}
           use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
+      - name: Add GitHub provider credentials to environment
+        run: |
+          if [ -n "${{ secrets.gh-provider-app-id }}" ] && [ -n "${{ secrets.gh-provider-installation-id }}" ] && [ -n "${{ secrets.gh-provider-private-key }}" ]; then
+            echo "GITHUB_APP_ID=${{ secrets.gh-provider-app-id }}" >> "${GITHUB_ENV}"
+            echo "GITHUB_APP_INSTALLATION_ID=${{ secrets.gh-provider-installation-id }}" >> "${GITHUB_ENV}"
+            # Decode base64 encoded private key and write to file
+            echo "${{ secrets.gh-provider-private-key }}" | base64 -d > ${RUNNER_TEMP}/github-app-private-key.pem
+            echo "GITHUB_APP_PEM_FILE=${RUNNER_TEMP}/github-app-private-key.pem" >> "${GITHUB_ENV}"
+          else
+            echo "GitHub provider credentials not provided."
+          fi
       - name: Terraform Validate
         id: validate
         run: terraform -chdir=${{ inputs.terraform-dir }} validate -no-color
@@ -414,21 +425,13 @@ jobs:
           else
             echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> "${GITHUB_ENV}"
           fi
-      - name: Add GitHub provider credentials to environment
-        run: |
-          if [ -n "${{ secrets.gh-provider-app-id }}" ] && [ -n "${{ secrets.gh-provider-installation-id }}" ] && [ -n "${{ secrets.gh-provider-private-key }}" ]; then
-            echo "GITHUB_APP_ID=${{ secrets.gh-provider-app-id }}" >> "${GITHUB_ENV}"
-            echo "GITHUB_APP_INSTALLATION_ID=${{ secrets.gh-provider-installation-id }}" >> "${GITHUB_ENV}"
-            # Decode base64 encoded private key and write to file
-            echo "${{ secrets.gh-provider-private-key }}" | base64 -d > ${RUNNER_TEMP}/github-app-private-key.pem
-            echo "GITHUB_APP_PEM_FILE=${RUNNER_TEMP}/github-app-private-key.pem" >> "${GITHUB_ENV}"
-          else
-            echo "GitHub provider credentials not provided."
-          fi
       - name: Terraform Plan
         id: plan
         run: |
           set -o pipefail
+          if [[ -n "${GITHUB_APP_PEM_FILE}" && -f "${GITHUB_APP_PEM_FILE}" ]]; then
+            export GITHUB_APP_PEM_FILE=$(cat "${GITHUB_APP_PEM_FILE}")
+          fi
           terraform -chdir=${{ inputs.terraform-dir }} plan \
             -var-file="${TF_VAR_FILE}" \
             -no-color -input=false \
