@@ -429,6 +429,9 @@ jobs:
         id: plan
         run: |
           set -o pipefail
+					if [[ -n "${GITHUB_APP_PEM_FILE}" && -f "${GITHUB_APP_PEM_FILE}" ]]; then
+						export GITHUB_APP_PEM_FILE=$(cat "${GITHUB_APP_PEM_FILE}")
+					fi
           terraform -chdir=${{ inputs.terraform-dir }} plan \
             -var-file="${TF_VAR_FILE}" \
             -no-color -input=false \
