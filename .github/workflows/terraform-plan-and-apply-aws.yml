@@ -395,6 +395,17 @@ jobs:
           terraform-version: ${{ inputs.terraform-version }}
           working-directory: ${{ inputs.working-directory }}
           use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
+      - name: Add GitHub provider credentials to environment
+        run: |
+          if [ -n "${{ secrets.gh-provider-app-id }}" ] && [ -n "${{ secrets.gh-provider-installation-id }}" ] && [ -n "${{ secrets.gh-provider-private-key }}" ]; then
+            echo "GITHUB_APP_ID=${{ secrets.gh-provider-app-id }}" >> "${GITHUB_ENV}"
+            echo "GITHUB_APP_INSTALLATION_ID=${{ secrets.gh-provider-installation-id }}" >> "${GITHUB_ENV}"
+            # Decode base64 encoded private key and write to file
+            echo "${{ secrets.gh-provider-private-key }}" | base64 -d > ${RUNNER_TEMP}/github-app-private-key.pem
+            echo "GITHUB_APP_PEM_FILE=${RUNNER_TEMP}/github-app-private-key.pem" >> "${GITHUB_ENV}"
+          else
+            echo "GitHub provider credentials not provided."
+          fi
       - name: Terraform Validate
         id: validate
         run: terraform -chdir=${{ inputs.terraform-dir }} validate -no-color
@@ -413,17 +424,6 @@ jobs:
             echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> "${GITHUB_ENV}"
           else
             echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> "${GITHUB_ENV}"
-          fi
-      - name: Add GitHub provider credentials to environment
-        run: |
-          if [ -n "${{ secrets.gh-provider-app-id }}" ] && [ -n "${{ secrets.gh-provider-installation-id }}" ] && [ -n "${{ secrets.gh-provider-private-key }}" ]; then
-            echo "GITHUB_APP_ID=${{ secrets.gh-provider-app-id }}" >> "${GITHUB_ENV}"
-            echo "GITHUB_APP_INSTALLATION_ID=${{ secrets.gh-provider-installation-id }}" >> "${GITHUB_ENV}"
-            # Decode base64 encoded private key and write to file
-            echo "${{ secrets.gh-provider-private-key }}" | base64 -d > ${RUNNER_TEMP}/github-app-private-key.pem
-            echo "GITHUB_APP_PEM_FILE=${RUNNER_TEMP}/github-app-private-key.pem" >> "${GITHUB_ENV}"
-          else
-            echo "GitHub provider credentials not provided."
           fi
       - name: Terraform Plan
         id: plan
