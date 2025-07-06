@@ -189,7 +189,7 @@ jobs:
           fi
       - name: Send Slack notification if drift is detected
         if: steps.check-drift.outputs.DRIFT_STATUS == 'drift'
-        uses: slackapi/slack-github-action@v2.0.0
+        uses: slackapi/slack-github-action@v2.1.0
         with:
           webhook: ${{ secrets.slack-webhook-url }}
           webhook-type: incoming-webhook
