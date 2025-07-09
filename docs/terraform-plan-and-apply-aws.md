@@ -88,8 +88,10 @@ The workflow supports the Terraform GitHub provider through GitHub App authentic
    ```hcl
    provider "github" {
      owner = "my-organization"
-     app_auth {}  # Will use environment variables set by the workflow
+     app_auth {
+       pem_file = file("/tmp/github_provider.pem")
+     } 
    }
    ```
 
-The workflow automatically sets the required environment variables (`GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PEM_FILE`) that the GitHub provider uses for authentication.
+The workflow automatically sets the required environment variables (`GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`) and exports the decoded private key in `/tmp/github_provider.pem`. The private key is cleaned up at the end of the workflow.
