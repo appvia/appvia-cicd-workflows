@@ -173,7 +173,7 @@ jobs:
           terraform-version: ${{ inputs.terraform-version }}
           working-directory: ${{ inputs.working-directory }}
       - name: Setup Linter
-        uses: terraform-linters/setup-tflint@v4
+        uses: terraform-linters/setup-tflint@v5
       - name: Linter Initialize
         run: tflint --init
       - name: Linting Code
