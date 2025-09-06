@@ -2,14 +2,41 @@
 
 This repository contains a collection of GitHub Actions workflow templates that can be used with various types of repositories to automate the build, test, and deployment of applications and infrastructure.
 
-## Workflow's
+## OpenTofu Support
+
+All Terraform workflows now support both **Terraform** and **OpenTofu** through the `enable-opentofu` input parameter. This allows you to use OpenTofu as a drop-in replacement for Terraform while maintaining the same workflow functionality.
+
+```yaml
+with:
+  enable-opentofu: true  # Use OpenTofu instead of Terraform
+```
+
+## Workflows
 
 Please refer to the following documentation for more information on the workflows:
 
-- [Terraform Plan & Apply (AWS)](./docs/terraform-plan-and-apply-aws.md)
-- [Terraform Module Validation](./docs/terraform-module-validation.md)
-- [Terraform Module Release](./docs/terraform-module-release.md)
-- [Terraform Destroy (AWS)](./docs/terraform-destroy.md)
+- [Terraform/OpenTofu Plan & Apply (AWS)](./docs/terraform-plan-and-apply-aws.md)
+- [Terraform/OpenTofu Module Validation](./docs/terraform-module-validation.md)
+- [Terraform/OpenTofu Module Release](./docs/terraform-module-release.md)
+- [Terraform/OpenTofu Destroy (AWS)](./docs/terraform-destroy.md)
+- [Terraform/OpenTofu Drift Detection](./docs/terraform-drift.md)
+
+## Validation
+
+This repository includes a Makefile for validating workflow syntax and structure:
+
+```bash
+# Install validation tools
+make install-tools
+
+# Validate all workflows
+make validate-workflows
+
+# Show workflow summary
+make summary
+```
+
+See [MAKEFILE.md](./MAKEFILE.md) for complete documentation.
 
 ## How to setup Deployment Protection & Approval
 
