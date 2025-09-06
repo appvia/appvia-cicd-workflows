@@ -6,10 +6,10 @@ on:
       infracost-api-key:
         description: "The API key for infracost"
         required: false
-      appvia-actions-secret:
+      actions-secret:
         description: "Appvia App secret for GH"
         required: false
-      appvia-actions-id:
+      actions-id:
         description: "Appvia App ID for GH"
         required: false
 
@@ -31,6 +31,11 @@ on:
         description: "Whether to run infracost on the Terraform Plan (secrets.infracost-api-key must be set if enabled)"
         required: false
         type: boolean
+
+      enable-opentofu:
+        description: "Use OpenTofu instead of Terraform"
+        type: boolean
+        default: false
 
       enable-commitlint:
         default: true
@@ -102,6 +107,9 @@ permissions:
   contents: read
   pull-requests: write
 
+env:
+  TOOL_NAME: ${{ inputs.enable-opentofu == 'true' && 'opentofu' || 'terraform' }}
+
 jobs:
   commitlint:
     name: "Commitlint"
@@ -141,13 +149,20 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+
+      - name: Setup OpenTofu
+        if: ${{ inputs.enable-opentofu == 'true' }}
+        uses: hashicorp/setup-opentofu@v3
+        with:
+          opentofu_version: ${{ inputs.terraform-version }}
       - name: Setup Terraform
+        if: ${{ inputs.enable-opentofu == 'false' }}
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Terraform Format
         id: format
-        run: terraform -chdir=${{ inputs.terraform-dir }} fmt -check -recursive
+        run: ${{ env.TOOL_NAME }} -chdir=${{ inputs.terraform-dir }} fmt -check -recursive
 
   terraform-lint:
     name: "Terraform Lint"
@@ -164,8 +179,9 @@ jobs:
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main
         with:
-          appvia-actions-id: ${{ secrets.appvia-actions-id }}
-          appvia-actions-secret: ${{ secrets.appvia-actions-secret }}
+          actions-id: ${{ secrets.actions-id }}
+          actions-secret: ${{ secrets.actions-secret }}
+          enable-opentofu: ${{ inputs.enable-opentofu }}
           enable-private-access: ${{ inputs.enable-private-access }}
           organization-name: ${{ inputs.organization-name }}
           terraform-dir: ${{ inputs.terraform-dir }}
@@ -183,7 +199,7 @@ jobs:
   terraform-tests:
     name: "Terraform Unit Tests"
     runs-on: ubuntu-latest
-    if: inputs.enable-terraform-tests
+    if: inputs.enable-terraform-tests && inputs.enable-opentofu == 'false'
     defaults:
       run:
         working-directory: .
@@ -196,8 +212,9 @@ jobs:
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main
         with:
-          appvia-actions-id: ${{ secrets.appvia-actions-id }}
-          appvia-actions-secret: ${{ secrets.appvia-actions-secret }}
+          actions-id: ${{ secrets.actions-id }}
+          actions-secret: ${{ secrets.actions-secret }}
+          enable-opentofu: ${{ inputs.enable-opentofu }}
           enable-private-access: ${{ inputs.enable-private-access }}
           organization-name: ${{ inputs.organization-name }}
           terraform-dir: .
@@ -227,8 +244,9 @@ jobs:
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main
         with:
-          appvia-actions-id: ${{ secrets.appvia-actions-id }}
-          appvia-actions-secret: ${{ secrets.appvia-actions-secret }}
+          actions-id: ${{ secrets.actions-id }}
+          actions-secret: ${{ secrets.actions-secret }}
+          enable-opentofu: ${{ inputs.enable-opentofu }}
           enable-private-access: ${{ inputs.enable-private-access }}
           organization-name: ${{ inputs.organization-name }}
           terraform-dir: ${{ inputs.terraform-dir }}
@@ -255,8 +273,9 @@ jobs:
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main
         with:
-          appvia-actions-id: ${{ secrets.appvia-actions-id }}
-          appvia-actions-secret: ${{ secrets.appvia-actions-secret }}
+          actions-id: ${{ secrets.actions-id }}
+          actions-secret: ${{ secrets.actions-secret }}
+          enable-opentofu: ${{ inputs.enable-opentofu }}
           enable-private-access: ${{ inputs.enable-private-access }}
           organization-name: ${{ inputs.organization-name }}
           terraform-dir: ${{ inputs.terraform-dir }}
@@ -288,8 +307,9 @@ jobs:
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main
         with:
-          appvia-actions-id: ${{ secrets.appvia-actions-id }}
-          appvia-actions-secret: ${{ secrets.appvia-actions-secret }}
+          actions-id: ${{ secrets.actions-id }}
+          actions-secret: ${{ secrets.actions-secret }}
+          enable-opentofu: ${{ inputs.enable-opentofu }}
           enable-private-access: ${{ inputs.enable-private-access }}
           organization-name: ${{ inputs.organization-name }}
           terraform-dir: ${{ inputs.terraform-dir }}
@@ -325,8 +345,8 @@ jobs:
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main
         with:
-          appvia-actions-id: ${{ secrets.appvia-actions-id }}
-          appvia-actions-secret: ${{ secrets.appvia-actions-secret }}
+          actions-id: ${{ secrets.actions-id }}
+          actions-secret: ${{ secrets.actions-secret }}
           enable-private-access: ${{ inputs.enable-private-access }}
           organization-name: ${{ inputs.organization-name }}
           terraform-dir: ${{ inputs.terraform-dir }}
@@ -366,8 +386,9 @@ jobs:
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main
         with:
-          appvia-actions-id: ${{ secrets.appvia-actions-id }}
-          appvia-actions-secret: ${{ secrets.appvia-actions-secret }}
+          actions-id: ${{ secrets.actions-id }}
+          actions-secret: ${{ secrets.actions-secret }}
+          enable-opentofu: ${{ inputs.enable-opentofu }}
           enable-private-access: ${{ inputs.enable-private-access }}
           organization-name: ${{ inputs.organization-name }}
           terraform-dir: ${{ inputs.terraform-dir }}
@@ -380,8 +401,8 @@ jobs:
           for dir in examples/*; do
             if [ -d "$dir" ]; then
               echo "--> Validating $dir"
-              terraform -chdir="${dir}" init -backend=false
-              terraform -chdir="${dir}" validate -no-color
+              ${{ env.TOOL_NAME }} -chdir="${dir}" init -backend=false
+              ${{ env.TOOL_NAME }} -chdir="${dir}" validate -no-color
             fi
           done
 

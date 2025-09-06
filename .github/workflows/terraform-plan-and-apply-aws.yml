@@ -6,10 +6,11 @@ on:
       infracost-api-key:
         description: "The API key for infracost"
         required: false
-      appvia-actions-id:
+      actions-id:
         description: "Appvia App ID for GH"
         required: false
-      appvia-actions-secret:
+        
+      actions-secret:
         description: "Appvia App secret for GH"
         required: false
       gh-provider-app-id:
@@ -226,12 +227,12 @@ jobs:
         run: |
           if "${{ runner.debug == true }}"; then
             if [ "${{ inputs.terraform-log-level }}" == "TRACE" ]; then
-              echo "tf_log=TRACE" >> $GITHUB_ENV
+              echo "tf_log=TRACE" >> "$GITHUB_ENV" 
             else
-              echo "tf_log=DEBUG" >> $GITHUB_OUTPUT
+              echo "tf_log=DEBUG" >> "$GITHUB_OUTPUT" 
             fi
           else
-            echo "tf_log=${{ inputs.terraform-log-level }}" >> $GITHUB_OUTPUT
+            echo "tf_log=${{ inputs.terraform-log-level }}" >> "$GITHUB_OUTPUT" 
           fi
 
   commitlint:
@@ -515,9 +516,9 @@ jobs:
       - name: Set terraform-values-file variable
         run: |
           if [ -n "${{ inputs.terraform-values-file }}" ]; then
-            echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> $GITHUB_ENV
+            echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> "$GITHUB_ENV" 
           else
-            echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> $GITHUB_ENV
+            echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> "$GITHUB_ENV" 
           fi
       - name: Run Checkov
         id: security

@@ -7,10 +7,10 @@ on:
       slack-webhook-url:
         description: "The Slack webhook URL"
         required: false
-      appvia-actions-id:
+      actions-id:
         description: "Appvia App ID for GH"
         required: false
-      appvia-actions-secret:
+      actions-secret:
         description: "Appvia App secret for GH"
         required: false
 
@@ -180,14 +180,14 @@ jobs:
       - name: Set terraform-values-file variable
         run: |
           if [ -n "${{ inputs.terraform-values-file }}" ]; then
-            echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> $GITHUB_ENV
+            echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> "$GITHUB_ENV" 
           else
-            echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> $GITHUB_ENV
+            echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> "$GITHUB_ENV" 
           fi
       - name: Check for drift and set status
         id: check-drift
         run: |
-          if grep -q 'No changes' <(terraform -chdir=${{ inputs.terraform-dir }} plan -var-file=$TF_VAR_FILE -no-color -input=false -out=tfplan -lock-timeout=${{ inputs.terraform-lock-timeout }}); then
+          if grep -q 'No changes' <(terraform -chdir=${{ inputs.terraform-dir }} plan -var-file="$TF_VAR_FILE" -no-color -input=false -out=tfplan -lock-timeout=${{ inputs.terraform-lock-timeout }}); then
             echo "No drift detected."
             echo "DRIFT_STATUS=no-drift" >> "$GITHUB_OUTPUT"
           else
