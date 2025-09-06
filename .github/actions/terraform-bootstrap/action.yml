@@ -1,11 +1,11 @@
-name: 'Terraform bootstrap'
-description: 'Terraform bootstrapping including init'
+name: "Bootstrap"
+description: "Bootstrapping including init"
 inputs:
-  appvia-actions-id:
+  actions-id:
     description: "The application ID for the workflow token"
     required: false
     type: string
-  appvia-actions-secret:
+  actions-secret:
     description: "The application secret for the workflow token"
     required: false
     type: string
@@ -27,6 +27,10 @@ inputs:
   aws-region:
     description: "The AWS region to deploy to"
     type: string
+  enable-opentofu:
+    description: "Use OpenTofu instead of Terraform"
+    type: boolean
+    default: false
   enable-private-access:
     description: Optional flag to state if terraform requires pulling private modules
     type: boolean
@@ -47,7 +51,7 @@ inputs:
     description: "The key of the terraform state (default: <repo-name>.tfstate)"
     type: string
   terraform-version:
-    description: "The version of terraform to use"
+    description: "The version of terraform or opentofu to use"
     type: string
   use-env-as-suffix:
     description: "Whether to use the environment as a suffix for the state file and iam roles"
@@ -63,6 +67,9 @@ outputs:
     description: "Outcome of the init step"
     value: ${{ steps.init.outcome }}
 
+env:
+  TOOL_NAME: ${{ inputs.enable-opentofu == 'true' && 'opentofu' || 'terraform' }}
+
 runs:
   using: "composite"
   steps:
@@ -70,7 +77,13 @@ runs:
       uses: actions/setup-node@v4
       with:
         node-version: 16
+    - name: Setup Tooling
+      if: ${{ inputs.enable-opentofu == 'true' }}
+      uses: hashicorp/setup-opentofu@v3
+      with:
+        opentofu_version: ${{ inputs.terraform-version }}
     - name: Setup Terraform
+      if: ${{ inputs.enable-opentofu == 'false' }}
       uses: hashicorp/setup-terraform@v3
       with:
         terraform_version: ${{ inputs.terraform-version }}
@@ -120,8 +133,8 @@ runs:
       if: ${{ inputs.enable-private-access == 'true' }}
       uses: peter-murray/workflow-application-token-action@v4
       with:
-        application_id: ${{ inputs.appvia-actions-id }}
-        application_private_key: ${{ inputs.appvia-actions-secret }}
+        application_id: ${{ inputs.actions-id }}
+        application_private_key: ${{ inputs.actions-secret }}
         organization: ${{ inputs.organization-name }}
         revoke_token: true
     - name: Setup Credentials
@@ -134,7 +147,7 @@ runs:
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       run: |
-        terraform -chdir=${{ inputs.terraform-dir }} init \
+        ${{ env.TOOL_NAME }} -chdir=${{ inputs.terraform-dir }} init \
           -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" \
           -backend-config="key=${{ steps.state-key.outputs.name }}" \
           -backend-config="encrypt=true" \

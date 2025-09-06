@@ -3,10 +3,10 @@ name: Terraform Destroy
 on:
   workflow_call:
     secrets:
-      appvia-actions-secret:
+      actions-secret:
         description: "Appvia App secret for GH"
         required: false
-      appvia-actions-id:
+      actions-id:
         description: "Appvia App ID for GH"
         required: false
 
@@ -77,6 +77,11 @@ on:
         required: false
         default: false
         type: boolean
+
+      enable-opentofu:
+        description: "Use OpenTofu instead of Terraform"
+        type: boolean
+        default: false
 
       organization-name:
         default: "appvia"
@@ -160,7 +165,7 @@ env:
   AWS_ROLE: ${{ inputs.aws-role }}
   AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/web_identity_token_file
   TF_LOG: ${{ inputs.terraform-log-level }}
-
+  TOOL_NAME: ${{ env.TOOL_NAME == 'opentofu' && 'opentofu' || 'terraform' }}
 permissions:
   id-token: write
   contents: read
@@ -168,7 +173,7 @@ permissions:
 jobs:
   terraform-plan:
     if: inputs.confirmation == github.repository
-    name: "Terraform Plan"
+    name: "Plan"
     runs-on: ${{ inputs.runs-on }}
     defaults:
       run:
@@ -183,18 +188,19 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-      - name: Terraform Bootstrap
+      - name: Terraform Bootstrap'
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap@main
         with:
-          appvia-actions-id: ${{ secrets.appvia-actions-id }}
-          appvia-actions-secret: ${{ secrets.appvia-actions-secret }}
+          actions-id: ${{ secrets.actions-id }}
+          actions-secret: ${{ secrets.actions-secret }}
           aws-account-id: ${{ inputs.aws-account-id }}
           aws-read-role-name: ${{ inputs.aws-read-role-name }}
           aws-region: ${{ inputs.aws-region }}
           aws-role: ${{ inputs.aws-role }}
           aws-web-identity-token-file: ${{ env.AWS_WEB_IDENTITY_TOKEN_FILE }}
           aws-write-role-name: ${{ inputs.aws-write-role-name }}
+          enable-opentofu: ${{ inputs.enable-opentofu }}
           enable-private-access: ${{ inputs.enable-private-access }}
           environment: ${{ inputs.environment }}
           organization-name: ${{ inputs.organization-name }}
@@ -227,7 +233,7 @@ jobs:
         id: plan
         run: |
           set -o pipefail
-          terraform -chdir=${{ inputs.terraform-dir }} plan \
+          ${{ env.TOOL_NAME }} -chdir=${{ inputs.terraform-dir }} plan \
           -destroy -var-file="${TF_VAR_FILE}" \
           -no-color \
           -input=false \
@@ -237,7 +243,7 @@ jobs:
           2>&1 | tee tfplan.stdout
       - name: Terraform Plan JSON Output
         run: |
-          terraform -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
+          ${{ env.TOOL_NAME }} -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
       - name: Upload tfplan
         uses: actions/upload-artifact@v4
         with:
@@ -283,6 +289,7 @@ jobs:
           aws-role: ${{ inputs.aws-role }}
           aws-web-identity-token-file: ${{ env.AWS_WEB_IDENTITY_TOKEN_FILE }}
           aws-write-role-name: ${{ inputs.aws-write-role-name }}
+          enable-opentofu: ${{ inputs.enable-opentofu }}
           enable-private-access: ${{ inputs.enable-private-access }}
           environment: ${{ inputs.environment }}
           organization-name: ${{ inputs.organization-name }}
@@ -304,7 +311,7 @@ jobs:
           path: ${{ inputs.additional-dir }}
       - name: Terraform Apply
         run: |
-          terraform apply -auto-approve -input=false \
+          ${{ env.TOOL_NAME }} apply -auto-approve -input=false \
           -lock-timeout=${{ inputs.terraform-lock-timeout }} \
           ${{ inputs.terraform-apply-extra-args }} \
           tfplan

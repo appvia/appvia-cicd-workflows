@@ -85,6 +85,11 @@ on:
         required: false
         type: boolean
 
+      enable-opentofu:
+        description: "Use OpenTofu instead of Terraform"
+        type: boolean
+        default: false
+
       enable-commitlint:
         default: true
         description: "Whether to run commitlint on the commit message"
@@ -202,6 +207,7 @@ on:
 env:
   AWS_ROLE: ${{ inputs.aws-role }}
   AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/web_identity_token_file
+  TOOL_NAME: ${{ inputs.enable-opentofu == 'true' && 'opentofu' || 'terraform' }}
 
 permissions:
   id-token: write
@@ -290,8 +296,9 @@ jobs:
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main
         with:
-          appvia-actions-id: ${{ secrets.appvia-actions-id }}
-          appvia-actions-secret: ${{ secrets.appvia-actions-secret }}
+          actions-id: ${{ secrets.actions-id }}
+          actions-secret: ${{ secrets.actions-secret }}
+          enable-opentofu: ${{ inputs.enable-opentofu }}
           enable-private-access: ${{ inputs.enable-private-access }}
           organization-name: ${{ inputs.organization-name }}
           terraform-dir: ${{ inputs.terraform-dir }}
@@ -378,8 +385,9 @@ jobs:
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap@main
         with:
-          appvia-actions-id: ${{ secrets.appvia-actions-id }}
-          appvia-actions-secret: ${{ secrets.appvia-actions-secret }}
+          actions-id: ${{ secrets.actions-id }}
+          actions-secret: ${{ secrets.actions-secret }}
+          enable-opentofu: ${{ inputs.enable-opentofu }}
           aws-account-id: ${{ inputs.aws-account-id }}
           aws-read-role-name: ${{ inputs.aws-read-role-name }}
           aws-region: ${{ inputs.aws-region }}
@@ -407,7 +415,7 @@ jobs:
           fi
       - name: Terraform Validate
         id: validate
-        run: terraform -chdir=${{ inputs.terraform-dir }} validate -no-color
+        run: ${{ env.TOOL_NAME }} -chdir=${{ inputs.terraform-dir }} validate -no-color
       - name: Terraform S3 Backend Check
         id: s3-backend-check
         run: |
@@ -428,7 +436,7 @@ jobs:
         id: plan
         run: |
           set -o pipefail
-          terraform -chdir=${{ inputs.terraform-dir }} plan \
+          ${{ env.TOOL_NAME }} -chdir=${{ inputs.terraform-dir }} plan \
             -var-file="${TF_VAR_FILE}" \
             -no-color -input=false \
             -out=tfplan \
@@ -438,10 +446,10 @@ jobs:
             2>&1 | tee tfplan.stdout
       - name: Terraform Plan JSON Output
         run: |
-          terraform -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
+          ${{ env.TOOL_NAME }} -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
       - name: Simple Plan Output
         run: |
-          terraform show -no-color tfplan | tee tfplan-simple
+          ${{ env.TOOL_NAME }} show -no-color tfplan | tee tfplan-simple
           sed -i -e '1,/Terraform will perform the following actions:/d' -e '/^[[:space:]]*$/d' tfplan-simple
           if grep -q 'Plan:' tfplan-simple; then
             plan_changes=$(grep 'Plan:' tfplan-simple)
@@ -495,8 +503,9 @@ jobs:
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main
         with:
-          appvia-actions-id: ${{ secrets.appvia-actions-id }}
-          appvia-actions-secret: ${{ secrets.appvia-actions-secret }}
+          actions-id: ${{ secrets.actions-id }}
+          actions-secret: ${{ secrets.actions-secret }}
+          enable-opentofu: ${{ inputs.enable-opentofu }}
           enable-private-access: ${{ inputs.enable-private-access }}
           organization-name: ${{ inputs.organization-name }}
           terraform-dir: ${{ inputs.terraform-dir }}
@@ -540,8 +549,9 @@ jobs:
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main
         with:
-          appvia-actions-id: ${{ secrets.appvia-actions-id }}
-          appvia-actions-secret: ${{ secrets.appvia-actions-secret }}
+          actions-id: ${{ secrets.actions-id }}
+          actions-secret: ${{ secrets.actions-secret }}
+          enable-opentofu: ${{ inputs.enable-opentofu }}
           enable-private-access: ${{ inputs.enable-private-access }}
           organization-name: ${{ inputs.organization-name }}
           terraform-dir: ${{ inputs.terraform-dir }}
@@ -697,14 +707,15 @@ jobs:
         id: init
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap@main
         with:
-          appvia-actions-id: ${{ secrets.appvia-actions-id }}
-          appvia-actions-secret: ${{ secrets.appvia-actions-secret }}
+          actions-id: ${{ secrets.actions-id }}
+          actions-secret: ${{ secrets.actions-secret }}
           aws-account-id: ${{ inputs.aws-account-id }}
           aws-read-role-name: ${{ inputs.aws-read-role-name }}
           aws-region: ${{ inputs.aws-region }}
           aws-role: ${{ inputs.aws-role }}
           aws-web-identity-token-file: ${{ env.AWS_WEB_IDENTITY_TOKEN_FILE }}
           aws-write-role-name: ${{ inputs.aws-write-role-name }}
+          enable-opentofu: ${{ inputs.enable-opentofu }}
           enable-private-access: ${{ inputs.enable-private-access }}
           environment: ${{ inputs.environment }}
           organization-name: ${{ inputs.organization-name }}
@@ -757,7 +768,7 @@ jobs:
           fi
       - name: Terraform Apply
         run: |
-          terraform apply \
+          ${{ env.TOOL_NAME }} apply \
             -auto-approve \
             -input=false \
             -parallelism=${{ inputs.terraform-parallelism }} \

@@ -42,6 +42,11 @@ on:
         required: false
         type: string
 
+      enable-opentofu:
+        description: "Use OpenTofu instead of Terraform"
+        type: boolean
+        default: false
+
       enable-private-access:
         description: Optional flag to state if terraform requires pulling private modules
         required: false
@@ -117,6 +122,7 @@ on:
 env:
   AWS_ROLE: ${{ inputs.aws-role }}
   AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/web_identity_token_file
+  TOOL_NAME: ${{ inputs.enable-opentofu == 'true' && 'opentofu' || 'terraform' }}
 
 permissions:
   id-token: write
@@ -141,14 +147,15 @@ jobs:
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap@main
         with:
-          appvia-actions-id: ${{ secrets.appvia-actions-id }}
-          appvia-actions-secret: ${{ secrets.appvia-actions-secret }}
+          actions-id: ${{ secrets.actions-id }}
+          actions-secret: ${{ secrets.actions-secret }}
           aws-account-id: ${{ inputs.aws-account-id }}
           aws-read-role-name: ${{ inputs.aws-read-role-name }}
           aws-region: ${{ inputs.aws-region }}
           aws-role: ${{ inputs.aws-role }}
           aws-web-identity-token-file: ${{ env.AWS_WEB_IDENTITY_TOKEN_FILE }}
           aws-write-role-name: ${{ inputs.aws-write-role-name }}
+          enable-opentofu: ${{ inputs.enable-opentofu }}
           enable-private-access: ${{ inputs.enable-private-access }}
           environment: ${{ inputs.environment }}
           organization-name: ${{ inputs.organization-name }}
@@ -160,7 +167,7 @@ jobs:
           working-directory: ${{ inputs.working-directory }}
       - name: Terraform Validate
         id: validate
-        run: terraform -chdir=${{ inputs.terraform-dir }} validate -no-color
+        run: ${{ env.TOOL_NAME }} -chdir=${{ inputs.terraform-dir }} validate -no-color
       - name: Terraform S3 Backend Check
         id: s3-backend-check
         run: |

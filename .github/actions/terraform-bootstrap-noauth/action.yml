@@ -1,14 +1,18 @@
-name: 'Terraform bootstrap'
-description: 'Terraform bootstrapping including init, no auth required'
+name: "Terraform bootstrap"
+description: "Terraform bootstrapping including init, no auth required"
 inputs:
-  appvia-actions-id:
+  actions-id:
     description: "The application ID for the workflow token"
     required: false
     type: string
-  appvia-actions-secret:
+  actions-secret:
     description: "The application secret for the workflow token"
     required: false
     type: string
+  enable-opentofu:
+    description: "Use OpenTofu instead of Terraform"
+    type: boolean
+    default: false
   enable-private-access:
     description: Optional flag to state if terraform requires pulling private modules
     type: boolean
@@ -33,29 +37,38 @@ outputs:
     description: "Outcome of the init step"
     value: ${{ steps.init.outcome }}
 
+env:
+  TOOL_NAME: ${{ inputs.enable-opentofu == 'true' && 'opentofu' || 'terraform' }}
+
 runs:
   using: "composite"
   steps:
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ inputs.terraform-version }}
-      - name: Enable Private Modules
-        id: get_workflow_token
-        if: ${{ inputs.enable-private-access == 'true' }}
-        uses: peter-murray/workflow-application-token-action@v4
-        with:
-          application_id: ${{ inputs.appvia-actions-id }}
-          application_private_key: ${{ inputs.appvia-actions-secret }}
-          organization: ${{ inputs.organization-name }}
-          revoke_token: true
-      - name: Setup Credentials
-        if: ${{ inputs.enable-private-access == 'true' }}
-        shell: bash
-        run: |
-          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
-      - name: Terraform Init
-        id: init
-        shell: bash
-        working-directory: ${{ inputs.working-directory }}
-        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false ${{ inputs.terraform-init-extra-args }}
+    - name: Setup Tooling
+      if: ${{ inputs.enable-opentofu == 'true' }}
+      uses: hashicorp/setup-opentofu@v3
+      with:
+        opentofu_version: ${{ inputs.terraform-version }}
+    - name: Setup Terraform
+      if: ${{ inputs.enable-opentofu == 'false' }}
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ inputs.terraform-version }}
+    - name: Enable Private Modules
+      id: get_workflow_token
+      if: ${{ inputs.enable-private-access == 'true' }}
+      uses: peter-murray/workflow-application-token-action@v4
+      with:
+        application_id: ${{ inputs.appvia-actions-id }}
+        application_private_key: ${{ inputs.appvia-actions-secret }}
+        organization: ${{ inputs.organization-name }}
+        revoke_token: true
+    - name: Setup Credentials
+      if: ${{ inputs.enable-private-access == 'true' }}
+      shell: bash
+      run: |
+        git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
+    - name: Terraform Init
+      id: init
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: ${{ env.TOOL_NAME }} -chdir=${{ inputs.terraform-dir }} init -backend=false ${{ inputs.terraform-init-extra-args }}
