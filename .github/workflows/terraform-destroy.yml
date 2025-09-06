@@ -87,6 +87,11 @@ on:
         default: false
         type: boolean
 
+      enable-opentofu:
+        description: "Use OpenTofu instead of Terraform"
+        type: boolean
+        default: false
+
       organization-name:
         default: "appvia"
         description: "The name of the GitHub organization"
@@ -169,6 +174,7 @@ env:
   AWS_ROLE: ${{ inputs.aws-role }}
   AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/web_identity_token_file
   TF_LOG: ${{ inputs.terraform-log-level }}
+  TOOL_NAME: ${{ inputs.enable-opentofu == 'true' && 'opentofu' || 'terraform' }}
 
 permissions:
   id-token: write
@@ -204,6 +210,7 @@ jobs:
           aws-role: ${{ inputs.aws-role }}
           aws-web-identity-token-file: ${{ env.AWS_WEB_IDENTITY_TOKEN_FILE }}
           aws-write-role-name: ${{ inputs.aws-write-role-name }}
+          enable-opentofu: ${{ inputs.enable-opentofu }}
           enable-private-access: ${{ inputs.enable-private-access }}
           environment: ${{ inputs.environment }}
           organization-name: ${{ inputs.organization-name }}
@@ -215,7 +222,7 @@ jobs:
           working-directory: ${{ inputs.working-directory }}
       - name: Terraform Validate
         id: validate
-        run: terraform -chdir=${{ inputs.terraform-dir }} validate -no-color
+        run: ${{ env.TOOL_NAME }} -chdir=${{ inputs.terraform-dir }} validate -no-color
       - name: Terraform S3 Backend Check
         id: s3-backend-check
         run: |
@@ -236,7 +243,7 @@ jobs:
         id: plan
         run: |
           set -o pipefail
-          terraform -chdir=${{ inputs.terraform-dir }} plan \
+          ${{ env.TOOL_NAME }} -chdir=${{ inputs.terraform-dir }} plan \
           -destroy -var-file="${TF_VAR_FILE}" \
           -no-color \
           -input=false \
@@ -246,7 +253,7 @@ jobs:
           2>&1 | tee tfplan.stdout
       - name: Terraform Plan JSON Output
         run: |
-          terraform -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
+          ${{ env.TOOL_NAME }} -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
       - name: Calculate Plan Checksum
         run: sha256sum tfplan > tfplan.checksum
       - name: Encrypt Plan Artifacts
@@ -300,6 +307,7 @@ jobs:
           aws-role: ${{ inputs.aws-role }}
           aws-web-identity-token-file: ${{ env.AWS_WEB_IDENTITY_TOKEN_FILE }}
           aws-write-role-name: ${{ inputs.aws-write-role-name }}
+          enable-opentofu: ${{ inputs.enable-opentofu }}
           enable-private-access: ${{ inputs.enable-private-access }}
           environment: ${{ inputs.environment }}
           organization-name: ${{ inputs.organization-name }}
@@ -349,7 +357,7 @@ jobs:
           fi
       - name: Terraform Apply
         run: |
-          terraform apply -auto-approve -input=false \
+          ${{ env.TOOL_NAME }} apply -auto-approve -input=false \
           -lock-timeout=${{ inputs.terraform-lock-timeout }} \
           ${{ inputs.terraform-apply-extra-args }} \
           tfplan

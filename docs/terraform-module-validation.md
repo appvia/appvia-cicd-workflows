@@ -2,6 +2,15 @@
 
 This GitHub Actions workflow template ([terraform-module-validation.yml](../.github/workflows/terraform-module-validation.yml)) can be used with Terraform repositories to validate best practices around Terraform modules. The workflow performs various steps such as Terraform formatting, linting, initialization, validation, and docs generation checks. It also adds a comment to the associated pull request containing results of the run.
 
+## OpenTofu Support
+
+This workflow supports both Terraform and OpenTofu. Use the `enable-opentofu` input to switch between tools:
+
+```yaml
+with:
+  enable-opentofu: true  # Use OpenTofu instead of Terraform
+```
+
 ## Workflow Jobs
 
 - terraform-docs
@@ -59,6 +68,7 @@ jobs:
 - `enable-infracost` - Default: false. Whether to run infracost on the Terraform Plan (requires `infracost-api-key` secret)
 - `enable-commitlint` - Default: true. Whether to run commitlint on commit messages
 - `enable-checkov` - Default: true. Whether to run Checkov security scanning
+- `enable-opentofu` - Default: false. Use OpenTofu instead of Terraform
 - `enable-private-access` - Default: false. Flag to state if terraform requires pulling private modules
 - `enable-terraform-tests` - Default: true. Whether to run `terraform test`
 - `organization-name` - Default: "appvia". The name of the GitHub organization

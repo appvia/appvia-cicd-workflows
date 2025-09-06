@@ -43,7 +43,7 @@ inputs:
     description: "The directory to validate"
     required: true
   terraform-version:
-    description: "The version of terraform or opentofu to use"
+    description: "The version of terraform to use"
     required: true
   terragrunt-version:
     description: "The version of terragrunt to use"

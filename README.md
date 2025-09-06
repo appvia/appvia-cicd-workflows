@@ -2,6 +2,22 @@
 
 This repository contains a collection of GitHub Actions workflow templates that can be used with various types of repositories to automate the build, test, and deployment of applications and infrastructure.
 
+## OpenTofu Support
+
+The AWS Terraform workflows support both **Terraform** and **OpenTofu** through the `enable-opentofu` input parameter, allowing you to use OpenTofu as a drop-in replacement for Terraform while maintaining the same workflow functionality:
+
+- [Terraform Plan & Apply (AWS)](./docs/terraform-plan-and-apply-aws.md)
+- [Terraform Module Validation](./docs/terraform-module-validation.md)
+- [Terraform Destroy (AWS)](./docs/terraform-destroy.md)
+- [Terraform Drift Detection](./docs/terraform-drift.md)
+
+```yaml
+with:
+  enable-opentofu: true  # Use OpenTofu instead of Terraform
+```
+
+> OpenTofu is not yet supported by the Azure Terraform workflows, Terraform Module Release, or the Terragrunt workflows.
+
 ## Workflows
 
 Please refer to the following documentation for more information on the workflows:

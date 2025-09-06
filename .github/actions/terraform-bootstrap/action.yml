@@ -26,6 +26,10 @@ inputs:
   aws-region:
     description: "The AWS region to deploy to"
     required: true
+  enable-opentofu:
+    description: "Use OpenTofu instead of Terraform"
+    required: false
+    default: false
   enable-private-access:
     description: Optional flag to state if terraform requires pulling private modules
     required: true
@@ -72,8 +76,13 @@ runs:
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
       with:
         node-version: ${{ inputs.node-version }}
-
+    - name: Setup OpenTofu
+      if: ${{ inputs.enable-opentofu == 'true' }}
+      uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+      with:
+        opentofu_version: ${{ inputs.terraform-version }}
     - name: Setup Terraform
+      if: ${{ inputs.enable-opentofu == 'false' }}
       uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
       with:
         terraform_version: ${{ inputs.terraform-version }}
@@ -142,8 +151,10 @@ runs:
       id: init
       shell: bash
       working-directory: ${{ inputs.working-directory }}
+      env:
+        TOOL_NAME: ${{ inputs.enable-opentofu == 'true' && 'opentofu' || 'terraform' }}
       run: |
-        terraform -chdir=${{ inputs.terraform-dir }} init \
+        "${TOOL_NAME}" -chdir=${{ inputs.terraform-dir }} init \
           -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" \
           -backend-config="key=${{ steps.state-key.outputs.name }}" \
           -backend-config="encrypt=true" \

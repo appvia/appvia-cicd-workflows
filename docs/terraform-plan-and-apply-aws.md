@@ -2,6 +2,15 @@
 
 This GitHub Actions workflow template ([terraform-plan-and-apply-aws.yml](../.github/workflows/terraform-plan-and-apply-aws.yml)) can be used with Terraform repositories to automate the deployment and management of AWS infrastructure. The workflow performs various steps such as authentication with AWS, Terraform formatting, initialization, validation, planning, and applying changes. It also adds the Terraform plan output as a comment to the associated pull request and triggers an apply action for pushes to the main branch.
 
+## OpenTofu Support
+
+This workflow supports both Terraform and OpenTofu. Use the `enable-opentofu` input to switch between tools:
+
+```yaml
+with:
+  enable-opentofu: true  # Use OpenTofu instead of Terraform
+```
+
 ## Workflow Steps
 
 1. **Setup Terraform:** Terraform is fetched at the specified version (overridable via inputs).
@@ -63,6 +72,7 @@ jobs:
 - `enable-infracost` - Default: false. Whether to run infracost on the Terraform Plan (requires `infracost-api-key` secret)
 - `enable-checkov` - Default: true. Whether to run Checkov security scanning
 - `enable-commitlint` - Default: true. Whether to run commitlint on the commit message
+- `enable-opentofu` - Default: false. Use OpenTofu instead of Terraform
 - `enable-plan-encryption` - Default: true. Whether to encrypt Terraform plan artifacts at rest. When enabled, the binary plan (`tfplan`) and JSON plan (`tfplan.json`) are encrypted using AES-256-CBC before being uploaded as artifacts. Requires the `encryption-key` secret to be set
 - `enable-terraform-apply` - Default: true. Whether to run terraform apply on merge to main
 - `enable-private-access` - Default: false. Flag to state if terraform requires pulling private modules

@@ -1,6 +1,15 @@
 # Terraform Destroy Workflow for AWS Infrastructure
 
-This workflow is used to manually run terraform destroy on AWS infrastructure. In order to trigger the workflow, firstly the workflow must be referenced from the calling workflow flow, see below. The user can then issue a workflow_dispatch event from the Actions tab in the repository, confirming the repository name within a `confirmation` field to ensure no accidental deletion occurs.
+This workflow is used to manually run terraform/opentofu destroy on AWS infrastructure. In order to trigger the workflow, firstly the workflow must be referenced from the calling workflow flow, see below. The user can then issue a workflow_dispatch event from the Actions tab in the repository, confirming the repository name within a `confirmation` field to ensure no accidental deletion occurs.
+
+## OpenTofu Support
+
+This workflow supports both Terraform and OpenTofu. Use the `enable-opentofu` input to switch between tools:
+
+```yaml
+with:
+  enable-opentofu: true  # Use OpenTofu instead of Terraform
+```
 
 ## Usage
 
@@ -46,6 +55,7 @@ jobs:
       confirmation: ${{ github.event.inputs.confirmation }}
       aws-account-id: 123456789012
       aws-role: <IAM_ROLE_NAME>
+      enable-opentofu: false  # Set to true to use OpenTofu
 ```
 
 **IMPORTANT:** The `confirmation` input is required and must match the repository name (`owner/repo`) to prevent accidental deletion.
@@ -61,6 +71,7 @@ OPTIONAL INPUTS:
 - `working-directory` - Default: "."
 - `use-env-as-suffix` - Default: false
 - `runs-on` - Default: "ubuntu-latest"
+- `enable-opentofu` - Use OpenTofu instead of Terraform (default: false)
 - `enable-private-access` - Default: false
 - `organization-name` - Default: "appvia"
 - `aws-read-role-name` - Custom role name for read-only access
