@@ -24,7 +24,7 @@ jobs:
       - name: Setup node
         uses: actions/setup-node@v4
         with:
-          node-version: 16
+          node-version: 22
       - name: Install Dependencies
         run: npm install @commitlint/config-conventional @commitlint/cli
       - name: Run Commitlint
