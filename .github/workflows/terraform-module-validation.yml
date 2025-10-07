@@ -366,8 +366,8 @@ jobs:
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main
         with:
-          appvia-actions-id: ${{ secrets.appvia-actions-id }}
-          appvia-actions-secret: ${{ secrets.appvia-actions-secret }}
+          actions-id: ${{ secrets.actions-id }}
+          actions-secret: ${{ secrets.actions-secret }}
           enable-private-access: ${{ inputs.enable-private-access }}
           organization-name: ${{ inputs.organization-name }}
           terraform-dir: ${{ inputs.terraform-dir }}
