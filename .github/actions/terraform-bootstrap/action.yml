@@ -1,11 +1,11 @@
-name: 'Terraform bootstrap'
-description: 'Terraform bootstrapping including init'
+name: "Terraform bootstrap"
+description: "Terraform bootstrapping including init"
 inputs:
-  appvia-actions-id:
+  actions-id:
     description: "The application ID for the workflow token"
     required: false
     type: string
-  appvia-actions-secret:
+  actions-secret:
     description: "The application secret for the workflow token"
     required: false
     type: string
@@ -120,8 +120,8 @@ runs:
       if: ${{ inputs.enable-private-access == 'true' }}
       uses: peter-murray/workflow-application-token-action@v4
       with:
-        application_id: ${{ inputs.appvia-actions-id }}
-        application_private_key: ${{ inputs.appvia-actions-secret }}
+        application_id: ${{ inputs.actions-id }}
+        application_private_key: ${{ inputs.actions-secret }}
         organization: ${{ inputs.organization-name }}
         revoke_token: true
     - name: Setup Credentials
