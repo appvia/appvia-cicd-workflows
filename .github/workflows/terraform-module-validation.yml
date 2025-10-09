@@ -114,7 +114,7 @@ jobs:
       result: ${{ steps.commitlint.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: Setup node
@@ -140,7 +140,7 @@ jobs:
       result: ${{ steps.format.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -159,7 +159,7 @@ jobs:
       result: ${{ steps.lint.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Terraform Bootstrap
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main
@@ -191,7 +191,7 @@ jobs:
       result: ${{ steps.tests.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Terraform Bootstrap
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main
@@ -218,7 +218,7 @@ jobs:
       result: ${{ steps.bootstrap.outputs.outcome-init }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Setup node
         uses: actions/setup-node@v4
         with:
@@ -246,7 +246,7 @@ jobs:
       result: ${{ steps.validate.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Setup node
         uses: actions/setup-node@v4
         with:
@@ -277,7 +277,7 @@ jobs:
       result: ${{ steps.security.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Check If Trivy Ignore File Exists
         id: security-exceptions
         run: |
@@ -320,7 +320,7 @@ jobs:
       result: ${{ steps.security.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Terraform Bootstrap
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main
@@ -357,7 +357,7 @@ jobs:
       result: ${{ steps.validate-examples.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Setup node
         uses: actions/setup-node@v4
         with:
@@ -396,7 +396,7 @@ jobs:
       result: ${{ steps.docs.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Terraform Docs
         id: docs
         uses: terraform-docs/gh-actions@v1.4.1
@@ -418,7 +418,7 @@ jobs:
           api-key: ${{ secrets.infracost-api-key }}
           currency: GBP
       - name: Checkout PR Base Branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: "${{ github.event.pull_request.base.ref }}"
       - name: Check For TF Files
@@ -436,7 +436,7 @@ jobs:
             --format=json \
             --out-file=/tmp/infracost-base.json
       - name: Checkout PR branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Generate Cost Estimate Difference
         if: steps.baseline.outputs.exists == 'true'
         run: |
