@@ -1,0 +1,94 @@
+---
+name: Update Pull Request
+description: "Updates the pull request with the latest Terragrunt plan"
+inputs:
+  status-format:
+    description: "The format of the status comment"
+    required: true
+
+  status-hcl-format:
+    description: "The HCL format of the status comment"
+    required: true
+
+  status-inputs-render:
+    description: "The inputs render of the status comment"
+    required: true
+
+  status-inputs-diff:
+    description: "The inputs diff of the status comment"
+    required: true
+
+  status-linting:
+    description: "The linting of the status comment"
+    required: true
+
+  status-security:
+    description: "The security of the status comment"
+    required: true
+
+  status-auth:
+    description: "The authentication of the status comment"
+    required: true
+
+  status-plan:
+    description: "The plan of the status comment"
+    required: true
+
+  status-commitlint:
+    description: "The commitlint of the status comment"
+    required: true
+
+outputs:
+  result:
+    description: "The result of the update"
+    value: ${{ steps.update.outputs.result }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Add PR Comment
+      id: update
+      uses: actions/github-script@v7
+      with:
+        script: |
+          // 1. Retrieve existing bot comments for the PR
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          })
+          const botComment = comments.find(comment => {
+            return comment.user.type === 'Bot' && comment.body.includes('Pull Request Review Status (${{ inputs.environment }})')
+          })
+
+          // 2. Prepare format of the comment
+          const output = `### Pull Request Review Status (${{ inputs.environment }})
+          * 🖌 <b>Terragrunt Format and Style:</b>      \`${{ inputs.status-format }}\`
+          * 🖌 <b>Terragrunt HCL Format and Style:</b>  \`${{ inputs.status-hcl-format }}\`
+          * 🔍 <b>Terragrunt Inputs Render:</b>         \`${{ inputs.status-inputs-render }}\`
+          * 🔍 <b>Terragrunt Inputs Diff:</b>           \`${{ inputs.status-inputs-diff }}\`
+          * 🔍 <b>Terragrunt Linting:</b>               \`${{ inputs.status-linting }}\`
+          * 🔍 <b>Terragrunt Security:</b>              \`${{ inputs.status-security }}\`
+          * 🔑 <b>AWS Authentication:</b>               \`${{ inputs.status-auth }}\`
+          * 📖 <b>Terragrunt Plan:</b>                  \`${{ inputs.status-plan }}\`
+          * 🔖 <b>Commitlint:</b>                       \`${{ inputs.status-commitlint }}\`
+
+          *<b>Pusher:</b> @${{ github.actor }}, <b>Action:</b> \`${{ github.event_name }}\`*
+          *<b>Workflow Run Link:</b> ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}*`;
+
+          // 4. If we have a comment, update it, otherwise create a new one
+          if (botComment) {
+            github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: botComment.id,
+              body: output
+            })
+          } else {
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+          }

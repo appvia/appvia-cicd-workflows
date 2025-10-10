@@ -1,0 +1,129 @@
+---
+name: "Terragrunt Inputs Diff"
+description: "Diffing Terragrunt inputs between pull request and main branch"
+inputs:
+  terraform-version:
+    description: "The version of terraform or opentofu to use"
+    required: true
+
+  terragrunt-version:
+    description: "The version of terragrunt to use"
+    required: true
+
+outputs:
+  result:
+    description: "The result of the diff"
+    value: ${{ steps.diff.outcome }}
+  result-comment:
+    description: "The result of the diff for the pull request"
+    value: ${{ steps.comment.outcome }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ inputs.terraform-version }}
+
+    - name: Setup Terragrunt
+      uses: gruntwork-io/terragrunt-action@v3
+      with:
+        tg_version: ${{ inputs.terragrunt-version }}
+        tf_path: /bin/terraform
+
+    - name: Run Terragrunt Inputs Diff
+      shell: bash
+      id: diff
+      env:
+        NO_COLOR: "true"
+      run: |
+        ./scripts/render-diff.sh | tee diff_output.txt 2>&1
+
+        # Extract summary information
+        if grep -q "Units with changes:" diff_output.txt; then
+          CHANGES_COUNT=$(grep "Units with changes:" diff_output.txt | grep -o '[0-9]\+' | head -1)
+          TOTAL_UNITS=$(grep "Total Terragrunt units:" diff_output.txt | grep -o '[0-9]\+' | head -1)
+          PR_BRANCH=$(grep "PR Branch:" diff_output.txt | sed 's/.*PR Branch: //')
+          MAIN_BRANCH=$(grep "Main Branch:" diff_output.txt | sed 's/.*Main Branch: //')
+          
+          echo "has-changes=true" >> $GITHUB_OUTPUT
+          echo "changes-count=$CHANGES_COUNT" >> $GITHUB_OUTPUT
+          echo "total-units=$TOTAL_UNITS" >> $GITHUB_OUTPUT
+          echo "pr-branch=$PR_BRANCH" >> $GITHUB_OUTPUT
+          echo "main-branch=$MAIN_BRANCH" >> $GITHUB_OUTPUT
+        else
+          echo "has-changes=false" >> $GITHUB_OUTPUT
+          echo "changes-count=0" >> $GITHUB_OUTPUT
+          echo "total-units=0" >> $GITHUB_OUTPUT
+        fi
+
+        # Create summary for PR comment
+        cat > summary.txt << EOF
+        ## 🔍 Terragrunt Input Analysis
+
+        **Branch Comparison:** \`${{ github.head_ref }}\` → \`${{ github.base_ref }}\`
+
+        EOF
+
+        if [ "$CHANGES_COUNT" -gt 0 ]; then
+          cat >> summary.txt << EOF
+        ⚠️ **$CHANGES_COUNT of $TOTAL_UNITS** Terragrunt units have input changes
+
+        <details>
+        <summary>📋 View Detailed Changes</summary>
+
+        \`\`\`
+        $(cat diff_output.txt)
+        \`\`\`
+
+        </details>
+        EOF
+        else
+          cat >> summary.txt << EOF
+        ✅ **No changes detected** in Terragrunt inputs across all units
+        EOF
+        fi
+
+        # Set summary output
+        echo "summary<<EOF" >> $GITHUB_OUTPUT
+        cat summary.txt >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Comment on Pull Request
+      uses: actions/github-script@v7
+      id: comment
+      with:
+        script: |
+          const fs = require('fs');
+          const summary = fs.readFileSync('summary.txt', 'utf8');
+
+          // Find existing comment
+          const comments = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+
+          const existingComment = comments.data.find(comment => 
+            comment.user.type === 'Bot' && 
+            comment.body.includes('🔍 Terragrunt Input Analysis')
+          );
+
+          if (existingComment) {
+            // Update existing comment
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existingComment.id,
+              body: summary
+            });
+          } else {
+            // Create new comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: summary
+            });
+          }
