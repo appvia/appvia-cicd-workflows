@@ -33,7 +33,7 @@ permissions:
 
 jobs:
   terraform:
-    uses: ./.github/workflows/terragrunt-plan-and-apply-aws.yml
+    uses: appvia/appvia-cicd-workflows/.github/workflows/terragrunt-plan-and-apply-aws.yml@main
     name: "Terragrunt (Plan: ${{ inputs.enable_plan }}, Apply: ${{ inputs.enable_apply }})"
     secrets:
       actions-id: "${{ secrets.ORG_ACTIONS_APP_ID }}"
