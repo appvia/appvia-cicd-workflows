@@ -460,7 +460,10 @@ jobs:
         id: diff
         uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-diff@main
         with:
+          cicd-branch: ${{ inputs.cicd-branch }}
+          cicd-repository: ${{ inputs.cicd-repository }}
           terraform-version: ${{ inputs.terraform-version }}
+          terragrunt-config-file: ${{ inputs.terragrunt-config-file }}
           terragrunt-version: ${{ inputs.terragrunt-version }}
 
   terragrunt-matrix:
