@@ -47,6 +47,7 @@ runs:
 
     # Download the scripts from the cicd workflows repository
     - name: Download Diff Script
+      shell: bash
       run: |
         curl -s https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/scripts/render-diff.sh -O /tmp/render-diff.sh
         mv -f /tmp/render-diff.sh ./scripts/render-diff.sh
