@@ -441,41 +441,6 @@ jobs:
         run: |
           echo "Needs to be implemented"
 
-  terragrunt-validate:
-    name: "Terragrunt Validate"
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ inputs.terragrunt-dir }}
-    outputs:
-      result: ${{ steps.validate.outcome }}
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Terragrunt Bootstrap
-        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@main
-        with:
-          actions-id: ${{ secrets.actions-id }}
-          actions-secret: ${{ secrets.actions-secret }}
-          aws-account-id: ${{ inputs.aws-account-id }}
-          aws-read-role-name: ${{ inputs.aws-read-role-name }}
-          aws-region: ${{ inputs.aws-region }}
-          aws-role: ${{ inputs.aws-role }}
-          aws-web-identity-token-file: ${{ inputs.aws-web-identity-token-file }}
-          aws-write-role-name: ${{ inputs.aws-write-role-name }}
-          enable-private-access: ${{ inputs.enable-private-access }}
-          environment: ${{ inputs.environment }}
-          organization-name: ${{ inputs.organization-name }}
-          terragrunt-dir: ${{ inputs.terragrunt-dir }}
-          terraform-version: ${{ inputs.terraform-version }}
-          terragrunt-version: ${{ inputs.terragrunt-version }}
-          use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
-
-      - name: Terragrunt Validate
-        id: validate
-        run: terragrunt validate --config ${{ inputs.terragrunt-config-file }} --all
-
   terragrunt-diff:
     name: "Terragrunt Inputs Diff"
     runs-on: ubuntu-latest
@@ -542,7 +507,7 @@ jobs:
     outputs:
       result-auth: ${{ steps.bootstrap.outputs.outcome-auth }}
       result-plan: ${{ steps.plan.outcome }}
-
+      result-validate: ${{ steps.validate.outcome }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -580,6 +545,10 @@ jobs:
           echo "Region: ${{ matrix.unit.region }}"
           echo "Account: ${{ matrix.unit.account }}"
 
+      - name: Terragrunt Validate
+        id: validate
+        run: terragrunt validate --config ${{ inputs.terragrunt-config-file }} --all
+
       - name: Terragrunt Plan
         id: plan
         working-directory: ${{ steps.extract-directory-name.outputs.directory_name }}
@@ -602,10 +571,10 @@ jobs:
         working-directory: ${{ inputs.terragrunt-dir }}
     needs:
       - debug-mode
-      - terragrunt-validate
     outputs:
       result-auth: ${{ steps.bootstrap.outputs.outcome-auth }}
       result-plan: ${{ steps.plan.outcome }}
+      result-validate: ${{ steps.validate.outcome }}
     env:
       TF_LOG: ${{ needs.debug-mode.outputs.tf_log }}
       TF_VAR_github_token: ${{ secrets.github-token }}
@@ -632,6 +601,10 @@ jobs:
           terraform-version: ${{ inputs.terraform-version }}
           terragrunt-version: ${{ inputs.terragrunt-version }}
           use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
+
+      - name: Terragrunt Validate
+        id: validate
+        run: terragrunt validate --config ${{ inputs.terragrunt-config-file }} --all
 
       - name: Terragrunt Plan
         id: plan
