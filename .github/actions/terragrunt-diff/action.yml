@@ -46,17 +46,10 @@ runs:
         tf_path: /bin/terraform
 
     # Download the scripts from the cicd workflows repository
-    - name: Download Scripts
-      uses: actions/checkout@v5
-      with:
-        repository: ${{ inputs.cicd-repository }}
-        branch: ${{ inputs.cicd-branch }}
-        path: ./cicd-workflows
-
-    - name: Copy Scripts
-      shell: bash
+    - name: Download Diff Script
       run: |
-        cp -f ./cicd-workflows/scripts/render-diff.sh ./scripts/render-diff.sh
+        curl -s https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/scripts/render-diff.sh -O /tmp/render-diff.sh
+        mv -f /tmp/render-diff.sh ./scripts/render-diff.sh
 
     - name: Run Terragrunt Inputs Diff
       shell: bash
@@ -65,7 +58,7 @@ runs:
         NO_COLOR: "true"
         ACCOUNT_FILES: ${{ inputs.terragrunt-config-file }}
       run: |
-        ./scripts/render-diff.sh | tee diff_output.txt 2>&1
+        /scripts/render-diff.sh | tee diff_output.txt 2>&1
 
         # Extract summary information
         if grep -q "Units with changes:" diff_output.txt; then
