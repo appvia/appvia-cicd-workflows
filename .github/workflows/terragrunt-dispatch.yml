@@ -1,5 +1,5 @@
 ---
-name: Trigger Workflow
+name: Trigger Terragrunt Workflow
 on:
   workflow_dispatch:
     inputs:
