@@ -218,12 +218,12 @@ jobs:
         run: |
           if "${{ runner.debug == true }}"; then
             if [ "${{ inputs.terraform-log-level }}" == "TRACE" ]; then
-              echo "tf_log=TRACE" >> "$GITHUB_ENV" 
+              echo "tf_log=TRACE" >> "$GITHUB_ENV"
             else
-              echo "tf_log=DEBUG" >> "$GITHUB_OUTPUT" 
+              echo "tf_log=DEBUG" >> "$GITHUB_OUTPUT"
             fi
           else
-            echo "tf_log=${{ inputs.terraform-log-level }}" >> "$GITHUB_OUTPUT" 
+            echo "tf_log=${{ inputs.terraform-log-level }}" >> "$GITHUB_OUTPUT"
           fi
 
   commitlint:
@@ -382,7 +382,7 @@ jobs:
             if [ -d "$cache_dir" ]; then
               echo "Running tflint in $cache_dir"
               cd "$cache_dir" || continue
-              
+
               # Find the actual terraform files (usually in a subdirectory)
               terraform_dir=$(find . -name "*.tf" -type f | head -1 | xargs dirname 2>/dev/null)
               if [ -d "$terraform_dir" ] && [ -n "$terraform_dir" ]; then
@@ -507,6 +507,8 @@ jobs:
       - terragrunt-matrix
     strategy:
       matrix: ${{ fromJson(needs.terragrunt-matrix.outputs.matrix) }}
+      # Allow all the jobs to complete even if some fail
+      fail-fast: false
     outputs:
       result-auth: ${{ steps.bootstrap.outputs.outcome-auth }}
       result-plan: ${{ steps.plan.outcome }}
