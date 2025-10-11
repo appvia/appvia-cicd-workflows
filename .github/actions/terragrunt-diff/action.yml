@@ -50,7 +50,8 @@ runs:
       shell: bash
       run: |
         mkdir -p ci-scripts
-        curl -s https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/scripts/render-diff.sh -O ./ci-scripts/render-diff.sh
+        curl -s https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/scripts/render-diff.sh -o ./ci-scripts/render-diff.sh
+        chmod +x ./ci-scripts/render-diff.sh
 
     - name: Run Terragrunt Inputs Diff
       shell: bash
