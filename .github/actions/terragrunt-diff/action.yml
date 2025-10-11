@@ -49,8 +49,8 @@ runs:
     - name: Download Diff Script
       shell: bash
       run: |
-        curl -s https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/scripts/render-diff.sh -O /tmp/render-diff.sh
-        mv -f /tmp/render-diff.sh ./scripts/render-diff.sh
+        mkdir -p ci-scripts
+        curl -s https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/scripts/render-diff.sh -O ./ci-scripts/render-diff.sh
 
     - name: Run Terragrunt Inputs Diff
       shell: bash
@@ -59,7 +59,7 @@ runs:
         NO_COLOR: "true"
         ACCOUNT_FILES: ${{ inputs.terragrunt-config-file }}
       run: |
-        /scripts/render-diff.sh | tee diff_output.txt 2>&1
+        ./ci-scripts/render-diff.sh | tee diff_output.txt 2>&1
 
         # Extract summary information
         if grep -q "Units with changes:" diff_output.txt; then
@@ -67,7 +67,7 @@ runs:
           TOTAL_UNITS=$(grep "Total Terragrunt units:" diff_output.txt | grep -o '[0-9]\+' | head -1)
           PR_BRANCH=$(grep "PR Branch:" diff_output.txt | sed 's/.*PR Branch: //')
           MAIN_BRANCH=$(grep "Main Branch:" diff_output.txt | sed 's/.*Main Branch: //')
-          
+
           echo "has-changes=true" >> $GITHUB_OUTPUT
           echo "changes-count=$CHANGES_COUNT" >> $GITHUB_OUTPUT
           echo "total-units=$TOTAL_UNITS" >> $GITHUB_OUTPUT
@@ -126,8 +126,8 @@ runs:
             issue_number: context.issue.number,
           });
 
-          const existingComment = comments.data.find(comment => 
-            comment.user.type === 'Bot' && 
+          const existingComment = comments.data.find(comment =>
+            comment.user.type === 'Bot' &&
             comment.body.includes('🔍 Terragrunt Input Analysis')
           );
 
