@@ -260,7 +260,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ${{ inputs.working-directory }}
+        working-directory: modules
     outputs:
       result: ${{ steps.format.outcome }}
     steps:
