@@ -29,9 +29,9 @@ runs:
     - name: Checkout Upstream Repository
       uses: actions/checkout@v4
       with:
-        token: ${{ inputs.token | github.token }}
+        token: ${{ inputs.token || github.token }}
         branch: ${{ inputs.template-branch }}
-        repository: ${{ inputs.template-repos itory }}
+        repository: ${{ inputs.template-repository }}
         path: ./tmp/upstream-template
     - name: Copying Files from Upstream Repository
       shell: bash
