@@ -39,9 +39,9 @@ jobs:
           path: ./tmp/upstream-template
       - name: Update Files
         run: |
-          for file in ${{ inputs.template-files }}; do
-            # We need to copy the file the same location i.e. ./tmp/upstream-template/accounts/${file} to accounts/${file}
-            cp -f ./tmp/upstream-template/${file} ${file}
+          # Iterate the files, which are new lines separated
+          cat ${{ inputs.template-files }} | while read -r file; do
+            cp -f ./tmp/upstream-template/${file} ./${file}
           done
           # Remove the temporary directory
           rm -rf ./tmp/upstream-template
