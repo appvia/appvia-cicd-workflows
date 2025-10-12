@@ -1,0 +1,59 @@
+---
+name: "Template Update"
+description: "Update the template files"
+inputs:
+  enable-pull-request:
+    description: "Whether to create a pull request"
+    required: true
+  pull-request-title:
+    description: "The title of the pull request"
+    required: false
+    default: ""
+  template-repository:
+    description: "The template repository to update"
+    required: true
+  template-files:
+    description: "The template files to update"
+    required: true
+  token:
+    description: "The token to used to authenticate with the repository"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout Upstream Repository
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ inputs.template-repository }}
+        path: ./tmp/upstream-template
+    - name: Copying Files from Upstream Repository
+      shell: bash
+      run: |
+        # Iterate the files, which are new lines separated
+        echo "${{ inputs.template-files }}" | while read -r file; do
+          if [[ -f "${file}" ]]; then
+            cp -f "./tmp/upstream-template/${file}" "./${file}"
+          fi
+        done
+        # Remove the temporary directory
+        rm -rf ./tmp/upstream-template
+    - name: Check for Changes
+      id: check-changes
+      shell: bash
+      run: |
+        if ! git diff --exit-code; then
+          echo "no-changes=false" >> "$GITHUB_OUTPUT"
+        else 
+          echo "no-changes=true" >> "$GITHUB_OUTPUT"
+        fi
+    - name: Create Pull Request
+      if: steps.check-changes.outputs.no-changes == 'false' && inputs.enable-pull-request == 'true'
+      uses: peter-evans/create-pull-request@v7
+      with:
+        base: main
+        body: "This PR is updating the templates to the latest version inline with the official ${{ inputs.template-repository }}"
+        commit-message: "chore(deps): updating the templates inline with the official ${{ inputs.template-repository }}"
+        delete-branch: true
+        title: "${{ inputs.pull-request-title }} | [UPDATE] - Updating Templates inline with ${{ inputs.template-repository }}"
+        token: ${{ inputs.token }}
