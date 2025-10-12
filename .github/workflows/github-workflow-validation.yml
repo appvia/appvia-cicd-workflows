@@ -2,6 +2,12 @@
 name: Validate GitHub Workflows
 on:
   workflow_call:
+    inputs:
+      workflows-path:
+        description: "The path to the GitHub workflows"
+        required: false
+        type: string
+        default: ".github/workflows"
 
 jobs:
   validate-workflows:
@@ -10,16 +16,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Validate GitHub Workflows
-        run: |
-          echo "Validating GitHub workflow files..."
-          find .github/workflows -name "*.yml" -o -name "*.yaml" | while read -r file; do
-            echo "Validating $file"
-            # Basic YAML validation
-            python3 -c "import yaml; yaml.safe_load(open('$file'))" || exit 1
-          done
-          echo "✓ All GitHub workflow files are valid"
       - name: Install Go
         uses: actions/setup-go@v6
         with:
@@ -29,4 +25,4 @@ jobs:
         run: go install github.com/rhysd/actionlint/cmd/actionlint@latest
       - name: Run Actionlint
         id: actionlint
-        run: actionlint .github/workflows/*.yml
+        run: actionlint ${workflows-path}/*.yml
