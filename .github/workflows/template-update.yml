@@ -28,6 +28,7 @@ on:
 
 jobs:
   update-template:
+    name: Update Template
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
