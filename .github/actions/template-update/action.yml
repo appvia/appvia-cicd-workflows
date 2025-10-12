@@ -2,6 +2,10 @@
 name: "Template Update"
 description: "Update the template files"
 inputs:
+  base-directory:
+    description: "The base directory to update"
+    required: true
+    default: "."
   enable-pull-request:
     description: "Whether to create a pull request"
     required: true
@@ -39,7 +43,7 @@ runs:
         # Iterate the files, which are new lines separated
         echo "${{ inputs.template-files }}" | while read -r file; do
           if [[ -f "${file}" ]]; then
-            cp -f "./tmp/upstream-template/${file}" "./${file}"
+            cp -f "./tmp/upstream-template/${file}" "${{ inputs.base-directory }}/${file}"
           fi
         done
         # Remove the temporary directory
