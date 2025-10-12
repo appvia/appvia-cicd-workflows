@@ -40,8 +40,10 @@ jobs:
       - name: Update Files
         run: |
           # Iterate the files, which are new lines separated
-          cat ${{ inputs.template-files }} | while read -r file; do
-            cp -f ./tmp/upstream-template/${file} ./${file}
+          echo "${{ inputs.template-files }}" | while read -r file; do
+            if [[ -f "${file}" ]]; then
+              cp -f "./tmp/upstream-template/${file}" "./${file}"
+            fi
           done
           # Remove the temporary directory
           rm -rf ./tmp/upstream-template
