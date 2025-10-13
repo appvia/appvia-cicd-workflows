@@ -34,7 +34,7 @@ jobs:
           echo "✓ All GitHub workflow files are valid"
 
       - name: Check Workflow Syntax
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             console.log('GitHub workflow files have been validated');
