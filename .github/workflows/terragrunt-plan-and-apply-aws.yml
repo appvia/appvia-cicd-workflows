@@ -366,7 +366,7 @@ jobs:
           use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
 
       - name: Setup TFLint
-        uses: terraform-linters/setup-tflint@v4
+        uses: terraform-linters/setup-tflint@v6
         with:
           tflint_version: latest
 
