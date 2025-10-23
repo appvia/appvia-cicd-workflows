@@ -505,6 +505,8 @@ jobs:
         working-directory: ${{ inputs.terragrunt-dir }}
     needs:
       - terragrunt-matrix
+    outputs:
+      result-validate: ${{ steps.validate.outcome }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -547,7 +549,6 @@ jobs:
     outputs:
       result-auth: ${{ steps.bootstrap.outputs.outcome-auth }}
       result-plan: ${{ steps.plan.outcome }}
-      result-validate: ${{ steps.validate.outcome }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
