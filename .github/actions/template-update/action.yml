@@ -23,9 +23,9 @@ inputs:
   template-files:
     description: "The template files to update"
     required: true
-  token:
-    description: "The token to used to authenticate with the repository"
-    required: true
+  upstream-token:
+    description: "The token to used to authenticate with the upstream repository (optional, defaults to github.token)"
+    required: false
 
 runs:
   using: "composite"
@@ -33,7 +33,7 @@ runs:
     - name: Checkout Upstream Repository
       uses: actions/checkout@v4
       with:
-        token: ${{ inputs.token || github.token }}
+        token: ${{ inputs.upstream-token || github.token }}
         branch: ${{ inputs.template-branch }}
         repository: ${{ inputs.template-repository }}
         path: ./tmp/upstream-template
@@ -55,16 +55,21 @@ runs:
         # Remove the temporary directory
         rm -rf ./tmp/upstream-template
     - name: Check for Changes
-      id: check-changes
+      id: has-changes
       shell: bash
       run: |
-        if ! git diff --exit-code; then
-          echo "no-changes=false" >> "$GITHUB_OUTPUT"
-        else 
-          echo "no-changes=true" >> "$GITHUB_OUTPUT"
+        echo "Current directory: $(pwd)"
+
+        if [[ -n "$(git diff --name-only)" ]]; then
+          echo "Changes detected in files"
+          echo "has-changes=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "No changes detected in files"
+          echo "has-changes=false" >> "$GITHUB_OUTPUT"
         fi
+
     - name: Create Pull Request
-      if: steps.check-changes.outputs.no-changes == 'false' && inputs.enable-pull-request == 'true'
+      if: steps.has-changes.outputs.has-changes == 'true'
       uses: peter-evans/create-pull-request@v7
       with:
         base: main
@@ -72,4 +77,4 @@ runs:
         commit-message: "chore(deps): updating the templates inline with the official ${{ inputs.template-repository }}"
         delete-branch: true
         title: "${{ inputs.pull-request-title }} | [UPDATE] - Updating Templates inline with ${{ inputs.template-repository }}"
-        token: ${{ inputs.token }}
+        token: ${{ github.token }}
