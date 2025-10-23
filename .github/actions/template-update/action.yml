@@ -40,13 +40,16 @@ runs:
     - name: Copying Files from Upstream Repository
       shell: bash
       run: |
-        IFS=$'\n' read -r -d '' -a files <<< "${{ inputs.template-files }}"
-        for file in "${files[@]}"; do
-          if [[ -f "./tmp/upstream-template/${file}" ]]; then
-            echo "Copying file ${file} from upstream template to ${{ inputs.base-directory }}/${file}"
-            cp -f "./tmp/upstream-template/${file}" "${{ inputs.base-directory }}/${file}"
-          else 
-            echo "File ${file} not found in upstream template"
+        # Process template files - handle both newline and space separated inputs
+        echo "${{ inputs.template-files }}" | while IFS= read -r file; do
+          # Skip empty lines
+          if [[ -n "${file}" ]]; then
+            if [[ -f "./tmp/upstream-template/${file}" ]]; then
+              echo "Copying file ${file} from upstream template to ${{ inputs.base-directory }}/${file}"
+              cp -f "./tmp/upstream-template/${file}" "${{ inputs.base-directory }}/${file}"
+            else 
+              echo "File ${file} not found in upstream template"
+            fi
           fi
         done
         # Remove the temporary directory
