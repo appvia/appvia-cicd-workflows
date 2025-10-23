@@ -496,6 +496,40 @@ jobs:
           matrix-key: "unit"
           include-path: "true"
 
+  terragrunt-validation:
+    name: "Terragrunt Validation"
+    if: inputs.enable-matrix == true && needs.terragrunt-matrix.outputs.count > 0 && ((github.event_name == 'pull_request') || (github.ref == 'refs/heads/main' && contains(fromJSON('["schedule"]'), github.event_name)) || (github.ref == 'refs/heads/main' && inputs.enable-terragrunt-plan))
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.terragrunt-dir }}
+    needs:
+      - terragrunt-matrix
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Terragrunt Bootstrap
+        id: bootstrap
+        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@main
+        with:
+          actions-id: ${{ secrets.actions-id }}
+          actions-secret: ${{ secrets.actions-secret }}
+          aws-account-id: ${{ inputs.aws-account-id }}
+          aws-read-role-name: ${{ inputs.aws-read-role-name }}
+          aws-region: ${{ inputs.aws-region }}
+          aws-role: ${{ inputs.aws-role }}
+          aws-web-identity-token-file: ${{ inputs.aws-web-identity-token-file }}
+          aws-write-role-name: ${{ inputs.aws-write-role-name }}
+          enable-private-access: ${{ inputs.enable-private-access }}
+          environment: ${{ inputs.environment }}
+          organization-name: ${{ inputs.organization-name }}
+          terraform-version: ${{ inputs.terraform-version }}
+          terragrunt-version: ${{ inputs.terragrunt-version }}
+          use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
+      - name: Terragrunt Validate
+        id: validate
+        run: terragrunt validate --config ${{ inputs.terragrunt-config-file }} --all
+
   terragrunt-plan-matrix:
     name: "Terragrunt Plan (${{ matrix.unit.region }}/${{ matrix.unit.unit_name }})"
     if: inputs.enable-matrix == true && needs.terragrunt-matrix.outputs.count > 0 && ((github.event_name == 'pull_request') || (github.ref == 'refs/heads/main' && contains(fromJSON('["schedule"]'), github.event_name)) || (github.ref == 'refs/heads/main' && inputs.enable-terragrunt-plan))
@@ -505,6 +539,7 @@ jobs:
         working-directory: ${{ inputs.terragrunt-dir }}
     needs:
       - terragrunt-matrix
+      - terragrunt-validation
     strategy:
       matrix: ${{ fromJson(needs.terragrunt-matrix.outputs.matrix) }}
       # Allow all the jobs to complete even if some fail
@@ -549,10 +584,6 @@ jobs:
           echo "Terragrunt Dir: ${{ steps.extract-directory-name.outputs.directory_name }}"
           echo "Region: ${{ matrix.unit.region }}"
           echo "Account: ${{ matrix.unit.account }}"
-
-      - name: Terragrunt Validate
-        id: validate
-        run: terragrunt validate --config ${{ inputs.terragrunt-config-file }} --all
 
       - name: Terragrunt Plan
         id: plan
