@@ -642,7 +642,7 @@ jobs:
           currency: GBP
 
       - name: Download tfplan
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
 
