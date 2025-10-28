@@ -239,7 +239,7 @@ jobs:
         run: |
           terraform -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
       - name: Upload tfplan
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: tfplan-${{ inputs.environment }}
           path: "tfplan*"
@@ -251,7 +251,7 @@ jobs:
           touch ${{ inputs.additional-dir }}/.optional.file
       - name: Upload additional directory
         if: inputs.additional-dir
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: additional-dir-${{ inputs.environment }}
           path: ${{ inputs.additional-dir }}
