@@ -590,7 +590,7 @@ jobs:
           name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
         continue-on-error: true
       - name: Add PR Comment
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             // 1. Retrieve existing bot comments for the PR
