@@ -74,6 +74,7 @@ runs:
       with:
         base: main
         body: "This PR is updating the templates to the latest version inline with the official ${{ inputs.template-repository }}"
+        branch: update/${{ github.run_id }}
         commit-message: "chore(deps): updating the templates inline with the official ${{ inputs.template-repository }}"
         delete-branch: true
         title: "${{ inputs.pull-request-title }} | [UPDATE] - Updating Templates inline with ${{ inputs.template-repository }}"
