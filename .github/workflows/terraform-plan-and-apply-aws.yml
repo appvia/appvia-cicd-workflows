@@ -239,7 +239,7 @@ jobs:
       result: ${{ steps.commitlint.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Setup node
@@ -265,7 +265,7 @@ jobs:
       result: ${{ steps.format.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -285,7 +285,7 @@ jobs:
       result_centralised_lint: ${{ steps.lintCentralised.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Terraform Bootstrap
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main
@@ -373,7 +373,7 @@ jobs:
       TF_LOG: ${{ needs.debug-mode.outputs.tf_log }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Terraform Bootstrap
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap@main
@@ -487,7 +487,7 @@ jobs:
       result: ${{ steps.security.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Ensure Checkov Configuration
         run: |
           [ -f ".checkov.yml" ] || echo "{}" > .checkov.yml
@@ -529,7 +529,7 @@ jobs:
       result: ${{ steps.security.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Check If Trivy Ignore File Exists
         id: security-exceptions
         run: |
@@ -692,7 +692,7 @@ jobs:
       - debug-mode
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Terraform Bootstrap
         id: init
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap@main
