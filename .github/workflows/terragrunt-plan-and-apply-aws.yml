@@ -331,6 +331,8 @@ jobs:
 
       - name: Format Terragrunt files
         id: format
+        env:
+          TG_PROVIDER_CACHE: "1"
         run: |
           terragrunt run --config ${{ inputs.terragrunt-config-file }} --all -- fmt
 
@@ -509,6 +511,8 @@ jobs:
       matrix: ${{ fromJson(needs.terragrunt-matrix.outputs.matrix) }}
       # Allow all the jobs to complete even if some fail
       fail-fast: false
+    env:
+      TG_PROVIDER_CACHE: "1"
     outputs:
       result-auth: ${{ steps.bootstrap.outputs.outcome-auth }}
       result-plan: ${{ steps.plan.outcome }}
@@ -672,6 +676,7 @@ jobs:
     env:
       TF_LOG: ${{ needs.debug-mode.outputs.tf_log }}
       TF_VAR_github_token: ${{ secrets.github-token }}
+      TG_PROVIDER_CACHE: "1"
     needs:
       - terragrunt-format
       - terragrunt-hclfmt
