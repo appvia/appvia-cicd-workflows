@@ -342,6 +342,8 @@ jobs:
     defaults:
       run:
         working-directory: ${{ inputs.terragrunt-dir }}
+    env:
+      TG_PROVIDER_CACHE: "1"
     outputs:
       result: ${{ steps.lint.outcome }}
     steps:
