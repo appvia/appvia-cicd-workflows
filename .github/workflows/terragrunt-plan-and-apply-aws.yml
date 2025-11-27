@@ -712,7 +712,7 @@ jobs:
 
       - name: Terragrunt Apply
         run: |
-          terragrunt run --config ${{ inputs.terragrunt-config-file }} --all --non-interactive ${{ inputs.terragrunt-apply-extra-args }} -- \
+          terragrunt run --config ${{ inputs.terragrunt-config-file }} --all --summary-per-unit --non-interactive ${{ inputs.terragrunt-apply-extra-args }} -- \
             apply \
             -auto-approve \
             -input=false \
