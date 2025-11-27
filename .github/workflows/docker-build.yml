@@ -284,7 +284,7 @@ jobs:
 
       - name: Login to AWS vis Credential
         if: ${{ env.ENABLE_LOGIN_AWS == 'true' && env.ENABLE_PUSH == 'true' }}
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           aws-access-key-id: ${{ secrets.aws-access-key-id }}
           aws-region: ${{ inputs.aws-region }}
@@ -292,7 +292,7 @@ jobs:
 
       - name: Login to AWS vis OIDC
         if: ${{ env.ENABLE_LOGIN_OIDC == 'true' && env.ENABLE_PUSH == 'true' }}
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           aws-region: ${{ inputs.aws-region }}
           role-to-assume: arn:aws:iam::${{ inputs.aws-account-id }}:role/${{ inputs.aws-role }}
