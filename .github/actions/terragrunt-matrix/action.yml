@@ -1,0 +1,199 @@
+---
+name: Terragrunt Dynamic Matrix
+description: "Finds all Terragrunt units in the specified directory and returns a job matrix"
+inputs:
+  terragrunt-dir:
+    description: "Directory to search for Terragrunt units"
+    required: false
+    default: "."
+  account-files:
+    description: "Comma-separated list of Terragrunt configuration files to look for"
+    required: false
+    default: "terragrunt.hcl"
+  exclude-patterns:
+    description: "Comma-separated list of patterns to exclude from search"
+    required: false
+    default: ".terragrunt-cache,node_modules,.git"
+  matrix-key:
+    description: "Key name for the matrix output"
+    required: false
+    default: "unit"
+  include-path:
+    description: "Include the full path in the matrix output"
+    required: false
+    default: "true"
+  include-relative-path:
+    description: "Include the relative path in the matrix output"
+    required: false
+    default: "true"
+  include-unit-name:
+    description: "Include a clean unit name in the matrix output"
+    required: false
+    default: "true"
+  include-region:
+    description: "Extract and include region from path (assumes accounts/REGION/ACCOUNT structure)"
+    required: false
+    default: "true"
+  include-account:
+    description: "Extract and include account from path (assumes accounts/REGION/ACCOUNT structure)"
+    required: false
+    default: "true"
+
+outputs:
+  matrix:
+    description: "JSON matrix of Terragrunt units"
+    value: ${{ steps.matrix.outputs.matrix }}
+  count:
+    description: "Number of units found"
+    value: ${{ steps.matrix.outputs.count }}
+  units:
+    description: "Comma-separated list of unit names"
+    value: ${{ steps.matrix.outputs.units }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Find Terragrunt Units
+      id: matrix
+      shell: bash
+      env:
+        ACCOUNT_FILES: "${{ inputs.account-files }}"
+        EXCLUDE_PATTERNS: "${{ inputs.exclude-patterns }}"
+        INCLUDE_ACCOUNT: "${{ inputs.include-account }}"
+        INCLUDE_PATH: "${{ inputs.include-path }}"
+        INCLUDE_REGION: "${{ inputs.include-region }}"
+        INCLUDE_RELATIVE_PATH: "${{ inputs.include-relative-path }}"
+        INCLUDE_UNIT_NAME: "${{ inputs.include-unit-name }}"
+        MATRIX_KEY: "${{ inputs.matrix-key }}"
+        TERRAGRUNT_DIR: "${{ inputs.terragrunt-dir }}"
+      run: |
+        set -e
+
+        # Convert comma-separated strings to arrays
+        IFS=',' read -ra FILES_ARRAY <<< "$ACCOUNT_FILES"
+        IFS=',' read -ra EXCLUDE_ARRAY <<< "$EXCLUDE_PATTERNS"
+
+        # Build find command with exclude patterns
+        FIND_CMD="find \"$TERRAGRUNT_DIR\" -type f"
+
+        # Add file name patterns
+        for file in "${FILES_ARRAY[@]}"; do
+          FIND_CMD="$FIND_CMD \\( -name \"$file\""
+        done
+        FIND_CMD="$FIND_CMD \\)"
+
+        # Add exclude patterns
+        for pattern in "${EXCLUDE_ARRAY[@]}"; do
+          FIND_CMD="$FIND_CMD -not -path \"*$pattern*\""
+        done
+
+        # Execute find command and process results
+        echo "Searching for Terragrunt units in: $TERRAGRUNT_DIR"
+        echo "Looking for files: $ACCOUNT_FILES"
+        echo "Excluding patterns: $EXCLUDE_PATTERNS"
+        echo ""
+
+        # Find all Terragrunt units
+        UNITS_JSON="[]"
+        UNIT_NAMES=""
+        COUNT=0
+
+        while IFS= read -r -d '' unit_file; do
+          # Skip if file doesn't exist or is empty
+          if [[ ! -f "$unit_file" ]] || [[ ! -s "$unit_file" ]]; then
+            continue
+          fi
+          
+          # Get relative path from terragrunt-dir
+          RELATIVE_PATH="${unit_file#$TERRAGRUNT_DIR/}"
+          RELATIVE_PATH="${RELATIVE_PATH#./}"
+          
+          # Extract unit name (directory containing the file)
+          UNIT_NAME=$(dirname "$RELATIVE_PATH")
+          UNIT_NAME=$(basename "$UNIT_NAME")
+          
+          # Extract region and account (assumes accounts/REGION/ACCOUNT structure)
+          REGION=""
+          ACCOUNT=""
+          if [[ "$INCLUDE_REGION" == "true" ]] || [[ "$INCLUDE_ACCOUNT" == "true" ]]; then
+            if [[ "$RELATIVE_PATH" =~ ^accounts/([^/]+)/([^/]+)/ ]]; then
+              REGION="${BASH_REMATCH[1]}"
+              ACCOUNT="${BASH_REMATCH[2]}"
+            fi
+          fi
+          
+          # Build unit object
+          UNIT_OBJ="{"
+          UNIT_OBJ="$UNIT_OBJ\"file\":\"$unit_file\""
+          
+          if [[ "$INCLUDE_RELATIVE_PATH" == "true" ]]; then
+            UNIT_OBJ="$UNIT_OBJ,\"relative_path\":\"$RELATIVE_PATH\""
+          fi
+          
+          if [[ "$INCLUDE_UNIT_NAME" == "true" ]]; then
+            UNIT_OBJ="$UNIT_OBJ,\"unit_name\":\"$UNIT_NAME\""
+          fi
+          
+          if [[ "$INCLUDE_REGION" == "true" ]] && [[ -n "$REGION" ]]; then
+            UNIT_OBJ="$UNIT_OBJ,\"region\":\"$REGION\""
+          fi
+          
+          if [[ "$INCLUDE_ACCOUNT" == "true" ]] && [[ -n "$ACCOUNT" ]]; then
+            UNIT_OBJ="$UNIT_OBJ,\"account\":\"$ACCOUNT\""
+          fi
+          
+          UNIT_OBJ="$UNIT_OBJ}"
+          
+          # Add to JSON array
+          if [[ "$UNITS_JSON" == "[]" ]]; then
+            UNITS_JSON="[$UNIT_OBJ"
+          else
+            UNITS_JSON="$UNITS_JSON,$UNIT_OBJ"
+          fi
+          
+          # Add to unit names list
+          if [[ -z "$UNIT_NAMES" ]]; then
+            UNIT_NAMES="$UNIT_NAME"
+          else
+            UNIT_NAMES="$UNIT_NAMES,$UNIT_NAME"
+          fi
+          
+          COUNT=$((COUNT + 1))
+          echo "Found unit: $UNIT_NAME ($RELATIVE_PATH)"
+          
+        done < <(eval "$FIND_CMD" -print0 2>/dev/null || true)
+
+        # Close JSON array
+        if [[ "$UNITS_JSON" != "[]" ]]; then
+          UNITS_JSON="$UNITS_JSON]"
+        fi
+
+        # Create final matrix
+        MATRIX_JSON="{\"$MATRIX_KEY\":$UNITS_JSON}"
+
+        # Output results
+        echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+        echo "count=$COUNT" >> $GITHUB_OUTPUT
+        echo "units=$UNIT_NAMES" >> $GITHUB_OUTPUT
+
+        echo ""
+        echo "Matrix generated:"
+        echo "$MATRIX_JSON" | jq '.' 2>/dev/null || echo "$MATRIX_JSON"
+        echo ""
+        echo "Found $COUNT Terragrunt units"
+        echo "Units: $UNIT_NAMES"
+
+    - name: Validate Matrix
+      shell: bash
+      run: |
+        MATRIX_COUNT="${{ steps.matrix.outputs.count }}"
+
+        if [[ "$MATRIX_COUNT" -eq 0 ]]; then
+          echo "⚠️ Warning: No Terragrunt units found"
+          echo "This might indicate:"
+          echo "  - Incorrect terragrunt-dir path"
+          echo "  - No matching configuration files"
+          echo "  - All units excluded by patterns"
+        else
+          echo "✅ Successfully found $MATRIX_COUNT Terragrunt units"
+        fi

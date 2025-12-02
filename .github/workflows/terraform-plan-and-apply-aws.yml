@@ -6,11 +6,20 @@ on:
       infracost-api-key:
         description: "The API key for infracost"
         required: false
-      appvia-actions-id:
-        description: "Appvia App ID for GH"
+      actions-id:
+        description: "The GitHub App ID for the Actions App"
         required: false
-      appvia-actions-secret:
-        description: "Appvia App secret for GH"
+      actions-secret:
+        description: "The GitHub App secret for the Actions App"
+        required: false
+      gh-provider-app-id:
+        description: "GitHub provider app ID"
+        required: false
+      gh-provider-installation-id:
+        description: "GitHub provider installation ID"
+        required: false
+      gh-provider-private-key:
+        description: "Base64 encoded private key for GitHub provider app"
         required: false
 
     inputs:
@@ -82,12 +91,6 @@ on:
         required: false
         type: boolean
 
-      enable-python:
-        default: false
-        description: "Whether to install python3"
-        required: false
-        type: boolean
-
       enable-terraform-apply:
         default: true
         description: "Whether to run terraform apply on merge to main"
@@ -109,12 +112,6 @@ on:
       environment:
         default: "production"
         description: "The environment to deploy to"
-        required: false
-        type: string
-
-      python-version:
-        default: "3.13"
-        description: "The version of python to use when enabled"
         required: false
         type: string
 
@@ -204,8 +201,6 @@ on:
 
 env:
   AWS_ROLE: ${{ inputs.aws-role }}
-  AWS_READONLY_OVERRIDE_ROLE: ${{ inputs.aws-read-role-name }}
-  AWS_READWRITE_OVERRIDE_ROLE: ${{ inputs.aws-write-role-name }}
   AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/web_identity_token_file
 
 permissions:
@@ -225,12 +220,12 @@ jobs:
         run: |
           if "${{ runner.debug == true }}"; then
             if [ "${{ inputs.terraform-log-level }}" == "TRACE" ]; then
-              echo "tf_log=TRACE" >> $GITHUB_ENV
+              echo "tf_log=TRACE" >> "$GITHUB_ENV"
             else
-              echo "tf_log=DEBUG" >> $GITHUB_OUTPUT
+              echo "tf_log=DEBUG" >> "$GITHUB_OUTPUT"
             fi
           else
-            echo "tf_log=${{ inputs.terraform-log-level }}" >> $GITHUB_OUTPUT
+            echo "tf_log=${{ inputs.terraform-log-level }}" >> "$GITHUB_OUTPUT"
           fi
 
   commitlint:
@@ -244,11 +239,11 @@ jobs:
       result: ${{ steps.commitlint.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Setup node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 16
       - name: Install Dependencies
@@ -265,19 +260,19 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ${{ inputs.working-directory }}
+        working-directory: modules
     outputs:
       result: ${{ steps.format.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Terraform Format
         id: format
-        uses: dflook/terraform-fmt-check@v1
+        uses: dflook/terraform-fmt-check@v2
 
   terraform-lint:
     name: "Terraform Lint"
@@ -290,30 +285,21 @@ jobs:
       result_centralised_lint: ${{ steps.lintCentralised.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
-      - name: Setup Linter
-        uses: terraform-linters/setup-tflint@v4
-      - name: Enable Private Modules
-        id: get_workflow_token
-        if: inputs.enable-private-access
-        uses: peter-murray/workflow-application-token-action@v4
+        uses: actions/checkout@v6
+      - name: Terraform Bootstrap
+        id: bootstrap
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main
         with:
-          application_id: ${{ secrets.appvia-actions-id }}
-          application_private_key: ${{ secrets.appvia-actions-secret }}
-          organization: ${{ inputs.organization-name }}
-          revoke_token: true
-      - name: Setup Credentials
-        if: inputs.enable-private-access
-        run: |
-          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ inputs.terraform-version }}
-      - name: Terraform Init
-        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false ${{ inputs.terraform-init-extra-args }}
+          actions-id: ${{ secrets.actions-id }}
+          actions-secret: ${{ secrets.actions-secret }}
+          enable-private-access: ${{ inputs.enable-private-access }}
+          organization-name: ${{ inputs.organization-name }}
+          terraform-dir: ${{ inputs.terraform-dir }}
+          terraform-init-extra-args: ${{ inputs.terraform-init-extra-args }}
+          terraform-version: ${{ inputs.terraform-version }}
+          working-directory: ${{ inputs.working-directory }}
       - name: Setup Linter
-        uses: terraform-linters/setup-tflint@v4
+        uses: terraform-linters/setup-tflint@v6
       - name: Linter Initialize
         run: tflint --init
       - name: Linting Code
@@ -351,7 +337,7 @@ jobs:
           api-key: ${{ secrets.infracost-api-key }}
           currency: GBP
       - name: Download tfplan
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
       - name: Generate Infracost Cost Estimate
@@ -378,8 +364,8 @@ jobs:
     needs:
       - debug-mode
     outputs:
-      result-auth: ${{ steps.auth.outcome }}
-      result-init: ${{ steps.init.outcome }}
+      result-auth: ${{ steps.bootstrap.outputs.outcome-auth }}
+      result-init: ${{ steps.bootstrap.outputs.outcome-init }}
       result-validate: ${{ steps.validate.outcome }}
       result-s3-backend-check: ${{ steps.s3-backend-check.outcome }}
       result-plan: ${{ steps.plan.outcome }}
@@ -387,79 +373,38 @@ jobs:
       TF_LOG: ${{ needs.debug-mode.outputs.tf_log }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
-      - name: Setup node
-        uses: actions/setup-node@v4
+        uses: actions/checkout@v6
+      - name: Terraform Bootstrap
+        id: bootstrap
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap@main
         with:
-          node-version: 16
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ inputs.terraform-version }}
-      - name: Install Python3
-        if: inputs.enable-python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ inputs.python-version }}
-      - name: Retrieve Web Identity Token for AWS Authentication
-        run: |
-          curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" | jq -r '.value' > "${AWS_WEB_IDENTITY_TOKEN_FILE}"
-      - name: Determine AWS Role
-        id: role
-        run: |
-          if [ "${{ inputs.use-env-as-suffix }}" == "true" ]; then
-            role_suffix="-${{ inputs.environment }}"
-          else
-            role_suffix=""
-          fi
-          if [[ "${GITHUB_REF##*/}" == "main" ]]; then
-            echo "name=${AWS_READWRITE_OVERRIDE_ROLE:-${AWS_ROLE}${role_suffix}}" >> "${GITHUB_OUTPUT}"
-          else
-            echo "name=${AWS_READONLY_OVERRIDE_ROLE:-${AWS_ROLE}${role_suffix}-ro}" >> "${GITHUB_OUTPUT}"
-          fi
-      - name: Authenticate with AWS
-        id: auth
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
+          actions-id: ${{ secrets.actions-id }}
+          actions-secret: ${{ secrets.actions-secret }}
+          aws-account-id: ${{ inputs.aws-account-id }}
+          aws-read-role-name: ${{ inputs.aws-read-role-name }}
           aws-region: ${{ inputs.aws-region }}
-          role-session-name: ${{ github.event.repository.name }}
-          role-to-assume: arn:aws:iam::${{ inputs.aws-account-id }}:role/${{ steps.role.outputs.name }}
-          mask-aws-account-id: "no"
-      - name: Set terraform-state-key variable
-        id: state-key
+          aws-role: ${{ inputs.aws-role }}
+          aws-web-identity-token-file: ${{ env.AWS_WEB_IDENTITY_TOKEN_FILE }}
+          aws-write-role-name: ${{ inputs.aws-write-role-name }}
+          enable-private-access: ${{ inputs.enable-private-access }}
+          environment: ${{ inputs.environment }}
+          organization-name: ${{ inputs.organization-name }}
+          terraform-dir: ${{ inputs.terraform-dir }}
+          terraform-init-extra-args: ${{ inputs.terraform-init-extra-args }}
+          terraform-state-key: ${{ inputs.terraform-state-key }}
+          terraform-version: ${{ inputs.terraform-version }}
+          working-directory: ${{ inputs.working-directory }}
+          use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
+      - name: Add GitHub provider credentials to environment
         run: |
-          if [ -n "${{ inputs.terraform-state-key }}" ]; then
-            echo "name=${{ inputs.terraform-state-key }}" >> "${GITHUB_OUTPUT}"
+          if [ -n "${{ secrets.gh-provider-app-id }}" ] && [ -n "${{ secrets.gh-provider-installation-id }}" ] && [ -n "${{ secrets.gh-provider-private-key }}" ]; then
+            echo "GITHUB_APP_ID=${{ secrets.gh-provider-app-id }}" >> "${GITHUB_ENV}"
+            echo "GITHUB_APP_INSTALLATION_ID=${{ secrets.gh-provider-installation-id }}" >> "${GITHUB_ENV}"
+            # Decode base64 encoded private key and write to file
+            echo "${{ secrets.gh-provider-private-key }}" | base64 --decode > /tmp/github_provider.pem
           else
-            if [ "${{ inputs.use-env-as-suffix }}" == "true" ]; then
-              echo "name=${{ github.event.repository.name }}-${{ inputs.environment }}.tfstate" >> "${GITHUB_OUTPUT}"
-            else
-              echo "name=${{ github.event.repository.name }}.tfstate" >> "${GITHUB_OUTPUT}"
-            fi
+            echo "GitHub provider credentials not provided."
           fi
-      - name: Enable Private Modules
-        id: get_workflow_token
-        if: inputs.enable-private-access
-        uses: peter-murray/workflow-application-token-action@v4
-        with:
-          application_id: ${{ secrets.appvia-actions-id }}
-          application_private_key: ${{ secrets.appvia-actions-secret }}
-          organization: ${{ inputs.organization-name }}
-          revoke_token: true
-      - name: Setup Credentials
-        if: inputs.enable-private-access
-        run: |
-          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
-      - name: Terraform Init
-        id: init
-        run: |
-          terraform -chdir=${{ inputs.terraform-dir }} init \
-          -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" \
-          -backend-config="key=${{ steps.state-key.outputs.name }}" \
-          -backend-config="encrypt=true" \
-          -backend-config="use_lockfile=true" \
-          -backend-config="region=${{ inputs.aws-region }}" \
-           ${{ inputs.terraform-init-extra-args }}
       - name: Terraform Validate
         id: validate
         run: terraform -chdir=${{ inputs.terraform-dir }} validate -no-color
@@ -506,7 +451,7 @@ jobs:
       - name: Calculate Plan Checksum
         run: sha256sum tfplan > tfplan.checksum
       - name: Upload tfplan
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
           compression-level: 9
@@ -519,7 +464,7 @@ jobs:
           touch ${{ inputs.additional-dir }}/.optional.file
       - name: Upload additional directory
         if: inputs.additional-dir
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: additional-dir-${{ inputs.environment }}
           compression-level: 9
@@ -527,6 +472,12 @@ jobs:
           include-hidden-files: true
           path: ${{ inputs.additional-dir }}
           retention-days: 14
+      - name: Cleanup GitHub provider key
+        if: always()
+        run: |
+          if [ -n "${{ secrets.gh-provider-app-id }}" ] && [ -n "${{ secrets.gh-provider-installation-id }}" ] && [ -n "${{ secrets.gh-provider-private-key }}" ]; then
+            rm /tmp/github_provider.pem
+          fi
 
   terraform-checkov:
     name: "Static Security Analysis - Checkov"
@@ -536,36 +487,28 @@ jobs:
       result: ${{ steps.security.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Ensure Checkov Configuration
         run: |
           [ -f ".checkov.yml" ] || echo "{}" > .checkov.yml
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - name: Terraform Bootstrap
+        id: bootstrap
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main
         with:
-          terraform_version: ${{ inputs.terraform-version }}
-      - name: Enable Private Modules
-        id: get_workflow_token
-        if: inputs.enable-private-access
-        uses: peter-murray/workflow-application-token-action@v4
-        with:
-          application_id: ${{ secrets.appvia-actions-id }}
-          application_private_key: ${{ secrets.appvia-actions-secret }}
-          organization: ${{ inputs.organization-name }}
-          revoke_token: true
-      - name: Setup Credentials
-        if: inputs.enable-private-access
-        run: |
-          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
-      - name: Terraform Init
-        id: init
-        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
+          actions-id: ${{ secrets.actions-id }}
+          actions-secret: ${{ secrets.actions-secret }}
+          enable-private-access: ${{ inputs.enable-private-access }}
+          organization-name: ${{ inputs.organization-name }}
+          terraform-dir: ${{ inputs.terraform-dir }}
+          terraform-init-extra-args: ${{ inputs.terraform-init-extra-args }}
+          terraform-version: ${{ inputs.terraform-version }}
+          working-directory: ${{ inputs.working-directory }}
       - name: Set terraform-values-file variable
         run: |
           if [ -n "${{ inputs.terraform-values-file }}" ]; then
-            echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> $GITHUB_ENV
+            echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> "$GITHUB_ENV"
           else
-            echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> $GITHUB_ENV
+            echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> "$GITHUB_ENV"
           fi
       - name: Run Checkov
         id: security
@@ -573,6 +516,7 @@ jobs:
         with:
           config_file: .checkov.yml
           directory: ${{ inputs.working-directory }}
+          download_external_modules: true
           framework: terraform
           output_format: cli,sarif
           soft_fail: true
@@ -585,33 +529,25 @@ jobs:
       result: ${{ steps.security.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Check If Trivy Ignore File Exists
         id: security-exceptions
         run: |
           if [ -e ".trivyignore" ]; then
             echo filename=".trivyignore" >> "${GITHUB_OUTPUT}"
           fi
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - name: Terraform Bootstrap
+        id: bootstrap
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main
         with:
-          terraform_version: ${{ inputs.terraform-version }}
-      - name: Enable Private Modules
-        id: get_workflow_token
-        if: inputs.enable-private-access
-        uses: peter-murray/workflow-application-token-action@v4
-        with:
-          application_id: ${{ secrets.appvia-actions-id }}
-          application_private_key: ${{ secrets.appvia-actions-secret }}
-          organization: ${{ inputs.organization-name }}
-          revoke_token: true
-      - name: Setup Credentials
-        if: inputs.enable-private-access
-        run: |
-          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
-      - name: Terraform Init
-        id: init
-        run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false
+          actions-id: ${{ secrets.actions-id }}
+          actions-secret: ${{ secrets.actions-secret }}
+          enable-private-access: ${{ inputs.enable-private-access }}
+          organization-name: ${{ inputs.organization-name }}
+          terraform-dir: ${{ inputs.terraform-dir }}
+          terraform-init-extra-args: ${{ inputs.terraform-init-extra-args }}
+          terraform-version: ${{ inputs.terraform-version }}
+          working-directory: ${{ inputs.working-directory }}
       - name: Set terraform-values-file variable
         run: |
           if [ -n "${{ inputs.terraform-values-file }}" ]; then
@@ -621,7 +557,7 @@ jobs:
           fi
       - name: Run Trivy vulnerability
         id: security
-        uses: aquasecurity/trivy-action@0.29.0
+        uses: aquasecurity/trivy-action@0.33.1
         with:
           exit-code: "1"
           format: "table"
@@ -649,12 +585,12 @@ jobs:
       - commitlint
     steps:
       - name: Download tfplan
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
         continue-on-error: true
       - name: Add PR Comment
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             // 1. Retrieve existing bot comments for the PR
@@ -672,6 +608,9 @@ jobs:
             const planExists = fs.existsSync("tfplan-simple");
             if (planExists) {
               var planOutput = fs.readFileSync("tfplan-simple", "utf8");
+              if (!planOutput.trim()) {
+                planOutput = "No changes detected."
+              }
 
               const planSummaryExists = fs.existsSync("tfplan-summary");
               if (planSummaryExists) {
@@ -753,75 +692,30 @@ jobs:
       - debug-mode
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
-      - name: Setup node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 16
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ inputs.terraform-version }}
-      - name: Install Python3
-        if: inputs.enable-python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ inputs.python-version }}
-      - name: Retrieve Web Identity Token for AWS Authentication
-        run: |
-          curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value' > "${AWS_WEB_IDENTITY_TOKEN_FILE}"
-      - name: Determine AWS Role
-        id: role
-        run: |
-          if [ "${{ inputs.use-env-as-suffix }}" == "true" ]; then
-            echo "name=${AWS_READWRITE_OVERRIDE_ROLE:-${AWS_ROLE}-${{ inputs.environment }}}" >> "${GITHUB_OUTPUT}"
-          else
-            echo "name=${AWS_READWRITE_OVERRIDE_ROLE:-${AWS_ROLE}}" >> "${GITHUB_OUTPUT}"
-          fi
-      - name: Authenticate with AWS
-        id: auth
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-region: ${{ inputs.aws-region }}
-          role-session-name: ${{ github.event.repository.name }}
-          role-to-assume: arn:aws:iam::${{ inputs.aws-account-id }}:role/${{ steps.role.outputs.name }}
-      - name: Set terraform-state-key variable
-        id: state-key
-        run: |
-          if [ -n "${{ inputs.terraform-state-key }}" ]; then
-            echo "name=${{ inputs.terraform-state-key }}" >> "${GITHUB_OUTPUT}"
-          else
-            if [ "${{ inputs.use-env-as-suffix }}" == "true" ]; then
-              echo "name=${{ github.event.repository.name }}-${{ inputs.environment }}.tfstate" >> "${GITHUB_OUTPUT}"
-            else
-              echo "name=${{ github.event.repository.name }}.tfstate" >> "${GITHUB_OUTPUT}"
-            fi
-          fi
-      - name: Enable Private Modules
-        id: get_workflow_token
-        if: inputs.enable-private-access
-        uses: peter-murray/workflow-application-token-action@v4
-        with:
-          application_id: ${{ secrets.appvia-actions-id }}
-          application_private_key: ${{ secrets.appvia-actions-secret }}
-          organization: ${{ inputs.organization-name }}
-          revoke_token: true
-      - name: Setup Credentials
-        if: inputs.enable-private-access
-        run: |
-          git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
-      - name: Terraform Init
+        uses: actions/checkout@v6
+      - name: Terraform Bootstrap
         id: init
-        run: |
-          terraform -chdir=${{ inputs.terraform-dir }} init \
-          -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" \
-          -backend-config="key=${{ steps.state-key.outputs.name }}" \
-          -backend-config="encrypt=true" \
-          -backend-config="use_lockfile=true" \
-          -backend-config="region=${{ inputs.aws-region }}" \
-           ${{ inputs.terraform-init-extra-args }}
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap@main
+        with:
+          actions-id: ${{ secrets.actions-id }}
+          actions-secret: ${{ secrets.actions-secret }}
+          aws-account-id: ${{ inputs.aws-account-id }}
+          aws-read-role-name: ${{ inputs.aws-read-role-name }}
+          aws-region: ${{ inputs.aws-region }}
+          aws-role: ${{ inputs.aws-role }}
+          aws-web-identity-token-file: ${{ env.AWS_WEB_IDENTITY_TOKEN_FILE }}
+          aws-write-role-name: ${{ inputs.aws-write-role-name }}
+          enable-private-access: ${{ inputs.enable-private-access }}
+          environment: ${{ inputs.environment }}
+          organization-name: ${{ inputs.organization-name }}
+          terraform-dir: ${{ inputs.terraform-dir }}
+          terraform-init-extra-args: ${{ inputs.terraform-init-extra-args }}
+          terraform-state-key: ${{ inputs.terraform-state-key }}
+          terraform-version: ${{ inputs.terraform-version }}
+          working-directory: ${{ inputs.working-directory }}
+          use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
       - name: Download tfplan
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
         continue-on-error: true
@@ -833,7 +727,7 @@ jobs:
           fi
       - name: Download Additional Directories
         if: inputs.additional-dir
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: additional-dir-${{ inputs.environment }}
           path: ${{ inputs.additional-dir }}
@@ -851,6 +745,16 @@ jobs:
             echo "Halting Terraform Apply phase to ensure the integrity of the deployment process."
             exit 1
           fi
+      - name: Add GitHub provider credentials to environment
+        run: |
+          if [ -n "${{ secrets.gh-provider-app-id }}" ] && [ -n "${{ secrets.gh-provider-installation-id }}" ] && [ -n "${{ secrets.gh-provider-private-key }}" ]; then
+            echo "GITHUB_APP_ID=${{ secrets.gh-provider-app-id }}" >> "${GITHUB_ENV}"
+            echo "GITHUB_APP_INSTALLATION_ID=${{ secrets.gh-provider-installation-id }}" >> "${GITHUB_ENV}"
+            # Decode base64 encoded private key and write to file
+            echo "${{ secrets.gh-provider-private-key }}" | base64 --decode > /tmp/github_provider.pem
+          else
+            echo "GitHub provider credentials not provided."
+          fi
       - name: Terraform Apply
         run: |
           terraform apply \
@@ -860,3 +764,9 @@ jobs:
             -lock-timeout=${{ inputs.terraform-lock-timeout }} \
             ${{ inputs.terraform-apply-extra-args }} \
             tfplan
+      - name: Cleanup GitHub provider key
+        if: always()
+        run: |
+          if [ -n "${{ secrets.gh-provider-app-id }}" ] && [ -n "${{ secrets.gh-provider-installation-id }}" ] && [ -n "${{ secrets.gh-provider-private-key }}" ]; then
+            rm /tmp/github_provider.pem
+          fi

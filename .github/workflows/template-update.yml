@@ -1,0 +1,68 @@
+---
+name: Update with Templates
+on:
+  workflow_call:
+    inputs:
+      enable-pull-request:
+        description: "Whether to create a pull request"
+        required: false
+        type: boolean
+        default: true
+      pull-request-title:
+        description: ""
+        required: false
+        type: string
+      template-repository:
+        description: "The repository to keep files in sync with"
+        required: true
+        type: string
+      template-branch:
+        description: "The branch to keep files in sync with"
+        required: false
+        type: string
+        default: main
+      template-files:
+        description: "The files to keep in sync with"
+        required: true
+        type: string
+
+jobs:
+  update-template:
+    name: Update Template
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+      - name: Checkout Upstream Repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ inputs.template-repository }}
+          path: ./tmp/upstream-template
+      - name: Update Files
+        run: |
+          # Iterate the files, which are new lines separated
+          echo "${{ inputs.template-files }}" | while read -r file; do
+            if [[ -f "${file}" ]]; then
+              cp -f "./tmp/upstream-template/${file}" "./${file}"
+            fi
+          done
+          # Remove the temporary directory
+          rm -rf ./tmp/upstream-template
+      - name: Check for Changes
+        id: check-changes
+        shell: bash
+        run: |
+          if ! git diff --exit-code; then
+            echo "no-changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "no-changes=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Create Pull Request
+        if: steps.check-changes.outputs.no-changes == 'false'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          title: "${{ inputs.pull-request-title }} | [UPDATE] - Updating Templates inline with ${{ inputs.template-repository }}"
+          body: "This PR is updating the templates to the latest version inline with the official ${{ inputs.template-repository }}"
+          base: main
+          commit-message: "chore(deps): updating the templates inline with the official ${{ inputs.template-repository }}"
+          delete-branch: true

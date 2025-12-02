@@ -15,7 +15,7 @@ This GitHub Actions workflow template ([terraform-plan-and-apply-aws.yml](../.gi
 8. **Terraform Plan:** A Terraform plan is generated with a specified values file (overridable via inputs) using the terraform plan command.
 9. **Get Cost Estimate:** The infracost utility is run to get a cost estimate on the Terraform Plan output. A comment will be added to the pull request with the cost estimate.
 10. **Add PR Comment:** If the workflow is triggered via a Pull Request, a comment will be added to the ticket containing the results of the previous steps.
-11. **Apply Changes:** If the workflow is triggered by a push to the main branch, it automatically applies the changes using the terraform apply command. This step should be used with caution as AWS infrastructure is modified at this point.
+11. **Apply Changes:** If the workflow is triggered by a push to the main branch, it automatically applies the changes using the terraform apply command. This step should be used with caution as AWS infrastructure is modified at this point. The automatic apply can be skipped by setting `enable-terraform-apply` to `false`.
 
 ## Usage
 
@@ -46,3 +46,52 @@ jobs:
 The `aws-role` inputs are optional and will default to the repository name.
 
 **Note:** This template may change over time, so it is recommended that you point to a tagged version rather than the main branch.
+
+### GitHub Provider Support
+
+The workflow supports the Terraform GitHub provider through GitHub App authentication. To use this feature, you need to:
+
+1. Create a GitHub App with the necessary permissions for your Terraform resources
+2. Generate a private key for the GitHub App
+3. Base64 encode the private key file:
+   ```bash
+   # macOS
+   base64 -i github-app-private-key.pem | pbcopy
+   
+   # Linux
+   base64 github-app-private-key.pem | xclip -selection clipboard
+   
+   # Or save to a file
+   base64 github-app-private-key.pem > github-app-private-key-base64.txt
+   ```
+4. Store the following as GitHub secrets in your repository:
+   - `GH_PROVIDER_APP_ID` - The GitHub App ID
+   - `GH_PROVIDER_INSTALLATION_ID` - The GitHub App installation ID
+   - `GH_PROVIDER_PRIVATE_KEY` - The base64 encoded private key from step 3
+
+5. Pass these secrets to the workflow:
+   ```yml
+   jobs:
+     terraform:
+       uses: appvia/appvia-cicd-workflows/.github/workflows/terraform-plan-and-apply-aws.yml@main
+       name: Plan and Apply
+       secrets:
+         gh-provider-app-id: ${{ secrets.GH_PROVIDER_APP_ID }}
+         gh-provider-installation-id: ${{ secrets.GH_PROVIDER_INSTALLATION_ID }}
+         gh-provider-private-key: ${{ secrets.GH_PROVIDER_PRIVATE_KEY }}
+       with:
+         aws-account: 123456789012
+         # ... other inputs
+   ```
+
+6. Configure the GitHub provider in your Terraform code:
+   ```hcl
+   provider "github" {
+     owner = "my-organization"
+     app_auth {
+       pem_file = file("/tmp/github_provider.pem")
+     } 
+   }
+   ```
+
+The workflow automatically sets the required environment variables (`GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`) and exports the decoded private key in `/tmp/github_provider.pem`. The private key is cleaned up at the end of the workflow.

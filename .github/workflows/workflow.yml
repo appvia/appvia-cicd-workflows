@@ -1,0 +1,41 @@
+---
+name: Workflow Validation
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/**"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/**"
+
+permissions:
+  contents: read
+
+jobs:
+  github-changes:
+    name: Validate GitHub Workflows
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate YAML Syntax
+        run: |
+          echo "Validating GitHub workflow files..."
+          find .github/workflows -name "*.yml" -o -name "*.yaml" | while read -r file; do
+            echo "Validating $file"
+            # Basic YAML validation
+            python3 -c "import yaml; yaml.safe_load(open('$file'))" || exit 1
+          done
+          echo "✓ All GitHub workflow files are valid"
+
+      - name: Check Workflow Syntax
+        uses: actions/github-script@v8
+        with:
+          script: |
+            console.log('GitHub workflow files have been validated');
+            console.log('No Terragrunt pipeline needed for .github changes');

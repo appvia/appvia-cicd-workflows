@@ -1,0 +1,394 @@
+---
+name: Docker Build, Push & Security Scan
+on:
+  workflow_call:
+    secrets:
+      aws-access-key-id:
+        description: "AWS Access Key ID (required if enable-oidc is false)"
+        required: false
+      aws-secret-access-key:
+        description: "AWS Secret Access Key (required if enable-oidc is false)"
+        required: false
+
+      docker-username:
+        description: "Docker username (required if push-image is true)"
+        required: false
+      docker-password:
+        description: "Docker password (required if push-image is true)"
+        required: false
+
+    inputs:
+      dockerfile-path:
+        description: "Path to Dockerfile"
+        required: false
+        default: "Dockerfile"
+        type: string
+
+      context-path:
+        description: "Build context path"
+        required: false
+        default: "."
+        type: string
+
+      registry:
+        description: "Docker registry to use (ECR / Docker Hub / GitHub Packages / etc.)"
+        required: true
+        type: string
+
+      image-name:
+        description: "The name of the image to build"
+        required: false
+        type: string
+
+      image-tag:
+        description: "Docker image tag (defaults to commit SHA)"
+        default: ${{ github.sha }}
+        required: false
+        type: string
+
+      image-platforms:
+        description: "The platforms to build the image for"
+        required: false
+        default: "linux/amd64,linux/arm64"
+        type: string
+
+      aws-region:
+        description: "AWS region for ECR (required if enable-ecr-login is true)"
+        required: false
+        default: "eu-west-2"
+        type: string
+
+      aws-account-id:
+        description: "AWS account ID (required if enable-oidc is true)"
+        required: false
+        type: string
+
+      aws-role:
+        description: "AWS IAM role name to assume (required if enable-oidc is true)"
+        required: false
+        type: string
+
+      enable-oidc:
+        description: "Indicates if OIDC authentication should be used for AWS"
+        required: false
+        default: false
+        type: boolean
+
+      enable-buildkit:
+        description: "Enable Docker BuildKit for improved builds"
+        required: false
+        default: true
+        type: boolean
+
+      build-args:
+        description: "Docker build arguments (comma-separated key=value pairs)"
+        required: false
+        type: string
+
+      cache-from:
+        description: "Cache from image (e.g., previous build tag)"
+        required: false
+        type: string
+
+      enable-push:
+        description: "Enable pushing the image to the registry"
+        required: false
+        default: true
+        type: boolean
+
+      trivy-severity:
+        description: "Trivy severity levels to fail on (CRITICAL,HIGH,MEDIUM,LOW)"
+        required: false
+        default: "CRITICAL,HIGH"
+        type: string
+
+      trivy-version:
+        description: "Trivy version to use"
+        required: false
+        default: "latest"
+        type: string
+
+      fail-on-vulnerabilities:
+        description: "Fail build if vulnerabilities found"
+        required: false
+        default: true
+        type: boolean
+
+      working-directory:
+        description: "Working directory for build"
+        required: false
+        default: "."
+        type: string
+
+      runs-on:
+        description: "GitHub runner to use"
+        required: false
+        default: "ubuntu-latest"
+        type: string
+
+env:
+  # The AWS region if defined in inputs
+  AWS_REGION: ${{ inputs.aws-region }}
+  # Path to the web identity token file
+  AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/web_identity_token_file
+  # Enable Docker BuildKit if enabled in inputs
+  DOCKER_BUILDKIT: ${{ inputs.enable-buildkit && '1' || '0' }}
+  # Indicates we should enable AWS credentials
+  ENABLE_LOGIN_AWS: inputs.enable-oidc == 'false' && ${{ secrets.aws-access-key-id }} != '' && ${{ secrets.aws-secret-access-key }} != ''
+  # Indicates we should enable Docker login
+  ENABLE_LOGIN_DOCKER: ${{ secrets.docker-username != '' && secrets.docker-password != '' }}
+  # Indicates we should use OIDC authentication
+  ENABLE_LOGIN_OIDC: inputs.enable-oidc == 'true'
+  # Indicates we should push the image to the registry
+  ENABLE_PUSH: ${{ inputs.enable-push }} && ${{ github.event_name != 'pull_request' }}
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  dockerfile-lint:
+    name: "Dockerfile Linting"
+    runs-on: ${{ inputs.runs-on }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    outputs:
+      result: ${{ steps.lint.outcome }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Run Hadolint
+        id: lint
+        uses: hadolint/hadolint-action@v3
+        with:
+          dockerfile: ${{ inputs.dockerfile-path }}
+          failure-threshold: warning
+          format: tty
+          ignore: DL3008,DL3009
+
+  docker-security-scan:
+    name: "Docker Security Scan"
+    runs-on: ${{ inputs.runs-on }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    outputs:
+      result: ${{ steps.scan.outcome }}
+      scan-report: ${{ steps.scan.outputs.sarif }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: docker-build-${{ github.sha }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=${{ inputs.image-tag || github.sha }},enable={{is_default_branch}}
+
+      - name: Prepare build args
+        id: build-args
+        run: |
+          BUILD_ARGS=""
+          if [ -n "${{ inputs.build-args }}" ]; then
+            IFS=',' read -ra ARGS <<< "${{ inputs.build-args }}"
+            for arg in "${ARGS[@]}"; do
+              BUILD_ARGS="${BUILD_ARGS} --build-arg ${arg}"
+            done
+            echo "args=${BUILD_ARGS}" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Build Docker image
+        id: docker-build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.context-path }}
+          file: ${{ inputs.dockerfile-path }}
+          push: false
+          tags: docker-build-${{ github.sha }}
+
+      - name: Run Trivy vulnerability scanner
+        id: scan
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: docker-build-${{ github.sha }}
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: ${{ inputs.trivy-severity }}
+          exit-code: ${{ inputs.fail-on-vulnerabilities && '1' || '0' }}
+          ignore-unfixed: true
+          trivyignores: ".trivyignore"
+          version: ${{ inputs.trivy-version }}
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
+
+      - name: Trivy scan summary
+        if: always()
+        run: |
+          echo "## 🔒 Security Scan Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f "trivy-results.sarif" ]; then
+            echo "✅ Security scan completed. Results uploaded to GitHub Security tab." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "⚠️ Security scan results file not found." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  docker-build:
+    name: "Build Docker Image"
+    runs-on: ${{ inputs.runs-on }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    needs:
+      - dockerfile-lint
+      - docker-security-scan
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Registry
+        if: ${{ env.ENABLE_LOGIN_DOCKER == 'true' && env.ENABLE_PUSH == 'true' }}
+        uses: docker/login-action@v5
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ secrets.docker-username }}
+          password: ${{ secrets.docker-password }}
+
+      - name: Login to AWS vis Credential
+        if: ${{ env.ENABLE_LOGIN_AWS == 'true' && env.ENABLE_PUSH == 'true' }}
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-access-key-id: ${{ secrets.aws-access-key-id }}
+          aws-region: ${{ inputs.aws-region }}
+          aws-secret-access-key: ${{ secrets.aws-secret-access-key }}
+
+      - name: Login to AWS vis OIDC
+        if: ${{ env.ENABLE_LOGIN_OIDC == 'true' && env.ENABLE_PUSH == 'true' }}
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-region: ${{ inputs.aws-region }}
+          role-to-assume: arn:aws:iam::${{ inputs.aws-account-id }}:role/${{ inputs.aws-role }}
+          role-session-name: ${{ github.event.repository.name }}-docker-build
+
+      - name: Login to Amazon ECR
+        if: ${{ env.ENABLE_LOGIN_OIDC == 'true' && env.ENABLE_PUSH == 'true' }}
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Prepare build args
+        id: build-args
+        run: |
+          BUILD_ARGS=""
+          if [ -n "${{ inputs.build-args }}" ]; then
+            IFS=',' read -ra ARGS <<< "${{ inputs.build-args }}"
+            for arg in "${ARGS[@]}"; do
+              BUILD_ARGS="${BUILD_ARGS} --build-arg ${arg}"
+            done
+            echo "args=${BUILD_ARGS}" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ inputs.image-name }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=${{ inputs.image-tag || github.sha }},enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.context-path }}
+          file: ${{ inputs.dockerfile-path }}
+          push: ${{ env.ENABLE_PUSH }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: |
+            type=registry,ref=${{ inputs.image-name }}:${{ steps.meta.outputs.tags }}
+          cache-to: |
+            type=registry,ref=${{ inputs.image-name }}:${{ steps.meta.outputs.tags }},mode=max
+          build-args: ${{ steps.build-args.outputs.args }}
+          platforms: ${{ inputs.image-platforms }}
+
+  build-summary:
+    name: "Build Summary"
+    runs-on: ${{ inputs.runs-on }}
+    needs:
+      - docker-build
+      - docker-security-scan
+      - dockerfile-lint
+    if: github.event_name == 'pull_request' && success()
+    steps:
+      - name: Add PR Comment
+        uses: actions/github-script@v8
+        with:
+          script: |
+            // 1. Retrieve existing bot comments for the PR
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            })
+            const botComment = comments.find(comment => {
+              return comment.user.type === 'Bot' && comment.body.includes('Docker Build Summary')
+            })
+
+            // 2. Prepare format of the comment
+            const output = `### Docker Build Summary
+            * 🐳 <b>Docker Build:</b> \`success\`" >> "$GITHUB_STEP_SUMMARY"
+            * 🔒 <b>Docker Security Scan:</b> \`${{ needs.docker-security-scan.outputs.result }}\`" >> "$GITHUB_STEP_SUMMARY"
+            * 🖌 <b>Dockerfile Linting:</b> \`${{ needs.dockerfile-lint.outputs.result }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+            *<b>Pusher:</b> @${{ github.actor }}, <b>Action:</b> \`${{ github.event_name }}\`*
+            *<b>Workflow Run Link:</b> ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}*`;
+
+            // 3. If we have a comment, update it, otherwise create a new one
+            if (botComment) {
+              github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: output
+              })
+            } else {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: output
+              })
+            }
