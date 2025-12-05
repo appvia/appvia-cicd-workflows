@@ -13,6 +13,10 @@ inputs:
     description: "The title of the pull request"
     required: false
     default: ""
+  branch-name:
+    description: "The name of the branch to update"
+    required: false
+    default: ""
   template-repository:
     description: "The template repository to update"
     required: true
@@ -74,7 +78,7 @@ runs:
       with:
         base: main
         body: "This PR is updating the templates to the latest version inline with the official ${{ inputs.template-repository }}"
-        branch: update/${{ github.run_id }}
+        branch: update/${{ inputs.branch-name || github.run_id }}
         commit-message: "chore(deps): updating the templates inline with the official ${{ inputs.template-repository }}"
         delete-branch: true
         title: "${{ inputs.pull-request-title }} | [UPDATE] - Updating Templates inline with ${{ inputs.template-repository }}"
