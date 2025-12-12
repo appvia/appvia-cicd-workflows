@@ -3,6 +3,12 @@ name: Terraform Module Release
 
 on:
   workflow_call:
+    inputs:
+      enable-cliff:
+        description: "Indicates if the repository uses cliff for changelog generation"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   release:
@@ -14,16 +20,8 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - name: Cliff Configuration
-        id: cliff
-        run: |
-          if [[ -f .cliff/cliff.toml ]]; then
-            echo "enable-cliff=true" >> "${GITHUB_OUTPUT}"
-          else
-            echo "enable-cliff=false" >> "${GITHUB_OUTPUT}"
-          fi
       - name: Generate Cliff Changelog
-        if: steps.cliff.outputs.enable-cliff == 'true'
+        if: inputs.enable-cliff == 'true'
         uses: orhun/git-cliff-action@v4
         with:
           config: .cliff/cliff.toml
@@ -31,8 +29,8 @@ jobs:
         env:
           OUTPUT: CHANGELOG.md
           GITHUB_REPO: ${{ github.repository }}
-      - name: Create Release
-        if: steps.cliff.outputs.enable-cliff == 'true'
+      - name: Create GitHub Release
+        if: inputs.enable-cliff == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -42,7 +40,7 @@ jobs:
             --title "Release ${{ github.ref_name }}"
 
       - name: Create GitHub Release
-        if: steps.cliff.outputs.enable-cliff == 'false'
+        if: inputs.enable-cliff == 'false'
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
