@@ -12,7 +12,37 @@ jobs:
     steps:
       - name: Clone repo
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Cliff Configuration
+        id: cliff
+        run: |
+          if [[ -f .cliff/cliff.toml ]]; then
+            echo "enable-cliff=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "enable-cliff=false" >> "${GITHUB_OUTPUT}"
+          fi
+      - name: Generate Cliff Changelog
+        if: steps.cliff.outputs.enable-cliff == 'true'
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: .cliff/cliff.toml
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+        env:
+          OUTPUT: CHANGELOG.md
+          GITHUB_REPO: ${{ github.repository }}
+      - name: Create Release
+        if: steps.cliff.outputs.enable-cliff == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --latest \
+            --notes-file CHANGELOG.md \
+            --title "Release ${{ github.ref_name }}"
+
       - name: Create GitHub Release
+        if: steps.cliff.outputs.enable-cliff == 'false'
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
