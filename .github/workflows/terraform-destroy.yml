@@ -293,12 +293,12 @@ jobs:
           use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
           working-directory: ${{ inputs.working-directory }}
       - name: Download tfplan
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: tfplan-${{ inputs.environment }}
       - name: Download Additional Directories
         if: inputs.additional-dir
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: additional-dir-${{ inputs.environment }}
           path: ${{ inputs.additional-dir }}

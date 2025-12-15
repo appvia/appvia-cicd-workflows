@@ -337,7 +337,7 @@ jobs:
           api-key: ${{ secrets.infracost-api-key }}
           currency: GBP
       - name: Download tfplan
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
       - name: Generate Infracost Cost Estimate
@@ -585,7 +585,7 @@ jobs:
       - commitlint
     steps:
       - name: Download tfplan
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
         continue-on-error: true
@@ -715,7 +715,7 @@ jobs:
           working-directory: ${{ inputs.working-directory }}
           use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
       - name: Download tfplan
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
         continue-on-error: true
@@ -727,7 +727,7 @@ jobs:
           fi
       - name: Download Additional Directories
         if: inputs.additional-dir
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: additional-dir-${{ inputs.environment }}
           path: ${{ inputs.additional-dir }}
