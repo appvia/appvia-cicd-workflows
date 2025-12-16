@@ -2,10 +2,10 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "packageRules": [
     {
-      "managers": [
+      "matchManagers": [
         "github-actions"
       ],
-      "digestPinning": true
+      "pinDigests": true
     }
   ],
   "extends": [
