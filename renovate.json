@@ -1,0 +1,10 @@
+{
+  "packageRules": [
+    {
+      "managers": [
+        "github-actions"
+      ],
+      "digestPinning": true
+    }
+  ]
+}
