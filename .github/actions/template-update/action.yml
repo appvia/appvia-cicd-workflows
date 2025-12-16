@@ -35,7 +35,7 @@ runs:
   using: "composite"
   steps:
     - name: Checkout Upstream Repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         token: ${{ inputs.upstream-token || github.token }}
         branch: ${{ inputs.template-branch }}
