@@ -136,7 +136,7 @@ jobs:
       result-s3-backend-check: ${{ steps.s3-backend-check.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       - name: Terraform Bootstrap
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap@main
@@ -189,7 +189,7 @@ jobs:
           fi
       - name: Send Slack notification if drift is detected
         if: steps.check-drift.outputs.DRIFT_STATUS == 'drift'
-        uses: slackapi/slack-github-action@v2.1.1
+        uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
         with:
           webhook: ${{ secrets.slack-webhook-url }}
           webhook-type: incoming-webhook

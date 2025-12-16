@@ -158,7 +158,7 @@ jobs:
       result: ${{ steps.lint.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
       - name: Run Hadolint
         id: lint
@@ -180,17 +180,17 @@ jobs:
       scan-report: ${{ steps.scan.outputs.sarif }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: docker-build-${{ github.sha }}
           tags: |
@@ -215,7 +215,7 @@ jobs:
 
       - name: Build Docker image
         id: docker-build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6
         with:
           context: ${{ inputs.context-path }}
           file: ${{ inputs.dockerfile-path }}
@@ -224,7 +224,7 @@ jobs:
 
       - name: Run Trivy vulnerability scanner
         id: scan
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # 0.33.1
         with:
           image-ref: docker-build-${{ github.sha }}
           format: "sarif"
@@ -236,7 +236,7 @@ jobs:
           version: ${{ inputs.trivy-version }}
 
       - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@1b168cd39490f61582a9beae412bb7057a6b2c4e # v4
         if: always()
         with:
           sarif_file: "trivy-results.sarif"
@@ -266,13 +266,13 @@ jobs:
       image-digest: ${{ steps.build.outputs.digest }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3
 
       - name: Login to Docker Registry
         if: ${{ env.ENABLE_LOGIN_DOCKER == 'true' && env.ENABLE_PUSH == 'true' }}
@@ -284,7 +284,7 @@ jobs:
 
       - name: Login to AWS vis Credential
         if: ${{ env.ENABLE_LOGIN_AWS == 'true' && env.ENABLE_PUSH == 'true' }}
-        uses: aws-actions/configure-aws-credentials@v5
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
         with:
           aws-access-key-id: ${{ secrets.aws-access-key-id }}
           aws-region: ${{ inputs.aws-region }}
@@ -292,7 +292,7 @@ jobs:
 
       - name: Login to AWS vis OIDC
         if: ${{ env.ENABLE_LOGIN_OIDC == 'true' && env.ENABLE_PUSH == 'true' }}
-        uses: aws-actions/configure-aws-credentials@v5
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
         with:
           aws-region: ${{ inputs.aws-region }}
           role-to-assume: arn:aws:iam::${{ inputs.aws-account-id }}:role/${{ inputs.aws-role }}
@@ -301,7 +301,7 @@ jobs:
       - name: Login to Amazon ECR
         if: ${{ env.ENABLE_LOGIN_OIDC == 'true' && env.ENABLE_PUSH == 'true' }}
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
+        uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2
 
       - name: Prepare build args
         id: build-args
@@ -317,7 +317,7 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ${{ inputs.image-name }}
           tags: |
@@ -330,7 +330,7 @@ jobs:
 
       - name: Build and push Docker image
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6
         with:
           context: ${{ inputs.context-path }}
           file: ${{ inputs.dockerfile-path }}
@@ -354,7 +354,7 @@ jobs:
     if: github.event_name == 'pull_request' && success()
     steps:
       - name: Add PR Comment
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
           script: |
             // 1. Retrieve existing bot comments for the PR

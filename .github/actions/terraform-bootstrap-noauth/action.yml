@@ -37,13 +37,13 @@ runs:
   using: "composite"
   steps:
     - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
+      uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
       with:
         terraform_version: ${{ inputs.terraform-version }}
     - name: Enable Private Modules
       id: get_workflow_token
       if: ${{ inputs.enable-private-access == 'true' }}
-      uses: actions/create-github-app-token@v2
+      uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2
       with:
         app-id: ${{ inputs.actions-id }}
         private-key: ${{ inputs.actions-secret }}
