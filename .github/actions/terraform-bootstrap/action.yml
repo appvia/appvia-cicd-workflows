@@ -67,11 +67,11 @@ runs:
   using: "composite"
   steps:
     - name: Setup node
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
       with:
         node-version: 16
     - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
+      uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
       with:
         terraform_version: ${{ inputs.terraform-version }}
     - name: Retrieve Web Identity Token for AWS Authentication
@@ -96,7 +96,7 @@ runs:
         fi
     - name: Authenticate with AWS
       id: auth
-      uses: aws-actions/configure-aws-credentials@v4
+      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
       with:
         aws-region: ${{ inputs.aws-region }}
         role-session-name: ${{ github.event.repository.name }}
@@ -118,7 +118,7 @@ runs:
     - name: Enable Private Modules
       id: get_workflow_token
       if: ${{ inputs.enable-private-access == 'true' }}
-      uses: actions/create-github-app-token@v2
+      uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2
       with:
         app-id: ${{ inputs.actions-id }}
         private-key: ${{ inputs.actions-secret }}

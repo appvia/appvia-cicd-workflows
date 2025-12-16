@@ -237,11 +237,11 @@ jobs:
       result: ${{ steps.commitlint.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           fetch-depth: 0
       - name: Setup node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6
         with:
           node-version: 16
       - name: Install Dependencies
@@ -263,7 +263,7 @@ jobs:
       result: ${{ steps.hclfmt.outcome }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
       - name: Terragrunt HCL Format
         id: hclfmt
@@ -280,15 +280,15 @@ jobs:
       result: ${{ steps.render.outcome }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
           terraform_version: ${{ inputs.terraform-version }}
 
       - name: Setup Terragrunt
-        uses: gruntwork-io/terragrunt-action@v3
+        uses: gruntwork-io/terragrunt-action@95fc057922e3c3d4cc021a81a213f088f333ddef # v3
         with:
           tg_version: ${{ inputs.terragrunt-version }}
           tf_path: /bin/terraform
@@ -308,7 +308,7 @@ jobs:
       result: ${{ steps.format.outcome }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
       - name: Terragrunt Bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@main
@@ -348,7 +348,7 @@ jobs:
       result: ${{ steps.lint.outcome }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
       - name: Terragrunt Bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@main
@@ -370,7 +370,7 @@ jobs:
           use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
 
       - name: Setup TFLint
-        uses: terraform-linters/setup-tflint@v6
+        uses: terraform-linters/setup-tflint@4cb9feea73331a35b422df102992a03a44a3bb33 # v6
         with:
           tflint_version: latest
 
@@ -413,7 +413,7 @@ jobs:
       result: ${{ steps.security.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       - name: Check If Trivy Ignore File Exists
         id: security-exceptions
         run: |
@@ -458,7 +458,7 @@ jobs:
       result: ${{ steps.diff.outputs.result }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
       - name: Terragrunt Inputs Diff
         id: diff
@@ -484,7 +484,7 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
       - name: Terragrunt Plan Matrix
         id: matrix
@@ -521,7 +521,7 @@ jobs:
       result-validate: ${{ steps.validate.outcome }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
       - name: Extract Directory Name
         id: extract-directory-name
@@ -592,7 +592,7 @@ jobs:
       TF_VAR_github_token: ${{ secrets.github-token }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
       - name: Terragrunt Bootstrap
         id: bootstrap
@@ -642,13 +642,13 @@ jobs:
       - terragrunt-plan
     steps:
       - name: Setup Infracost
-        uses: infracost/actions/setup@v3
+        uses: infracost/actions/setup@e9d6e6cd65e168e76b0de50ff9957d2fe8bb1832 # v3
         with:
           api-key: ${{ secrets.infracost-api-key }}
           currency: GBP
 
       - name: Download tfplan
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
 
@@ -688,7 +688,7 @@ jobs:
       - debug-mode
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
       - name: Terraform Bootstrap
         id: init
@@ -738,7 +738,7 @@ jobs:
       - terragrunt-security
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       - name: Add PR Comment
         uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-pr@main
         with:
@@ -772,7 +772,7 @@ jobs:
       - terragrunt-security
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
       - name: Add PR Comment
         uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-pr@main
         with:
