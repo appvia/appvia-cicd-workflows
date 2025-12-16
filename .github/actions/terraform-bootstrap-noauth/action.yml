@@ -45,8 +45,8 @@ runs:
       if: ${{ inputs.enable-private-access == 'true' }}
       uses: actions/create-github-app-token@v2
       with:
-        app_id: ${{ inputs.actions-id }}
-        private_key: ${{ inputs.actions-secret }}
+        app-id: ${{ inputs.actions-id }}
+        private-key: ${{ inputs.actions-secret }}
         owner: ${{ inputs.organization-name }}
     - name: Setup Credentials
       if: ${{ inputs.enable-private-access == 'true' }}

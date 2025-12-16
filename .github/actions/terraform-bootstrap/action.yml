@@ -120,8 +120,8 @@ runs:
       if: ${{ inputs.enable-private-access == 'true' }}
       uses: actions/create-github-app-token@v2
       with:
-        app_id: ${{ inputs.actions-id }}
-        private_key: ${{ inputs.actions-secret }}
+        app-id: ${{ inputs.actions-id }}
+        private-key: ${{ inputs.actions-secret }}
         owner: ${{ inputs.organization-name }}
     # - name: Enable Private Modules
     #   id: get_workflow_token
@@ -129,7 +129,7 @@ runs:
     #   uses: peter-murray/workflow-application-token-action@v4
     #   with:
     #     application_id: ${{ inputs.actions-id }}
-    #     application_private_key: ${{ inputs.actions-secret }}
+    #     application_private-key: ${{ inputs.actions-secret }}
     #     organization: ${{ inputs.organization-name }}
     #     revoke_token: true
     - name: Setup Credentials
