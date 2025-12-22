@@ -48,7 +48,7 @@ runs:
   steps:
     - name: Add PR Comment
       id: update
-      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
       with:
         script: |
           // 1. Retrieve existing bot comments for the PR
