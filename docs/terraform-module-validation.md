@@ -43,11 +43,34 @@ jobs:
     uses: appvia/appvia-cicd-workflows/.github/workflows/terraform-module-validation.yml@main
     name: Module Validation
     secrets:
-      # Required if you want to run infracost
+      # Optional: Required if you want to run infracost
       infracost-api-key: ${{ secrets.ORG_INFRACOST_API_KEY }}
     with:
-      aws-account-id: <ACCOUNT_ID>
-      aws-region: <AWS_REGION>
       # Optional toggle to enable infracost
       enable-infracost: true
 ```
+
+## Inputs
+
+### Optional Inputs
+
+- `cicd-repository` - Default: "appvia/appvia-cicd-workflows". The repository to pull the CI/CD workflows from
+- `cicd-branch` - Default: "main". The branch to pull the CI/CD workflows from
+- `enable-infracost` - Default: false. Whether to run infracost on the Terraform Plan (requires `infracost-api-key` secret)
+- `enable-commitlint` - Default: true. Whether to run commitlint on commit messages
+- `enable-checkov` - Default: true. Whether to run Checkov security scanning
+- `enable-private-access` - Default: false. Flag to state if terraform requires pulling private modules
+- `enable-terraform-tests` - Default: true. Whether to run `terraform test`
+- `organization-name` - Default: "appvia". The name of the GitHub organization
+- `terraform-dir` - Default: ".". The directory to validate
+- `terraform-init-extra-args` - Extra arguments to pass to terraform init
+- `terraform-tests-dir` - Default: ".". The terraform test directory
+- `terraform-version` - Default: "1.11.2". The version of terraform to use
+- `trivy-version` - Default: "v0.56.2". The version of trivy to use
+- `working-directory` - Default: ".". Working directory
+
+### Optional Secrets
+
+- `infracost-api-key` - The API key for infracost (required if `enable-infracost` is true)
+- `actions-secret` - The GitHub App secret for the Actions App
+- `actions-id` - The GitHub App ID for the Actions App

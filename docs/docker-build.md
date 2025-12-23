@@ -99,14 +99,12 @@ jobs:
       context-path: .
       dockerfile-path: ./docker/Dockerfile
       enable-buildkit: true
-      enable-dockerfile-lint: true
       enable-oidc: true
-      enable-security-scan: true
+      enable-push: true
       fail-on-vulnerabilities: true
       registry: 123456789012.dkr.ecr.eu-west-2.amazonaws.com
-      image-name: myapplication 
+      image-name: myapplication
       image-tag: v0.0.1
-      push-image: true
       trivy-severity: "CRITICAL,HIGH"
 ```
 
@@ -125,10 +123,10 @@ jobs:
 
 - `dockerfile-path`: Path to Dockerfile (default: `Dockerfile`)
 - `context-path`: Build context path (default: `.`)
-- `ecr-repository`: ECR repository name (defaults to repository name)
 - `build-args`: Docker build arguments as comma-separated `key=value` pairs
 - `cache-from`: Cache from image tag (e.g., `latest` or previous build tag)
 - `working-directory`: Working directory for build (default: `.`)
+- `image-platforms`: Platforms to build the image for (default: `linux/amd64,linux/arm64`)
 
 #### AWS Configuration
 
@@ -140,7 +138,7 @@ jobs:
 #### Feature Flags
 
 - `enable-buildkit`: Enable Docker BuildKit (default: `true`)
-- `push-image`: Push image to ECR (default: `true`)
+- `enable-push`: Push image to registry (default: `true`; automatically disabled for pull requests)
 
 #### Security Configuration
 
@@ -196,7 +194,7 @@ When using access keys (`use-oidc: false`), provide the following secrets:
 - `aws-access-key-id`: AWS Access Key ID
 - `aws-secret-access-key`: AWS Secret Access Key
 
-### Registry Credentiasl
+### Registry Credentials
 
 When not using OIDC or AWS credentials, you can also pass docker username and password credentials
 

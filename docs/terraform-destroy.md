@@ -29,19 +29,54 @@ jobs:
 And we can create another workflow file in your Terraform repository (e.g. `.github/workflows/terraform-destroy.yml`) with the below contents:
 
 ```yml
-name: Terraform
+name: Terraform Destroy
 on:
   workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Enter the repository name to confirm deletion'
+        required: true
+        type: string
 
 jobs:
   terraform-destroy:
     uses: appvia/appvia-cicd-workflows/.github/workflows/terraform-destroy.yml@main
     name: Destroy
     with:
-      aws-account: 123456789012
+      confirmation: ${{ github.event.inputs.confirmation }}
+      aws-account-id: 123456789012
       aws-role: <IAM_ROLE_NAME>
 ```
 
-The `aws-role` inputs are optional and will default to the repository name.
+**IMPORTANT:** The `confirmation` input is required and must match the repository name (`owner/repo`) to prevent accidental deletion.
+
+OPTIONAL INPUTS:
+- `aws-role` - Defaults to the repository name
+- `aws-region` - Default: "eu-west-2"
+- `environment` - Default: "production"
+- `terraform-version` - Default: "1.11.2"
+- `terraform-dir` - Default: "."
+- `terraform-values-file` - Default: "values/<environment>.tfvars"
+- `terraform-lock-timeout` - Default: "30s"
+- `working-directory` - Default: "."
+- `use-env-as-suffix` - Default: false
+- `runs-on` - Default: "ubuntu-latest"
+- `enable-private-access` - Default: false
+- `organization-name` - Default: "appvia"
+- `aws-read-role-name` - Custom role name for read-only access
+- `aws-write-role-name` - Custom role name for read-write access
+- `additional-dir` - Upload additional directory as artifact
+- `additional-dir-optional` - Default: false
+- `terraform-init-extra-args` - Extra arguments to pass to terraform init
+- `terraform-plan-extra-args` - Extra arguments to pass to terraform plan
+- `terraform-apply-extra-args` - Extra arguments to pass to terraform apply
+- `terraform-state-key` - Default: "<repo-name>.tfstate"
+- `terraform-log-level` - The log level of terraform
+- `cicd-repository` - Default: "appvia/appvia-cicd-workflows"
+- `cicd-branch` - Default: "main"
+
+OPTIONAL SECRETS:
+- `actions-id` - The GitHub App ID for the Actions App
+- `actions-secret` - The GitHub App secret for the Actions App
 
 **Note:** This template may change over time, so it is recommended that you point to a tagged version rather than the main branch.

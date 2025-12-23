@@ -1,4 +1,4 @@
-# Terraform Draft Workflow for AWS Infrastructure
+# Terraform Drift Workflow for AWS Infrastructure
 
 This workflow is used to run an scheduled or manually triggered drift detection on AWS infrastructure and alert in Slack if a change is detected, using GitHub Actions workflow template ([terraform-drift.yml](../.github/workflows/terraform-drift.yml))
 In order to trigger the workflow, firstly the workflow must be referenced from the calling workflow flow, see below.
@@ -40,7 +40,6 @@ jobs:
 ```
 
 REQUIRED INPUTS:
-- `slack-webhook-url` - Slack Webhook to a channel/app, stored as a secret in your Github Actions Secrets
 - `aws-account-id` - AWS account number where the infrastructure is deployed, and consequently planned against
 
 OPTIONAL INPUTS:
@@ -51,11 +50,19 @@ OPTIONAL INPUTS:
 - `environment` - Default: "production"
 - `use-env-as-suffix` - Default: false, Whether to use the environment as a suffix for the state file and iam roles
 - `runs-on` - Default: "ubuntu-latest"
-- `terraform-dir` - Default: ".", 
+- `terraform-dir` - Default: "."
+- `terraform-init-extra-args` - Extra arguments to pass to terraform init
 - `terraform-lock-timeout` - Default: "30s"
 - `terraform-state-key` - Default: <repo-name>.tfstate
 - `terraform-values-file` - Default: <environment>.tfvars
 - `terraform-version` - Default: "1.11.2"
 - `working-directory` - Default: "."
+- `enable-private-access` - Default: false
+- `organization-name` - Default: "appvia"
+
+OPTIONAL SECRETS:
+- `slack-webhook-url` - Slack Webhook to a channel/app, stored as a secret in your Github Actions Secrets
+- `actions-id` - The GitHub App ID for the Actions App
+- `actions-secret` - The GitHub App secret for the Actions App
 
 **Note:** This template may change over time, so it is recommended that you point to a tagged version rather than the main branch.

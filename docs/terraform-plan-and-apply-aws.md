@@ -38,12 +38,57 @@ jobs:
     secrets:
       infracost-api-key: ${{ secrets.ORG_INFRACOST_API_KEY }}
     with:
-      aws-account: 123456789012
+      aws-account-id: 123456789012
       aws-role: <IAM_ROLE_NAME>
       enable-infracost: true
 ```
 
-The `aws-role` inputs are optional and will default to the repository name.
+## Inputs
+
+### Required Inputs
+
+- `aws-account-id` - The AWS account ID to deploy to
+
+### Optional Inputs
+
+- `additional-dir` - Upload additional directory as artifact from plan stage
+- `additional-dir-optional` - Default: false. Uploads additional directory as artifact from plan stage
+- `aws-role` - Default: Repository Name. The AWS role to assume
+- `aws-read-role-name` - Overrides the default behavior, and uses a custom role name for read-only access
+- `aws-write-role-name` - Overrides the default behavior, and uses a custom role name for read-write access
+- `aws-region` - Default: "eu-west-2". The AWS region to deploy to
+- `cicd-repository` - Default: "appvia/appvia-cicd-workflows". The repository to pull the CI/CD workflows from
+- `cicd-branch` - Default: "main". The branch to pull the CI/CD workflows from
+- `enable-infracost` - Default: false. Whether to run infracost on the Terraform Plan (requires `infracost-api-key` secret)
+- `enable-checkov` - Default: true. Whether to run Checkov security scanning
+- `enable-commitlint` - Default: true. Whether to run commitlint on the commit message
+- `enable-terraform-apply` - Default: true. Whether to run terraform apply on merge to main
+- `enable-private-access` - Default: false. Flag to state if terraform requires pulling private modules
+- `organization-name` - Default: "appvia". The name of the GitHub organization
+- `environment` - Default: "production". The environment to deploy to
+- `runs-on` - Default: "ubuntu-latest". Single label value for the GitHub runner to use
+- `terraform-apply-extra-args` - Extra arguments to pass to terraform apply
+- `terraform-dir` - Default: ".". The directory to validate
+- `terraform-init-extra-args` - Extra arguments to pass to terraform init
+- `terraform-lock-timeout` - Default: "30s". The time to wait for a lock
+- `terraform-log-level` - The log level of terraform
+- `terraform-plan-extra-args` - Extra arguments to pass to terraform plan
+- `terraform-state-key` - Default: "<repo-name>.tfstate". The key of the terraform state
+- `terraform-values-file` - Default: "values/<environment>.tfvars". The values file to use
+- `terraform-parallelism` - Default: 20. The number of parallel operations to run
+- `terraform-version` - Default: "1.11.2". The version of terraform to use
+- `trivy-version` - Default: "v0.60.0". The version of trivy to use
+- `working-directory` - Default: ".". The working directory to run terraform commands in
+- `use-env-as-suffix` - Default: false. Whether to use the environment as a suffix for the state file and iam roles
+
+### Optional Secrets
+
+- `infracost-api-key` - The API key for infracost (required if `enable-infracost` is true)
+- `actions-id` - The GitHub App ID for the Actions App
+- `actions-secret` - The GitHub App secret for the Actions App
+- `gh-provider-app-id` - GitHub provider app ID
+- `gh-provider-installation-id` - GitHub provider installation ID
+- `gh-provider-private-key` - Base64 encoded private key for GitHub provider app
 
 **Note:** This template may change over time, so it is recommended that you point to a tagged version rather than the main branch.
 
