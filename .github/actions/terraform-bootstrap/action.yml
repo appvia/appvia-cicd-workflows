@@ -99,9 +99,9 @@ runs:
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
       with:
         aws-region: ${{ inputs.aws-region }}
+        mask-aws-account-id: "true"
         role-session-name: ${{ github.event.repository.name }}
         role-to-assume: arn:aws:iam::${{ inputs.aws-account-id }}:role/${{ steps.role.outputs.name }}
-        mask-aws-account-id: "no"
     - name: Set terraform-state-key variable
       id: state-key
       shell: bash
