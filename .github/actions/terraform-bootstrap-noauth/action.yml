@@ -1,34 +1,31 @@
 ---
-name: "Terraform bootstrap"
+name: "Terraform Bootstrap (Unauth)"
 description: "Terraform bootstrapping including init, no auth required"
 inputs:
   actions-id:
     description: "The application ID for the workflow token"
     required: false
-    type: string
   actions-secret:
     description: "The application secret for the workflow token"
     required: false
-    type: string
   enable-private-access:
     description: Optional flag to state if terraform requires pulling private modules
-    type: boolean
-    default: false
+    required: true
   organization-name:
     description: "The name of the Github organization"
-    type: string
+    required: false
   terraform-dir:
     description: "The directory to validate"
-    type: string
+    required: true
   terraform-init-extra-args:
     description: "Extra arguments to pass to terraform init"
-    type: string
+    required: false
   terraform-version:
     description: "The version of terraform to use"
-    type: string
+    required: true
   working-directory:
     description: "The working directory to run the action in"
-    type: string
+    required: true
 outputs:
   outcome-init:
     description: "Outcome of the init step"

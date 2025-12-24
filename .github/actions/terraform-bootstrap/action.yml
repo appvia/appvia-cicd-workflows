@@ -1,59 +1,58 @@
 ---
+name: Terraform Bootstrap
+description: "Terraform bootstrapping including AWS auth, init with S3 backend"
 inputs:
   actions-id:
     description: "The application ID for the workflow token"
     required: false
-    type: string
   actions-secret:
     description: "The application secret for the workflow token"
     required: false
-    type: string
   aws-account-id:
     description: "The AWS account ID to deploy to"
-    type: string
+    required: true
   aws-read-role-name:
     description: "Overrides the default behavior, and uses a custom role name for read-only access"
-    type: string
+    required: false
   aws-role:
     description: "The role to assume"
-    type: string
+    required: true
   aws-web-identity-token-file:
     description: "The file to store the web identity token in"
-    type: string
+    required: true
   aws-write-role-name:
     description: "Overrides the default behavior, and uses a custom role name for read-write access"
-    type: string
+    required: false
   aws-region:
     description: "The AWS region to deploy to"
-    type: string
+    required: true
   enable-private-access:
     description: Optional flag to state if terraform requires pulling private modules
-    type: boolean
-    default: false
+    required: true
   environment:
     description: "The environment to deploy to"
-    type: string
+    required: false
   organization-name:
     description: "The name of the Github organization"
-    type: string
+    required: false
   terraform-dir:
     description: "The directory to validate"
-    type: string
+    required: true
   terraform-init-extra-args:
     description: "Extra arguments to pass to terraform init"
-    type: string
+    required: false
   terraform-state-key:
     description: "The key of the terraform state (default: <repo-name>.tfstate)"
-    type: string
+    required: false
   terraform-version:
     description: "The version of terraform to use"
-    type: string
+    required: true
   use-env-as-suffix:
     description: "Whether to use the environment as a suffix for the state file and iam roles"
-    type: boolean
+    required: false
   working-directory:
     description: "The working directory to run the action in"
-    type: string
+    required: true
 outputs:
   outcome-auth:
     description: "Outcome of the auth step"
