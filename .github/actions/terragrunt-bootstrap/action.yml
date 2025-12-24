@@ -26,6 +26,14 @@ inputs:
     description: "The file to store the web identity token in"
     required: true
 
+  enable-private-access:
+    description: Optional flag to state if terragrunt requires pulling private modules
+    required: false
+
+  organization-name:
+    description: "The name of the Github organization"
+    required: false
+
   terragrunt-dir:
     description: "The directory to validate"
     required: true

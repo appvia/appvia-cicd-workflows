@@ -107,6 +107,12 @@ on:
         required: false
         type: string
 
+      organization-name:
+        description: "The name of the Github organization (private modules access)"
+        required: false
+        type: string
+        default: "appvia"
+
       runs-on:
         default: "ubuntu-latest"
         description: "Single label value for the GitHub runner to use"
@@ -258,7 +264,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+      - name: Setup Terragrunt
+        uses: gruntwork-io/terragrunt-action@95fc057922e3c3d4cc021a81a213f088f333ddef # v3
+        with:
+          tg_version: ${{ inputs.terragrunt-version }}
+          tf_path: /bin/terraform
       - name: Terragrunt HCL Format
         id: hclfmt
         run: |
@@ -275,18 +289,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
           terraform_version: ${{ inputs.terraform-version }}
-
       - name: Setup Terragrunt
         uses: gruntwork-io/terragrunt-action@95fc057922e3c3d4cc021a81a213f088f333ddef # v3
         with:
           tg_version: ${{ inputs.terragrunt-version }}
           tf_path: /bin/terraform
-
       - name: Terragrunt Render
         id: render
         run: |
@@ -310,6 +321,7 @@ jobs:
           actions-id: ${{ secrets.actions-id }}
           actions-secret: ${{ secrets.actions-secret }}
           enable-private-access: ${{ inputs.enable-private-access }}
+          organization-name: ${{ inputs.organization-name }}
           terragrunt-dir: ${{ inputs.terragrunt-dir }}
           terraform-version: ${{ inputs.terraform-version }}
           terragrunt-version: ${{ inputs.terragrunt-version }}
@@ -341,6 +353,7 @@ jobs:
           actions-id: ${{ secrets.actions-id }}
           actions-secret: ${{ secrets.actions-secret }}
           enable-private-access: ${{ inputs.enable-private-access }}
+          organization-name: ${{ inputs.organization-name }}
           terragrunt-dir: ${{ inputs.terragrunt-dir }}
           terraform-version: ${{ inputs.terraform-version }}
           terragrunt-version: ${{ inputs.terragrunt-version }}
@@ -403,6 +416,7 @@ jobs:
           actions-id: ${{ secrets.actions-id }}
           actions-secret: ${{ secrets.actions-secret }}
           enable-private-access: ${{ inputs.enable-private-access }}
+          organization-name: ${{ inputs.organization-name }}
           terragrunt-dir: ${{ inputs.terragrunt-dir }}
           terraform-version: ${{ inputs.terraform-version }}
           terragrunt-version: ${{ inputs.terragrunt-version }}
@@ -508,6 +522,7 @@ jobs:
           aws-write-role-name: ${{ inputs.aws-write-role-name }}
           enable-private-access: ${{ inputs.enable-private-access }}
           environment: ${{ inputs.environment }}
+          organization-name: ${{ inputs.organization-name }}
           terragrunt-dir: ${{ steps.extract-directory-name.outputs.directory_name }}
           terraform-version: ${{ inputs.terraform-version }}
           terragrunt-version: ${{ inputs.terragrunt-version }}
@@ -573,6 +588,7 @@ jobs:
           aws-write-role-name: ${{ inputs.aws-write-role-name }}
           enable-private-access: ${{ inputs.enable-private-access }}
           environment: ${{ inputs.environment }}
+          organization-name: ${{ inputs.organization-name }}
           terragrunt-dir: ${{ inputs.terragrunt-dir }}
           terraform-version: ${{ inputs.terraform-version }}
           terragrunt-version: ${{ inputs.terragrunt-version }}
@@ -668,6 +684,7 @@ jobs:
           aws-write-role-name: ${{ inputs.aws-write-role-name }}
           enable-private-access: ${{ inputs.enable-private-access }}
           environment: ${{ inputs.environment }}
+          organization-name: ${{ inputs.organization-name }}
           terragrunt-dir: ${{ inputs.terragrunt-dir }}
           terraform-version: ${{ inputs.terraform-version }}
           terragrunt-version: ${{ inputs.terragrunt-version }}
