@@ -22,7 +22,7 @@ on:
     inputs:
       aws-account-id:
         description: "The AWS account ID to deploy to"
-        required: true
+        required: false
         type: string
 
       aws-role:
@@ -100,12 +100,6 @@ on:
         required: false
         default: false
         type: boolean
-
-      organization-name:
-        description: "The name of the Github organization"
-        required: false
-        type: string
-        default: "appvia"
 
       environment:
         default: "production"
@@ -310,24 +304,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
-      - name: Terragrunt Bootstrap
-        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@main
+      - name: Terragrunt Bootstrap (Unauth)
+        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap-unauth@main
         with:
           actions-id: ${{ secrets.actions-id }}
           actions-secret: ${{ secrets.actions-secret }}
-          aws-account-id: ${{ inputs.aws-account-id }}
-          aws-read-role-name: ${{ inputs.aws-read-role-name }}
-          aws-region: ${{ inputs.aws-region }}
-          aws-role: ${{ inputs.aws-role }}
-          aws-web-identity-token-file: ${{ inputs.aws-web-identity-token-file }}
-          aws-write-role-name: ${{ inputs.aws-write-role-name }}
           enable-private-access: ${{ inputs.enable-private-access }}
-          environment: ${{ inputs.environment }}
-          organization-name: ${{ inputs.organization-name }}
           terragrunt-dir: ${{ inputs.terragrunt-dir }}
           terraform-version: ${{ inputs.terraform-version }}
           terragrunt-version: ${{ inputs.terragrunt-version }}
-          use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
 
       - name: Format Terragrunt files
         id: format
@@ -350,24 +335,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
-      - name: Terragrunt Bootstrap
-        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@main
+      - name: Terragrunt Bootstrap (Unauth)
+        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap-unauth@main
         with:
           actions-id: ${{ secrets.actions-id }}
           actions-secret: ${{ secrets.actions-secret }}
-          aws-account-id: ${{ inputs.aws-account-id }}
-          aws-read-role-name: ${{ inputs.aws-read-role-name }}
-          aws-region: ${{ inputs.aws-region }}
-          aws-role: ${{ inputs.aws-role }}
-          aws-web-identity-token-file: ${{ inputs.aws-web-identity-token-file }}
-          aws-write-role-name: ${{ inputs.aws-write-role-name }}
           enable-private-access: ${{ inputs.enable-private-access }}
-          environment: ${{ inputs.environment }}
-          organization-name: ${{ inputs.organization-name }}
           terragrunt-dir: ${{ inputs.terragrunt-dir }}
           terraform-version: ${{ inputs.terraform-version }}
           terragrunt-version: ${{ inputs.terragrunt-version }}
-          use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
 
       - name: Setup TFLint
         uses: terraform-linters/setup-tflint@4cb9feea73331a35b422df102992a03a44a3bb33 # v6
@@ -420,26 +396,16 @@ jobs:
           if [ -e ".trivyignore" ]; then
             echo filename=".trivyignore" >> "${GITHUB_OUTPUT}"
           fi
-      - name: Terragrunt Bootstrap
+      - name: Terragrunt Bootstrap (Unauth)
         id: bootstrap
-        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@main
+        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap-unauth@main
         with:
           actions-id: ${{ secrets.actions-id }}
           actions-secret: ${{ secrets.actions-secret }}
-          aws-account-id: ${{ inputs.aws-account-id }}
-          aws-read-role-name: ${{ inputs.aws-read-role-name }}
-          aws-region: ${{ inputs.aws-region }}
-          aws-role: ${{ inputs.aws-role }}
-          aws-web-identity-token-file: ${{ inputs.aws-web-identity-token-file }}
-          aws-write-role-name: ${{ inputs.aws-write-role-name }}
           enable-private-access: ${{ inputs.enable-private-access }}
-          environment: ${{ inputs.environment }}
-          organization-name: ${{ inputs.organization-name }}
           terragrunt-dir: ${{ inputs.terragrunt-dir }}
           terraform-version: ${{ inputs.terraform-version }}
           terragrunt-version: ${{ inputs.terragrunt-version }}
-          use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
-
       - name: Run Trivy vulnerability
         id: security
         run: |
@@ -542,7 +508,6 @@ jobs:
           aws-write-role-name: ${{ inputs.aws-write-role-name }}
           enable-private-access: ${{ inputs.enable-private-access }}
           environment: ${{ inputs.environment }}
-          organization-name: ${{ inputs.organization-name }}
           terragrunt-dir: ${{ steps.extract-directory-name.outputs.directory_name }}
           terraform-version: ${{ inputs.terraform-version }}
           terragrunt-version: ${{ inputs.terragrunt-version }}
@@ -608,7 +573,6 @@ jobs:
           aws-write-role-name: ${{ inputs.aws-write-role-name }}
           enable-private-access: ${{ inputs.enable-private-access }}
           environment: ${{ inputs.environment }}
-          organization-name: ${{ inputs.organization-name }}
           terragrunt-dir: ${{ inputs.terragrunt-dir }}
           terraform-version: ${{ inputs.terraform-version }}
           terragrunt-version: ${{ inputs.terragrunt-version }}
@@ -704,7 +668,6 @@ jobs:
           aws-write-role-name: ${{ inputs.aws-write-role-name }}
           enable-private-access: ${{ inputs.enable-private-access }}
           environment: ${{ inputs.environment }}
-          organization-name: ${{ inputs.organization-name }}
           terragrunt-dir: ${{ inputs.terragrunt-dir }}
           terraform-version: ${{ inputs.terraform-version }}
           terragrunt-version: ${{ inputs.terragrunt-version }}

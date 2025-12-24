@@ -68,7 +68,7 @@ on:
 
       runs-on:
         default: "ubuntu-latest"
-        description: "Single label value for the GitHub runner to use (custom value only applies to Terraform Plan and Apply steps)"
+        description: "Single label value for the GitHub runner to use"
         required: false
         type: string
 

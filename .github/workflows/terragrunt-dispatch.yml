@@ -5,12 +5,12 @@ on:
     inputs:
       aws-account-id:
         description: "The AWS account ID to deploy to"
-        required: true
+        required: false
         type: string
 
       aws-role:
         description: "The AWS role to assume"
-        required: true
+        required: false
         type: string
 
       enable_plan:

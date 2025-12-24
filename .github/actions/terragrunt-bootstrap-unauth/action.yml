@@ -1,35 +1,35 @@
 ---
-name: "Terraform bootstrap"
-description: "Terraform bootstrapping including init, no auth required"
+name: "Terragrunt Bootstrap Unauth"
+description: "Uses the bootstrap the Terragrunt environment"
 inputs:
   actions-id:
     description: "The application ID for the workflow token"
     required: false
-    type: string
+
   actions-secret:
     description: "The application secret for the workflow token"
     required: false
-    type: string
-  enable-private-access:
-    description: Optional flag to state if terraform requires pulling private modules
-    type: boolean
-    default: false
-  organization-name:
-    description: "The name of the Github organization"
-    type: string
-  terraform-dir:
+
+  terragrunt-dir:
     description: "The directory to validate"
-    type: string
-  terraform-init-extra-args:
-    description: "Extra arguments to pass to terraform init"
-    type: string
+    required: true
+
   terraform-version:
-    description: "The version of terraform to use"
-    type: string
+    description: "The version of terraform or opentofu to use"
+    required: true
+
+  terragrunt-version:
+    description: "The version of terragrunt to use"
+    required: true
+
   working-directory:
     description: "The working directory to run the action in"
-    type: string
+    required: true
+
 outputs:
+  outcome-auth:
+    description: "Outcome of the auth step"
+    value: ${{ steps.auth.outcome }}
   outcome-init:
     description: "Outcome of the init step"
     value: ${{ steps.init.outcome }}
@@ -37,10 +37,22 @@ outputs:
 runs:
   using: "composite"
   steps:
+    - name: Setup node
+      uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6
+      with:
+        node-version: 16
+
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
       with:
         terraform_version: ${{ inputs.terraform-version }}
+
+    - name: Setup Terragrunt
+      uses: gruntwork-io/terragrunt-action@95fc057922e3c3d4cc021a81a213f088f333ddef # v3
+      with:
+        tg_version: ${{ inputs.terragrunt-version }}
+        tf_path: /bin/terraform
+
     - name: Enable Private Modules
       id: get_workflow_token
       if: ${{ inputs.enable-private-access == 'true' }}
@@ -49,13 +61,9 @@ runs:
         app-id: ${{ inputs.actions-id }}
         private-key: ${{ inputs.actions-secret }}
         owner: ${{ inputs.organization-name }}
+
     - name: Setup Credentials
       if: ${{ inputs.enable-private-access == 'true' }}
       shell: bash
       run: |
         git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
-    - name: Terraform Init
-      id: init
-      shell: bash
-      working-directory: ${{ inputs.working-directory }}
-      run: terraform -chdir=${{ inputs.terraform-dir }} init -backend=false ${{ inputs.terraform-init-extra-args }}

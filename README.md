@@ -2,15 +2,27 @@
 
 This repository contains a collection of GitHub Actions workflow templates that can be used with various types of repositories to automate the build, test, and deployment of applications and infrastructure.
 
-## Workflow's
+## Workflows
 
 Please refer to the following documentation for more information on the workflows:
 
-- [Docker Build, Push & Security Scan](./docs/docker-build.md)
-- [Terraform Plan & Apply (AWS)](./docs/terraform-plan-and-apply-aws.md)
-- [Terraform Module Validation](./docs/terraform-module-validation.md)
-- [Terraform Module Release](./docs/terraform-module-release.md)
-- [Terraform Destroy (AWS)](./docs/terraform-destroy.md)
+### Terraform Workflows
+- [Terraform Plan & Apply (AWS)](./docs/terraform-plan-and-apply-aws.md) - Automated Terraform deployment pipeline for AWS
+- [Terraform Module Validation](./docs/terraform-module-validation.md) - Validate Terraform modules
+- [Terraform Module Release](./docs/terraform-module-release.md) - Release and publish Terraform modules
+- [Terraform Destroy (AWS)](./docs/terraform-destroy.md) - Safely destroy Terraform-managed infrastructure
+- [Terraform Drift Detection](./docs/terraform-drift.md) - Detect configuration drift in deployed infrastructure
+
+### Terragrunt Workflows
+- [Terragrunt Plan & Apply (AWS)](./docs/terragrunt-plan-and-apply-aws.md) - Automated Terragrunt deployment pipeline for AWS
+- [Terragrunt Manual Dispatch](./docs/terragrunt-dispatch.md) - Manually trigger Terragrunt operations
+
+### Docker Workflows
+- [Docker Build, Push & Security Scan](./docs/docker-build.md) - Build, scan, and push Docker images
+
+### Utility Workflows
+- [GitHub Workflow Validation](./docs/github-workflow-validation.md) - Validate GitHub Actions workflow files
+- [Template Update](./docs/template-update.md) - Keep repository files in sync with templates
 
 ## How to setup Deployment Protection & Approval
 
