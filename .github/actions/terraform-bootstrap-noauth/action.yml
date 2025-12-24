@@ -38,6 +38,7 @@ runs:
       uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
       with:
         terraform_version: ${{ inputs.terraform-version }}
+
     - name: Enable Private Modules
       id: get_workflow_token
       if: ${{ inputs.enable-private-access == 'true' }}
@@ -46,11 +47,13 @@ runs:
         app-id: ${{ inputs.actions-id }}
         private-key: ${{ inputs.actions-secret }}
         owner: ${{ inputs.organization-name }}
+
     - name: Setup Credentials
       if: ${{ inputs.enable-private-access == 'true' }}
       shell: bash
       run: |
         git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
+        
     - name: Terraform Init
       id: init
       shell: bash

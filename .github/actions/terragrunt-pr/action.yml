@@ -5,35 +5,27 @@ inputs:
   status-format:
     description: "The format of the status comment"
     required: true
-
   status-hcl-format:
     description: "The HCL format of the status comment"
     required: true
-
   status-inputs-render:
     description: "The inputs render of the status comment"
     required: true
-
   status-inputs-diff:
     description: "The inputs diff of the status comment"
     required: true
-
   status-linting:
     description: "The linting of the status comment"
     required: true
-
   status-security:
     description: "The security of the status comment"
     required: true
-
   status-auth:
     description: "The authentication of the status comment"
     required: true
-
   status-plan:
     description: "The plan of the status comment"
     required: true
-
   status-commitlint:
     description: "The commitlint of the status comment"
     required: true

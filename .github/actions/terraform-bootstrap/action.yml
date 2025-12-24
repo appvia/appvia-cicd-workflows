@@ -68,15 +68,18 @@ runs:
       uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6
       with:
         node-version: 16
+
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
       with:
         terraform_version: ${{ inputs.terraform-version }}
+
     - name: Retrieve Web Identity Token for AWS Authentication
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       run: |
         curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" | jq -r '.value' > "${{ inputs.aws-web-identity-token-file }}"
+
     - name: Determine AWS Role
       id: role
       shell: bash
@@ -92,6 +95,7 @@ runs:
         else
           echo "name=${aws_read_role_name:-${{ inputs.aws-role }}${role_suffix}-ro}" >> "${GITHUB_OUTPUT}"
         fi
+
     - name: Authenticate with AWS
       id: auth
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
@@ -100,6 +104,7 @@ runs:
         mask-aws-account-id: "true"
         role-session-name: ${{ github.event.repository.name }}
         role-to-assume: arn:aws:iam::${{ inputs.aws-account-id }}:role/${{ steps.role.outputs.name }}
+
     - name: Set terraform-state-key variable
       id: state-key
       shell: bash
@@ -113,6 +118,7 @@ runs:
             echo "name=${{ github.event.repository.name }}.tfstate" >> "${GITHUB_OUTPUT}"
           fi
         fi
+
     - name: Enable Private Modules
       id: get_workflow_token
       if: ${{ inputs.enable-private-access == 'true' }}
@@ -121,11 +127,13 @@ runs:
         app-id: ${{ inputs.actions-id }}
         private-key: ${{ inputs.actions-secret }}
         owner: ${{ inputs.organization-name }}
+
     - name: Setup Credentials
       if: ${{ inputs.enable-private-access == 'true' }}
       shell: bash
       run: |
         git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
+        
     - name: Terraform init
       id: init
       shell: bash

@@ -2,26 +2,22 @@
 name: "Terragrunt Inputs Diff"
 description: "Diffing Terragrunt inputs between pull request and main branch"
 inputs:
+  cicd-repository:
+    description: "The repository for the cicd workflows"
+    required: true
+  cicd-branch:
+    description: "The branch for the cicd workflows"
+    required: true
   terraform-version:
     description: "The version of terraform or opentofu to use"
     required: true
-
   terragrunt-version:
     description: "The version of terragrunt to use"
     required: true
-
   terragrunt-config-file:
     description: "The terragrunt config file to use"
     required: true
     default: "terragrunt.hcl"
-
-  cicd-repository:
-    description: "The repository for the cicd workflows"
-    required: true
-
-  cicd-branch:
-    description: "The branch for the cicd workflows"
-    required: true
 
 outputs:
   result:
@@ -45,7 +41,6 @@ runs:
         tg_version: ${{ inputs.terragrunt-version }}
         tf_path: /bin/terraform
 
-    # Download the scripts from the cicd workflows repository
     - name: Download Diff Script
       shell: bash
       run: |

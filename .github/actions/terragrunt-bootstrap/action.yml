@@ -5,63 +5,48 @@ inputs:
   actions-id:
     description: "The application ID for the workflow token"
     required: false
-
   actions-secret:
     description: "The application secret for the workflow token"
     required: false
-
   aws-account-id:
     description: "The AWS account ID to deploy to"
     required: false
-
   aws-read-role-name:
     description: "Overrides the default behavior, and uses a custom role name for read-only access"
     required: false
-
   aws-write-role-name:
     description: "Overrides the default behavior, and uses a custom role name for read-write access"
     required: false
-
   aws-region:
     description: "The AWS region to deploy to"
     required: false
-
   aws-role:
     description: "The role to assume"
     required: false
-
   aws-web-identity-token-file:
     description: "The file to store the web identity token in"
     required: true
-
   enable-private-access:
     description: Optional flag to state if terragrunt requires pulling private modules
     required: false
-
   environment:
     description: "The environment to deploy to"
     required: false
-
   organization-name:
     description: "The name of the Github organization"
     required: false
-
   terragrunt-dir:
     description: "The directory to validate"
     required: true
-
   terraform-version:
     description: "The version of terraform or opentofu to use"
     required: true
-
   terragrunt-version:
     description: "The version of terragrunt to use"
     required: true
-
   use-env-as-suffix:
     description: "Whether to use the environment as a suffix for the state file and iam roles"
     required: false
-
   working-directory:
     description: "The working directory to run the action in"
     required: true
