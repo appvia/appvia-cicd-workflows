@@ -18,6 +18,14 @@ inputs:
     description: "Overrides the default behavior, and uses a custom role name for read-only access"
     required: false
 
+  aws-write-role-name:
+    description: "Overrides the default behavior, and uses a custom role name for read-write access"
+    required: false
+
+  aws-region:
+    description: "The AWS region to deploy to"
+    required: false
+
   aws-role:
     description: "The role to assume"
     required: false
@@ -28,6 +36,10 @@ inputs:
 
   enable-private-access:
     description: Optional flag to state if terragrunt requires pulling private modules
+    required: false
+
+  environment:
+    description: "The environment to deploy to"
     required: false
 
   organization-name:
