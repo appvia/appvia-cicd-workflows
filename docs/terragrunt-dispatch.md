@@ -90,8 +90,6 @@ Once the workflow is added to your repository:
 3. Select the **Manual Terragrunt Trigger** workflow from the left sidebar
 4. Click the **Run workflow** dropdown button
 5. Fill in the required parameters:
-   - **AWS Account ID:** The AWS account to deploy to
-   - **AWS Role:** The IAM role name to assume
    - **Enable Plan:** Check to run a Terragrunt plan
    - **Enable Apply:** Check to run a Terragrunt apply (use with caution!)
    - **Terragrunt Directory:** The directory containing your Terragrunt configuration
@@ -101,15 +99,12 @@ Once the workflow is added to your repository:
 
 The workflow accepts the following inputs when manually triggered:
 
-### Required Inputs
+### Optional Inputs
 
 - `aws-account-id` - The AWS account ID to deploy to
 - `aws-role` - The AWS IAM role to assume for deployment
-
-### Optional Inputs
-
-- `enable_plan` - Default: false. Whether to run the Terragrunt plan step
 - `enable_apply` - Default: false. Whether to run the Terragrunt apply step (use with caution!)
+- `enable_plan` - Default: false. Whether to run the Terragrunt plan step
 - `terragrunt-dir` - Default: ".". The directory containing the Terragrunt configuration to execute
 
 ## Examples
