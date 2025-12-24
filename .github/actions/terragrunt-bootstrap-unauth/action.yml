@@ -5,31 +5,24 @@ inputs:
   actions-id:
     description: "The application ID for the workflow token"
     required: false
-
   actions-secret:
     description: "The application secret for the workflow token"
     required: false
-
   enable-private-access:
     description: Optional flag to state if terragrunt requires pulling private modules
     required: false
-
   organization-name:
     description: "The name of the Github organization"
     required: false
-
   terragrunt-dir:
     description: "The directory to validate"
     required: true
-
   terraform-version:
     description: "The version of terraform or opentofu to use"
     required: true
-
   terragrunt-version:
     description: "The version of terragrunt to use"
     required: true
-
   working-directory:
     description: "The working directory to run the action in"
     required: true
@@ -49,18 +42,15 @@ runs:
       uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6
       with:
         node-version: 16
-
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
       with:
         terraform_version: ${{ inputs.terraform-version }}
-
     - name: Setup Terragrunt
       uses: gruntwork-io/terragrunt-action@95fc057922e3c3d4cc021a81a213f088f333ddef # v3
       with:
         tg_version: ${{ inputs.terragrunt-version }}
         tf_path: /bin/terraform
-
     - name: Enable Private Modules
       id: get_workflow_token
       if: ${{ inputs.enable-private-access == 'true' }}
@@ -69,7 +59,6 @@ runs:
         app-id: ${{ inputs.actions-id }}
         private-key: ${{ inputs.actions-secret }}
         owner: ${{ inputs.organization-name }}
-
     - name: Setup Credentials
       if: ${{ inputs.enable-private-access == 'true' }}
       shell: bash
