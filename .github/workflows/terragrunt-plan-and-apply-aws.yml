@@ -314,18 +314,24 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-
-      - name: Terragrunt Bootstrap (Unauth)
-        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap-unauth@main
+      - name: Terragrunt Bootstrap 
+        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@main
         with:
           actions-id: ${{ secrets.actions-id }}
           actions-secret: ${{ secrets.actions-secret }}
+          aws-account-id: ${{ inputs.aws-account-id }}
+          aws-read-role-name: ${{ inputs.aws-read-role-name }}
+          aws-region: ${{ inputs.aws-region }}
+          aws-role: ${{ inputs.aws-role }}
+          aws-web-identity-token-file: ${{ inputs.aws-web-identity-token-file }}
+          aws-write-role-name: ${{ inputs.aws-write-role-name }}
           enable-private-access: ${{ inputs.enable-private-access }}
+          environment: ${{ inputs.environment }}
           organization-name: ${{ inputs.organization-name }}
           terragrunt-dir: ${{ inputs.terragrunt-dir }}
           terraform-version: ${{ inputs.terraform-version }}
           terragrunt-version: ${{ inputs.terragrunt-version }}
-
+          use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
       - name: Format Terragrunt files
         id: format
         env:
@@ -346,7 +352,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-
       - name: Terragrunt Bootstrap (Unauth)
         uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap-unauth@main
         with:
@@ -357,16 +362,13 @@ jobs:
           terragrunt-dir: ${{ inputs.terragrunt-dir }}
           terraform-version: ${{ inputs.terraform-version }}
           terragrunt-version: ${{ inputs.terragrunt-version }}
-
       - name: Setup TFLint
         uses: terraform-linters/setup-tflint@4cb9feea73331a35b422df102992a03a44a3bb33 # v6
         with:
           tflint_version: latest
-
       - name: Generate Terraform files
         run: |
           terragrunt init --config ${{ inputs.terragrunt-config-file }} --all --backend=false
-
       - name: Run TFLint
         id: lint
         run: |
@@ -465,7 +467,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-
       - name: Terragrunt Plan Matrix
         id: matrix
         uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-matrix@main
@@ -502,12 +503,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-
       - name: Extract Directory Name
         id: extract-directory-name
         run: |
           echo "directory_name=$(dirname ${{ matrix.unit.relative_path }})" >> "${GITHUB_OUTPUT}"
-
       - name: Terragrunt Bootstrap
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@main
@@ -526,7 +525,6 @@ jobs:
           terragrunt-dir: ${{ steps.extract-directory-name.outputs.directory_name }}
           terraform-version: ${{ inputs.terraform-version }}
           terragrunt-version: ${{ inputs.terragrunt-version }}
-          use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
 
       - name: Process Unit
         run: |
@@ -535,12 +533,10 @@ jobs:
           echo "Terragrunt Dir: ${{ steps.extract-directory-name.outputs.directory_name }}"
           echo "Region: ${{ matrix.unit.region }}"
           echo "Account: ${{ matrix.unit.account }}"
-
       - name: Terragrunt Validate
         id: validate
         run: |
           terragrunt validate --config ${{ steps.extract-directory-name.outputs.directory_name }}/${{ inputs.terragrunt-config-file }}
-
       - name: Terragrunt Plan
         id: plan
         working-directory: ${{ steps.extract-directory-name.outputs.directory_name }}
@@ -573,7 +569,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-
       - name: Terragrunt Bootstrap
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@main
@@ -593,11 +588,9 @@ jobs:
           terraform-version: ${{ inputs.terraform-version }}
           terragrunt-version: ${{ inputs.terragrunt-version }}
           use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
-
       - name: Terragrunt Validate
         id: validate
         run: terragrunt validate --config ${{ inputs.terragrunt-config-file }} --all
-
       - name: Terragrunt Plan
         id: plan
         run: |
@@ -626,18 +619,15 @@ jobs:
         with:
           api-key: ${{ secrets.infracost-api-key }}
           currency: GBP
-
       - name: Download tfplan
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
-
       - name: Generate Infracost Cost Estimate
         run: |
           infracost breakdown --path=tfplan.json \
             --format=json \
             --out-file=/tmp/infracost.json
-
       - name: Post Infracost comment
         run: |
           infracost comment github --path=/tmp/infracost.json \
@@ -669,7 +659,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-
       - name: Terraform Bootstrap
         id: init
         uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@main
@@ -689,7 +678,6 @@ jobs:
           terraform-version: ${{ inputs.terraform-version }}
           terragrunt-version: ${{ inputs.terragrunt-version }}
           use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
-
       - name: Terragrunt Apply
         run: |
           terragrunt run --config ${{ inputs.terragrunt-config-file }} --all --summary-per-unit --non-interactive ${{ inputs.terragrunt-apply-extra-args }} -- \
