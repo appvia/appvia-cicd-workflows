@@ -112,7 +112,7 @@ runs:
         aws-region: ${{ inputs.aws-region }}
         role-session-name: ${{ github.event.repository.name }}
         role-to-assume: arn:aws:iam::${{ inputs.aws-account-id }}:role/${{ steps.role.outputs.name }}
-        mask-aws-account-id: "no"
+        mask-aws-account-id: "true"
 
     - name: Set terraform-state-key variable
       if: ${{ inputs.aws-account-id != '' && inputs.aws-role != '' }}
