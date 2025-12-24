@@ -29,7 +29,11 @@ jobs:
         run: npm install @commitlint/config-conventional @commitlint/cli
       - name: Run Commitlint
         id: commitlint
-        run: npx commitlint --config .commitlintrc.yaml --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
+        run: |
+          npx commitlint \
+            --config .commitlintrc.yaml \
+            --from ${{ github.event.pull_request.base.sha }} \
+            --to ${{ github.event.pull_request.head.sha }}
 
   actionlint:
     name: "Linting Actions"

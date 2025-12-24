@@ -12,7 +12,7 @@ inputs:
 
   aws-account-id:
     description: "The AWS account ID to deploy to"
-    required: true
+    required: false
 
   aws-read-role-name:
     description: "Overrides the default behavior, and uses a custom role name for read-only access"
@@ -20,7 +20,7 @@ inputs:
 
   aws-role:
     description: "The role to assume"
-    required: true
+    required: false
 
   aws-web-identity-token-file:
     description: "The file to store the web identity token in"
@@ -80,6 +80,7 @@ runs:
         curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" | jq -r '.value' > "${{ inputs.aws-web-identity-token-file }}"
 
     - name: Determine AWS Role
+      if: ${{ inputs.aws-account-id != '' && inputs.aws-role != '' }}
       id: role
       shell: bash
       run: |
@@ -96,6 +97,7 @@ runs:
         fi
 
     - name: Authenticate with AWS
+      if: ${{ inputs.aws-account-id != '' && inputs.aws-role != '' }}
       id: auth
       uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
       with:
@@ -105,6 +107,7 @@ runs:
         mask-aws-account-id: "no"
 
     - name: Set terraform-state-key variable
+      if: ${{ inputs.aws-account-id != '' && inputs.aws-role != '' }}
       id: state-key
       shell: bash
       run: |

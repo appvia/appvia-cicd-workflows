@@ -1,5 +1,4 @@
-name: "Terraform bootstrap"
-description: "Terraform bootstrapping including init"
+---
 inputs:
   actions-id:
     description: "The application ID for the workflow token"

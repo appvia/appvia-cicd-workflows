@@ -23,103 +23,85 @@ on:
         required: false
         default: "Dockerfile"
         type: string
-
       context-path:
         description: "Build context path"
         required: false
         default: "."
         type: string
-
       registry:
         description: "Docker registry to use (ECR / Docker Hub / GitHub Packages / etc.)"
         required: true
         type: string
-
       image-name:
         description: "The name of the image to build"
         required: false
         type: string
-
       image-tag:
         description: "Docker image tag (defaults to commit SHA)"
         default: ${{ github.sha }}
         required: false
         type: string
-
       image-platforms:
         description: "The platforms to build the image for"
         required: false
         default: "linux/amd64,linux/arm64"
         type: string
-
       aws-region:
         description: "AWS region for ECR (required if enable-ecr-login is true)"
         required: false
         default: "eu-west-2"
         type: string
-
       aws-account-id:
         description: "AWS account ID (required if enable-oidc is true)"
         required: false
         type: string
-
       aws-role:
         description: "AWS IAM role name to assume (required if enable-oidc is true)"
         required: false
         type: string
-
       enable-oidc:
         description: "Indicates if OIDC authentication should be used for AWS"
         required: false
         default: false
         type: boolean
-
       enable-buildkit:
         description: "Enable Docker BuildKit for improved builds"
         required: false
         default: true
         type: boolean
-
       build-args:
         description: "Docker build arguments (comma-separated key=value pairs)"
         required: false
         type: string
-
       cache-from:
         description: "Cache from image (e.g., previous build tag)"
         required: false
         type: string
-
       enable-push:
         description: "Enable pushing the image to the registry"
         required: false
         default: true
         type: boolean
-
       trivy-severity:
         description: "Trivy severity levels to fail on (CRITICAL,HIGH,MEDIUM,LOW)"
         required: false
         default: "CRITICAL,HIGH"
         type: string
-
       trivy-version:
         description: "Trivy version to use"
         required: false
         default: "latest"
         type: string
-
       fail-on-vulnerabilities:
         description: "Fail build if vulnerabilities found"
         required: false
         default: true
         type: boolean
-
       working-directory:
         description: "Working directory for build"
         required: false
         default: "."
         type: string
-
       runs-on:
         description: "GitHub runner to use"
         required: false
@@ -181,13 +163,10 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
@@ -200,7 +179,6 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix={{branch}}-
             type=raw,value=${{ inputs.image-tag || github.sha }},enable={{is_default_branch}}
-
       - name: Prepare build args
         id: build-args
         run: |
@@ -212,7 +190,6 @@ jobs:
             done
             echo "args=${BUILD_ARGS}" >> "${GITHUB_OUTPUT}"
           fi
-
       - name: Build Docker image
         id: docker-build
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6
@@ -221,7 +198,6 @@ jobs:
           file: ${{ inputs.dockerfile-path }}
           push: false
           tags: docker-build-${{ github.sha }}
-
       - name: Run Trivy vulnerability scanner
         id: scan
         uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # 0.33.1
@@ -234,13 +210,11 @@ jobs:
           ignore-unfixed: true
           trivyignores: ".trivyignore"
           version: ${{ inputs.trivy-version }}
-
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@5d4e8d1aca955e8d8589aabd499c5cae939e33c7 # v4
         if: always()
         with:
           sarif_file: "trivy-results.sarif"
-
       - name: Trivy scan summary
         if: always()
         run: |
@@ -267,13 +241,10 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-
       - name: Login to Docker Registry
         if: ${{ env.ENABLE_LOGIN_DOCKER == 'true' && env.ENABLE_PUSH == 'true' }}
         uses: docker/login-action@v5
@@ -281,7 +252,6 @@ jobs:
           registry: ${{ inputs.registry }}
           username: ${{ secrets.docker-username }}
           password: ${{ secrets.docker-password }}
-
       - name: Login to AWS vis Credential
         if: ${{ env.ENABLE_LOGIN_AWS == 'true' && env.ENABLE_PUSH == 'true' }}
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
@@ -290,7 +260,6 @@ jobs:
           aws-region: ${{ inputs.aws-region }}
           aws-secret-access-key: ${{ secrets.aws-secret-access-key }}
           mask-aws-account-id: "true"
-
       - name: Login to AWS vis OIDC
         if: ${{ env.ENABLE_LOGIN_OIDC == 'true' && env.ENABLE_PUSH == 'true' }}
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
@@ -299,12 +268,10 @@ jobs:
           mask-aws-account-id: "true"
           role-session-name: ${{ github.event.repository.name }}-docker-build
           role-to-assume: arn:aws:iam::${{ inputs.aws-account-id }}:role/${{ inputs.aws-role }}
-
       - name: Login to Amazon ECR
         if: ${{ env.ENABLE_LOGIN_OIDC == 'true' && env.ENABLE_PUSH == 'true' }}
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2
-
       - name: Prepare build args
         id: build-args
         run: |
@@ -316,7 +283,6 @@ jobs:
             done
             echo "args=${BUILD_ARGS}" >> "${GITHUB_OUTPUT}"
           fi
-
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
@@ -329,7 +295,6 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix={{branch}}-
             type=raw,value=${{ inputs.image-tag || github.sha }},enable={{is_default_branch}}
-
       - name: Build and push Docker image
         id: build
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6
