@@ -587,9 +587,10 @@ jobs:
               const planSummaryExists = fs.existsSync("tfplan-summary");
               if (planSummaryExists) {
                 var planSummaryContents = fs.readFileSync("tfplan-summary", "utf8");
-                const planSummaryRegex = /Plan: (\d+) to add, (\d+) to change, (\d+) to destroy\./;
+                const planSummaryRegex = /Plan: (?:(\d+) to import, )?(\d+) to add, (\d+) to change, (\d+) to destroy\./;
                 const planSummaryMatch = planSummaryContents.match(planSummaryRegex);
-                var planSummaryMsg = `${planSummaryMatch[1]} to add, ${planSummaryMatch[2]} to change, ${planSummaryMatch[3]} to destroy.`
+                const importPart = planSummaryMatch[1] ? `${planSummaryMatch[1]} to import, ` : '';
+                var planSummaryMsg = `${importPart}${planSummaryMatch[2]} to add, ${planSummaryMatch[3]} to change, ${planSummaryMatch[4]} to destroy.`
               } else {
                 var planSummaryMsg = "No changes detected."
               }
