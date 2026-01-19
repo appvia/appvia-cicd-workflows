@@ -496,6 +496,7 @@ jobs:
       fail-fast: false
     env:
       TG_PROVIDER_CACHE: "1"
+      TG_DISABLE_BUCKET_UPDATE: "true"
     outputs:
       result-auth: ${{ steps.bootstrap.outputs.outcome-auth }}
       result-plan: ${{ steps.plan.outcome }}
