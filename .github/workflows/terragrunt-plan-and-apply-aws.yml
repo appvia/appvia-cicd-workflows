@@ -495,6 +495,7 @@ jobs:
       # Allow all the jobs to complete even if some fail
       fail-fast: false
     env:
+      TF_LOG: 1
       TG_PROVIDER_CACHE: "1"
       TG_DISABLE_BUCKET_UPDATE: "true"
     outputs:
