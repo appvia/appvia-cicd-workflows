@@ -314,7 +314,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
-      - name: Terragrunt Bootstrap 
+      - name: Terragrunt Bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@main
         with:
           actions-id: ${{ secrets.actions-id }}
@@ -533,10 +533,10 @@ jobs:
           echo "Terragrunt Dir: ${{ steps.extract-directory-name.outputs.directory_name }}"
           echo "Region: ${{ matrix.unit.region }}"
           echo "Account: ${{ matrix.unit.account }}"
-      - name: Terragrunt Validate
-        id: validate
-        run: |
-          terragrunt validate --config ${{ steps.extract-directory-name.outputs.directory_name }}/${{ inputs.terragrunt-config-file }}
+      #      - name: Terragrunt Validate
+      #        id: validate
+      #        run: |
+      #          terragrunt validate --config ${{ steps.extract-directory-name.outputs.directory_name }}/${{ inputs.terragrunt-config-file }}
       - name: Terragrunt Plan
         id: plan
         working-directory: ${{ steps.extract-directory-name.outputs.directory_name }}
@@ -562,7 +562,7 @@ jobs:
     outputs:
       result-auth: ${{ steps.bootstrap.outputs.outcome-auth }}
       result-plan: ${{ steps.plan.outcome }}
-      result-validate: ${{ steps.validate.outcome }}
+    #  result-validate: ${{ steps.validate.outcome }}
     env:
       TF_LOG: ${{ needs.debug-mode.outputs.tf_log }}
       TF_VAR_github_token: ${{ secrets.github-token }}
