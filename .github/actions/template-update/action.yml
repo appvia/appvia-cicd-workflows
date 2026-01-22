@@ -25,7 +25,7 @@ inputs:
     required: false
     default: main
   template-files:
-    description: "The template files to update"
+    description: "The template files to update (optionally source:destination format)"
     required: true
   upstream-token:
     description: "The token to used to authenticate with the upstream repository (optional, defaults to github.token)"
@@ -46,13 +46,23 @@ runs:
       run: |
         # Process template files - handle both newline and space separated inputs
         echo "${{ inputs.template-files }}" | while IFS= read -r file; do
+          # Set the source and destination file paths
+          source_file="${file}"
+          destination_file="${{ inputs.base-directory}}/${file}"
+
+          # If the file has a ':', the first part is the source, the second part is the destination
+          if [[ "${file}" == *:* ]]; then
+            source_file="${file%%:*}"
+            destination_file="${file#*:}"
+          fi
+
           # Skip empty lines
-          if [[ -n "${file}" ]]; then
-            if [[ -f "./tmp/upstream-template/${file}" ]]; then
-              echo "Copying file ${file} from upstream template to ${{ inputs.base-directory }}/${file}"
-              cp -f "./tmp/upstream-template/${file}" "${{ inputs.base-directory }}/${file}"
+          if [[ -n "${source_file}" ]]; then
+            if [[ -f "./tmp/upstream-template/${source_file}" ]]; then
+              echo "Copying file ${source_file} from upstream template to ${destination_file}"
+              cp -f "./tmp/upstream-template/${source_file}" "${destination_file}"
             else 
-              echo "File ${file} not found in upstream template"
+              echo "File ${source_file} not found in upstream template"
             fi
           fi
         done
