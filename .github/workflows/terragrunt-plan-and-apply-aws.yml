@@ -200,6 +200,8 @@ on:
 env:
   AWS_ROLE: ${{ inputs.aws-role }}
   AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/web_identity_token_file
+  TG_BACKEND_BOOTSTRAP: false
+  TG_BACKEND_REQUIRE_BOOTSTRAP: false
 
 permissions:
   id-token: write
