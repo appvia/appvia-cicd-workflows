@@ -90,7 +90,14 @@ jobs:
 - `gh-provider-app-id` - GitHub provider app ID
 - `gh-provider-installation-id` - GitHub provider installation ID
 - `gh-provider-private-key` - Base64 encoded private key for GitHub provider app
-- `environment-variables` - A JSON object of environment variables to be made available to Terraform (e.g. `{"TF_VAR_my_var": "my_value"}`)
+- `environment-variables` - A JSON object of environment variables to be made available to Terraform.
+  Example:
+  ```yml
+  environment-variables: |
+    {
+      "TF_VAR_my_secret_variable": "${{ secrets.MY_SECRET_VALUE }}"
+    }
+  ```
 
 **Note:** This template may change over time, so it is recommended that you point to a tagged version rather than the main branch.
 
