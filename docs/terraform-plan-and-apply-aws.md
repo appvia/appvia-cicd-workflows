@@ -98,6 +98,22 @@ jobs:
       "TF_VAR_my_secret_variable": "${{ secrets.MY_SECRET_VALUE }}"
     }
   ```
+- `environment-files` - A JSON object of file paths and their base64 encoded contents to be created in the working directory.
+  Example:
+  ```yml
+  environment-files: |
+    {
+      "my_cert.pem": "${{ secrets.MY_CERT_BASE64 }}"
+    }
+  ```
+- `environment-files` - A JSON object of file paths and their base64 encoded contents to be created in the working directory.
+  Example:
+  ```yml
+  environment-files: |
+    {
+      "my-file.txt": "SGVsbG8gV29ybGQh"
+    }
+  ```
 
 **Note:** This template may change over time, so it is recommended that you point to a tagged version rather than the main branch.
 

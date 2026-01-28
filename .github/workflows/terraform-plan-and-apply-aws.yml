@@ -389,14 +389,14 @@ jobs:
         if: env.TF_VARS_JSON != ''
         run: |
           echo "Sourcing terraform variables from secret"
-          printf '%s' "${TF_VARS_JSON}" | jq -r 'to_entries|map("\(.key)=\(.value|tostring)")|.[]' >> $GITHUB_ENV
+          jq -n -r 'env.TF_VARS_JSON | fromjson | to_entries[] | "\(.key)=\(.value)"' >> $GITHUB_ENV
       - name: Source Environment Files
         env:
           TF_VARS_JSON: ${{ secrets.environment-files }}
         if: env.TF_VARS_JSON != ''
         run: |
-          printf '%s' "${TF_VARS_JSON}" | jq -r 'to_entries|map("\(.key)=\(.value|@base64)")|.[]' | while IFS='=' read -r key value; do
-            echo "${value}" | base64 --decode > "${key}"
+          jq -n -r 'env.TF_VARS_JSON | fromjson | to_entries[] | "\(.key)=\(.value | gsub("\n";""))"' | while IFS='=' read -r key value; do
+            echo "$value" | base64 -d > "$key"
           done
       - name: Terraform Validate
         id: validate
@@ -755,14 +755,14 @@ jobs:
         if: env.TF_VARS_JSON != ''
         run: |
           echo "Sourcing terraform variables from secret"
-          printf '%s' "${TF_VARS_JSON}" | jq -r 'to_entries|map("\(.key)=\(.value|tostring)")|.[]' >> $GITHUB_ENV
+          jq -n -r 'env.TF_VARS_JSON | fromjson | to_entries[] | "\(.key)=\(.value)"' >> $GITHUB_ENV
       - name: Source Environment Files
         env:
           TF_VARS_JSON: ${{ secrets.environment-files }}
         if: env.TF_VARS_JSON != ''
         run: |
-          printf '%s' "${TF_VARS_JSON}" | jq -r 'to_entries|map("\(.key)=\(.value|@base64)")|.[]' | while IFS='=' read -r key value; do
-            echo "${value}" | base64 --decode > "${key}"
+          jq -n -r 'env.TF_VARS_JSON | fromjson | to_entries[] | "\(.key)=\(.value | gsub("\n";""))"' | while IFS='=' read -r key value; do
+            echo "$value" | base64 -d > "$key"
           done
       - name: Terraform Apply
         run: |
