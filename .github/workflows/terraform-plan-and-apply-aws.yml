@@ -59,7 +59,6 @@ on:
         description: "The repository to pull the CI/CD workflows from"
         required: false
         type: string
-
       cicd-branch:
         default: "main"
         description: "The branch to pull the CI/CD workflows from"
@@ -90,6 +89,10 @@ on:
         required: false
         default: false
         type: boolean
+      environment-file:
+        description: "The environment file to used in the terraform plan and apply"
+        required: false
+        type: string
       organization-name:
         description: "The name of the Github organization"
         required: false
@@ -376,6 +379,21 @@ jobs:
             echo "${{ secrets.gh-provider-private-key }}" | base64 --decode > /tmp/github_provider.pem
           else
             echo "GitHub provider credentials not provided."
+          fi
+      - name: Source Environment File
+        if: inputs.environment-file != ''
+        run: |
+          if [ -f "${{ inputs.environment-file }}" ]; then
+            echo "Sourcing environment file: ${{ inputs.environment-file }}"
+            set -a
+            source "${{ inputs.environment-file }}"
+            set +a
+            # Export all variables to GITHUB_ENV for subsequent steps
+            while IFS= read -r line; do
+              if [[ $line =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
+                echo "$line" >> "$GITHUB_ENV"
+              fi
+            done < "${{ inputs.environment-file }}"
           fi
       - name: Terraform Validate
         id: validate
@@ -727,6 +745,21 @@ jobs:
             echo "${{ secrets.gh-provider-private-key }}" | base64 --decode > /tmp/github_provider.pem
           else
             echo "GitHub provider credentials not provided."
+          fi
+      - name: Source Environment File
+        if: inputs.environment-file != ''
+        run: |
+          if [ -f "${{ inputs.environment-file }}" ]; then
+            echo "Sourcing environment file: ${{ inputs.environment-file }}"
+            set -a
+            source "${{ inputs.environment-file }}"
+            set +a
+            # Export all variables to GITHUB_ENV for subsequent steps
+            while IFS= read -r line; do
+              if [[ $line =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
+                echo "$line" >> "$GITHUB_ENV"
+              fi
+            done < "${{ inputs.environment-file }}"
           fi
       - name: Terraform Apply
         run: |
