@@ -21,6 +21,9 @@ on:
       gh-provider-private-key:
         description: "Base64 encoded private key for GitHub provider app"
         required: false
+      environment-variables:
+        description: "A JSON object of environment variables to be made available to Terraform"
+        required: false
 
     inputs:
       additional-dir:
@@ -89,10 +92,7 @@ on:
         required: false
         default: false
         type: boolean
-      environment-file:
-        description: "The environment file to used in the terraform plan and apply"
-        required: false
-        type: string
+
       organization-name:
         description: "The name of the Github organization"
         required: false
@@ -380,24 +380,13 @@ jobs:
           else
             echo "GitHub provider credentials not provided."
           fi
-      - name: Source Environment File
-        if: inputs.environment-file != ''
+      - name: Source Terraform Environment Variables
+        env:
+          TF_VARS_JSON: ${{ secrets.environment-variables }}
+        if: env.TF_VARS_JSON != ''
         run: |
-          echo "Listing the files in ${PWD} for debugging purposes:"
-          ls -la
-
-          if [[ -f "${{ inputs.environment-file }}" ]]; then
-            echo "Sourcing environment file: ${{ inputs.environment-file }}"
-            set -a
-            source "${{ inputs.environment-file }}"
-            set +a
-            # Export all variables to GITHUB_ENV for subsequent steps
-            while IFS= read -r line; do
-              if [[ $line =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
-                echo "$line" >> "$GITHUB_ENV"
-              fi
-            done < "${{ inputs.environment-file }}"
-          fi
+          echo "Sourcing terraform variables from secret"
+          echo "${TF_VARS_JSON}" | jq -r 'to_entries|map("\(.key)=\(.value|tostring)")|.[]' >> $GITHUB_ENV
       - name: Terraform Validate
         id: validate
         run: terraform -chdir=${{ inputs.terraform-dir }} validate -no-color
@@ -749,21 +738,13 @@ jobs:
           else
             echo "GitHub provider credentials not provided."
           fi
-      - name: Source Environment File
-        if: inputs.environment-file != ''
+      - name: Source Terraform Environment Variables
+        env:
+          TF_VARS_JSON: ${{ secrets.environment-variables }}
+        if: env.TF_VARS_JSON != ''
         run: |
-          if [ -f "${{ inputs.environment-file }}" ]; then
-            echo "Sourcing environment file: ${{ inputs.environment-file }}"
-            set -a
-            source "${{ inputs.environment-file }}"
-            set +a
-            # Export all variables to GITHUB_ENV for subsequent steps
-            while IFS= read -r line; do
-              if [[ $line =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
-                echo "$line" >> "$GITHUB_ENV"
-              fi
-            done < "${{ inputs.environment-file }}"
-          fi
+          echo "Sourcing terraform variables from secret"
+          echo "${TF_VARS_JSON}" | jq -r 'to_entries|map("\(.key)=\(.value|tostring)")|.[]' >> $GITHUB_ENV
       - name: Terraform Apply
         run: |
           terraform apply \
