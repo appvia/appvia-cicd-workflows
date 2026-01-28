@@ -383,7 +383,10 @@ jobs:
       - name: Source Environment File
         if: inputs.environment-file != ''
         run: |
-          if [ -f "${{ inputs.environment-file }}" ]; then
+          echo "Listing the files in ${PWD} for debugging purposes:"
+          ls -la
+
+          if [[ -f "${{ inputs.environment-file }}" ]]; then
             echo "Sourcing environment file: ${{ inputs.environment-file }}"
             set -a
             source "${{ inputs.environment-file }}"
