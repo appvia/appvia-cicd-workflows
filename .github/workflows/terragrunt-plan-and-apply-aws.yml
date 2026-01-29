@@ -237,7 +237,7 @@ jobs:
       result: ${{ steps.commitlint.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
       - name: Setup node
@@ -263,7 +263,7 @@ jobs:
       result: ${{ steps.hclfmt.outcome }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
@@ -288,7 +288,7 @@ jobs:
       result: ${{ steps.render.outcome }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
@@ -313,7 +313,7 @@ jobs:
       result: ${{ steps.format.outcome }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Terragrunt Bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@main
         with:
@@ -351,7 +351,7 @@ jobs:
       result: ${{ steps.lint.outcome }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Terragrunt Bootstrap (Unauth)
         uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap-unauth@main
         with:
@@ -404,7 +404,7 @@ jobs:
       result: ${{ steps.security.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Check If Trivy Ignore File Exists
         id: security-exceptions
         run: |
@@ -440,7 +440,7 @@ jobs:
       result: ${{ steps.diff.outputs.result }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Terragrunt Inputs Diff
         id: diff
@@ -466,7 +466,7 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Terragrunt Plan Matrix
         id: matrix
         uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-matrix@main
@@ -501,7 +501,7 @@ jobs:
       result-plan: ${{ steps.plan.outcome }}
     steps:
       - name: Checkout
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Extract Directory Name
         id: extract-directory-name
         run: |
@@ -567,7 +567,7 @@ jobs:
       TF_VAR_github_token: ${{ secrets.github-token }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Terragrunt Bootstrap
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@main
@@ -657,7 +657,7 @@ jobs:
       - debug-mode
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Terraform Bootstrap
         id: init
         uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@main
@@ -705,7 +705,7 @@ jobs:
       - terragrunt-security
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Add PR Comment
         uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-pr@main
         with:
@@ -739,7 +739,7 @@ jobs:
       - terragrunt-security
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Add PR Comment
         uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-pr@main
         with:
