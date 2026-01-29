@@ -12,15 +12,6 @@ on:
       actions-secret:
         description: "The GitHub App secret for the Actions App"
         required: false
-      gh-provider-app-id:
-        description: "GitHub provider app ID"
-        required: false
-      gh-provider-installation-id:
-        description: "GitHub provider installation ID"
-        required: false
-      gh-provider-private-key:
-        description: "Base64 encoded private key for GitHub provider app"
-        required: false
       environment-variables:
         description: "A JSON object of environment variables to be made available to Terraform"
         required: false
@@ -373,16 +364,6 @@ jobs:
           terraform-version: ${{ inputs.terraform-version }}
           working-directory: ${{ inputs.working-directory }}
           use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
-      - name: Add GitHub provider credentials to environment
-        run: |
-          if [ -n "${{ secrets.gh-provider-app-id }}" ] && [ -n "${{ secrets.gh-provider-installation-id }}" ] && [ -n "${{ secrets.gh-provider-private-key }}" ]; then
-            echo "GITHUB_APP_ID=${{ secrets.gh-provider-app-id }}" >> "${GITHUB_ENV}"
-            echo "GITHUB_APP_INSTALLATION_ID=${{ secrets.gh-provider-installation-id }}" >> "${GITHUB_ENV}"
-            # Decode base64 encoded private key and write to file
-            echo "${{ secrets.gh-provider-private-key }}" | base64 --decode > /tmp/github_provider.pem
-          else
-            echo "GitHub provider credentials not provided."
-          fi
       - name: Source Environment Variables
         env:
           TF_VARS_JSON: ${{ secrets.environment-variables }}
@@ -395,8 +376,9 @@ jobs:
           TF_VARS_JSON: ${{ secrets.environment-files }}
         if: env.TF_VARS_JSON != ''
         run: |
-          jq -n -r 'env.TF_VARS_JSON | gsub("[\n\r]";"") | fromjson | to_entries[] | "\(.key)=\(.value)"' | while IFS='=' read -r key value; do
-            echo "$value" | base64 -d > "$key"
+          jq -n -r 'env.TF_VARS_JSON | fromjson | to_entries[] | "\(.key) \(.value)"' | while read -r key value; do
+            echo "Creating environment file: ${key}"
+            printf '%s' "$value" | base64 -d > "$key"
           done
       - name: Terraform Validate
         id: validate
@@ -465,12 +447,6 @@ jobs:
           include-hidden-files: true
           path: ${{ inputs.additional-dir }}
           retention-days: 14
-      - name: Cleanup GitHub provider key
-        if: always()
-        run: |
-          if [ -n "${{ secrets.gh-provider-app-id }}" ] && [ -n "${{ secrets.gh-provider-installation-id }}" ] && [ -n "${{ secrets.gh-provider-private-key }}" ]; then
-            rm /tmp/github_provider.pem
-          fi
 
   terraform-checkov:
     name: "Static Security Analysis - Checkov"
@@ -739,16 +715,6 @@ jobs:
             echo "Halting Terraform Apply phase to ensure the integrity of the deployment process."
             exit 1
           fi
-      - name: Add GitHub provider credentials to environment
-        run: |
-          if [ -n "${{ secrets.gh-provider-app-id }}" ] && [ -n "${{ secrets.gh-provider-installation-id }}" ] && [ -n "${{ secrets.gh-provider-private-key }}" ]; then
-            echo "GITHUB_APP_ID=${{ secrets.gh-provider-app-id }}" >> "${GITHUB_ENV}"
-            echo "GITHUB_APP_INSTALLATION_ID=${{ secrets.gh-provider-installation-id }}" >> "${GITHUB_ENV}"
-            # Decode base64 encoded private key and write to file
-            echo "${{ secrets.gh-provider-private-key }}" | base64 --decode > /tmp/github_provider.pem
-          else
-            echo "GitHub provider credentials not provided."
-          fi
       - name: Source Environment Variables
         env:
           TF_VARS_JSON: ${{ secrets.environment-variables }}
@@ -761,8 +727,9 @@ jobs:
           TF_VARS_JSON: ${{ secrets.environment-files }}
         if: env.TF_VARS_JSON != ''
         run: |
-          jq -n -r 'env.TF_VARS_JSON | gsub("[\n\r]";"") | fromjson | to_entries[] | "\(.key)=\(.value)"' | while IFS='=' read -r key value; do
-            echo "$value" | base64 -d > "$key"
+          jq -n -r 'env.TF_VARS_JSON | fromjson | to_entries[] | "\(.key) \(.value)"' | while read -r key value; do
+            echo "Creating environment file: ${key}"
+            printf '%s' "$value" | base64 -d > "$key"
           done
       - name: Terraform Apply
         run: |
@@ -773,9 +740,3 @@ jobs:
             -lock-timeout=${{ inputs.terraform-lock-timeout }} \
             ${{ inputs.terraform-apply-extra-args }} \
             tfplan
-      - name: Cleanup GitHub provider key
-        if: always()
-        run: |
-          if [ -n "${{ secrets.gh-provider-app-id }}" ] && [ -n "${{ secrets.gh-provider-installation-id }}" ] && [ -n "${{ secrets.gh-provider-private-key }}" ]; then
-            rm /tmp/github_provider.pem
-          fi
