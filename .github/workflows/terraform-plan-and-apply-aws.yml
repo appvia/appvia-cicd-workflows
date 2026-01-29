@@ -370,7 +370,7 @@ jobs:
         if: env.TF_VARS_JSON != ''
         run: |
           echo "Sourcing terraform variables from secret"
-          jq -n -r 'env.TF_VARS_JSON | gsub("[\n\r]";"") | fromjson | to_entries[] | "\(.key)=\(.value)"' >> $GITHUB_ENV
+          jq -n -r 'env.TF_VARS_JSON | gsub("[\n\r]";"") | fromjson | to_entries[] | "\(.key)=\(.value)"' >> "$GITHUB_ENV"
       - name: Source Environment Files
         env:
           TF_VARS_JSON: ${{ secrets.environment-files }}
@@ -475,9 +475,9 @@ jobs:
       - name: Set terraform-values-file variable
         run: |
           if [ -n "${{ inputs.terraform-values-file }}" ]; then
-            echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> "$GITHUB_ENV"
+            echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> "${GITHUB_ENV}"
           else
-            echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> "$GITHUB_ENV"
+            echo "TF_VAR_FILE=values/${{ inputs.environment }}.tfvars" >> "${GITHUB_ENV}"
           fi
       - name: Run Checkov
         id: security
@@ -721,7 +721,7 @@ jobs:
         if: env.TF_VARS_JSON != ''
         run: |
           echo "Sourcing terraform variables from secret"
-          jq -n -r 'env.TF_VARS_JSON | gsub("[\n\r]";"") | fromjson | to_entries[] | "\(.key)=\(.value)"' >> $GITHUB_ENV
+          jq -n -r 'env.TF_VARS_JSON | gsub("[\n\r]";"") | fromjson | to_entries[] | "\(.key)=\(.value)"' >> "$GITHUB_ENV"
       - name: Source Environment Files
         env:
           TF_VARS_JSON: ${{ secrets.environment-files }}
