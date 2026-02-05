@@ -254,7 +254,7 @@ jobs:
           password: ${{ secrets.docker-password }}
       - name: Login to AWS vis Credential
         if: ${{ env.ENABLE_LOGIN_AWS == 'true' && env.ENABLE_PUSH == 'true' }}
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6
         with:
           aws-access-key-id: ${{ secrets.aws-access-key-id }}
           aws-region: ${{ inputs.aws-region }}
@@ -262,7 +262,7 @@ jobs:
           mask-aws-account-id: "true"
       - name: Login to AWS vis OIDC
         if: ${{ env.ENABLE_LOGIN_OIDC == 'true' && env.ENABLE_PUSH == 'true' }}
-        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6
         with:
           aws-region: ${{ inputs.aws-region }}
           mask-aws-account-id: "true"
