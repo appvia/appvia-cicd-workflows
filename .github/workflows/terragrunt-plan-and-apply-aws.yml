@@ -568,7 +568,6 @@ jobs:
     #  result-validate: ${{ steps.validate.outcome }}
     env:
       TF_LOG: ${{ needs.debug-mode.outputs.tf_log }}
-      TF_VAR_github_token: ${{ secrets.github-token }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -657,7 +656,6 @@ jobs:
         working-directory: ${{ inputs.terragrunt-dir }}
     env:
       TF_LOG: ${{ needs.debug-mode.outputs.tf_log }}
-      TF_VAR_github_token: ${{ secrets.github-token }}
       TG_PROVIDER_CACHE: "1"
     needs:
       - terragrunt-format
