@@ -59,7 +59,7 @@ jobs:
           fi
       - name: Create Pull Request
         if: steps.check-changes.outputs.no-changes == 'false'
-        uses: peter-evans/create-pull-request@98357b18bf14b5342f975ff684046ec3b2a07725 # v8
+        uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # v8
         with:
           title: "${{ inputs.pull-request-title }} | [UPDATE] - Updating Templates inline with ${{ inputs.template-repository }}"
           body: "This PR is updating the templates to the latest version inline with the official ${{ inputs.template-repository }}"
