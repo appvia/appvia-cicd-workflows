@@ -104,7 +104,7 @@ runs:
     - name: Authenticate with AWS
       if: ${{ inputs.aws-account-id != '' && inputs.aws-role != '' }}
       id: auth
-      uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
+      uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6
       with:
         aws-region: ${{ inputs.aws-region }}
         role-session-name: ${{ github.event.repository.name }}
