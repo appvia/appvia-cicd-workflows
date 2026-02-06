@@ -6,15 +6,12 @@ on:
       actions-id:
         description: "Github App ID for GH"
         required: false
-
       actions-secret:
         description: "Github App secret for GH"
         required: false
-
-      github-token:
-        description: "The Github token to use for the landing zone repository creation"
+      environment-variables:
+        description: "A JSON object of environment variables to be made available to Terraform"
         required: false
-
       infracost-api-key:
         description: "The API key for infracost"
         required: false
@@ -536,6 +533,13 @@ jobs:
       #        id: validate
       #        run: |
       #          terragrunt validate --config ${{ steps.extract-directory-name.outputs.directory_name }}/${{ inputs.terragrunt-config-file }}
+      - name: Source Environment Variables
+        env:
+          TF_VARS_JSON: ${{ secrets.environment-variables }}
+        if: env.TF_VARS_JSON != ''
+        run: |
+          echo "Sourcing terraform variables from secret"
+          jq -n -r 'env.TF_VARS_JSON | gsub("[\n\r]";"") | fromjson | to_entries[] | "\(.key)=\(.value)"' >> "$GITHUB_ENV"
       - name: Terragrunt Plan
         id: plan
         working-directory: ${{ steps.extract-directory-name.outputs.directory_name }}
@@ -590,6 +594,13 @@ jobs:
       - name: Terragrunt Validate
         id: validate
         run: terragrunt validate --config ${{ inputs.terragrunt-config-file }} --all
+      - name: Source Environment Variables
+        env:
+          TF_VARS_JSON: ${{ secrets.environment-variables }}
+        if: env.TF_VARS_JSON != ''
+        run: |
+          echo "Sourcing terraform variables from secret"
+          jq -n -r 'env.TF_VARS_JSON | gsub("[\n\r]";"") | fromjson | to_entries[] | "\(.key)=\(.value)"' >> "$GITHUB_ENV"
       - name: Terragrunt Plan
         id: plan
         run: |
