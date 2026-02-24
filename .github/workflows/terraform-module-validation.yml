@@ -56,6 +56,12 @@ on:
         required: false
         type: boolean
 
+      node-version:
+        default: 22
+        description: "The version of node to use"
+        required: false
+        type: number
+
       organization-name:
         default: "appvia"
         description: "The name of the GitHub organization"
@@ -120,7 +126,7 @@ jobs:
       - name: Setup node
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
         with:
-          node-version: 16
+          node-version: ${{ inputs.node-version }}
       - name: Install Dependencies
         run: npm install @commitlint/config-conventional @commitlint/cli
       - name: Retrieve Commit Configuration
@@ -222,7 +228,7 @@ jobs:
       - name: Setup node
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
         with:
-          node-version: 16
+          node-version: ${{ inputs.node-version }}
       - name: Terraform Bootstrap
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main
@@ -250,7 +256,7 @@ jobs:
       - name: Setup node
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
         with:
-          node-version: 16
+          node-version: ${{ inputs.node-version }}
       - name: Terraform Bootstrap
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main
@@ -361,7 +367,7 @@ jobs:
       - name: Setup node
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
         with:
-          node-version: 16
+          node-version: ${{ inputs.node-version }}
       - name: Terraform Bootstrap
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main

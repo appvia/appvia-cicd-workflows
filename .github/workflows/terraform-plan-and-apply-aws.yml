@@ -86,7 +86,11 @@ on:
         required: false
         default: false
         type: boolean
-
+      node-version:
+        default: 22
+        description: "The version of node to use"
+        required: false
+        type: number
       organization-name:
         description: "The name of the Github organization"
         required: false
@@ -214,7 +218,7 @@ jobs:
       - name: Setup node
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
         with:
-          node-version: 16
+          node-version: ${{ inputs.node-version }}
       - name: Install Dependencies
         run: npm install @commitlint/config-conventional @commitlint/cli
       - name: Retrieve Commit Configuration
@@ -357,13 +361,14 @@ jobs:
           aws-write-role-name: ${{ inputs.aws-write-role-name }}
           enable-private-access: ${{ inputs.enable-private-access }}
           environment: ${{ inputs.environment }}
+          node-version: ${{ inputs.node-version }}
           organization-name: ${{ inputs.organization-name }}
           terraform-dir: ${{ inputs.terraform-dir }}
           terraform-init-extra-args: ${{ inputs.terraform-init-extra-args }}
           terraform-state-key: ${{ inputs.terraform-state-key }}
           terraform-version: ${{ inputs.terraform-version }}
-          working-directory: ${{ inputs.working-directory }}
           use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
+          working-directory: ${{ inputs.working-directory }}
       - name: Source Environment Variables
         env:
           TF_VARS_JSON: ${{ secrets.environment-variables }}
