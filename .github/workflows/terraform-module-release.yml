@@ -21,11 +21,11 @@ jobs:
         with:
           fetch-depth: 0
       - name: Generate Cliff Changelog
-        if: inputs.enable-cliff == 'true'
+        if: inputs.enable-cliff == true
         uses: orhun/git-cliff-action@c93ef52f3d0ddcdcc9bd5447d98d458a11cd4f72 # v4
         with:
           config: .cliff/cliff.toml
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          github-token: "${{ secret s.GITHUB_TOKEN }}"
         env:
           OUTPUT: CHANGELOG.md
           GITHUB_REPO: ${{ github.repository }}
