@@ -20,10 +20,16 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
+      - name: Previous Release
+        id: previous_release
+        run: |
+          LAST_TAG=$(git tag --sort=-version:refname | head -n 2 | tail -n 1)
+          echo "LAST_TAG=${LAST_TAG}" >> "${GITHUB_OUTPUT}"
       - name: Generate Cliff Changelog
         if: inputs.enable-cliff == true
         uses: orhun/git-cliff-action@c93ef52f3d0ddcdcc9bd5447d98d458a11cd4f72 # v4
         with:
+          args: "--verbose ${{ steps.previous_release.outputs.LAST_TAG }}..HEAD"
           config: .cliff/cliff.toml
           github-token: "${{ secrets.GITHUB_TOKEN }}"
         env:
