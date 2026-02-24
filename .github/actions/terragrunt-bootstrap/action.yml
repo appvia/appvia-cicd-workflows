@@ -32,6 +32,10 @@ inputs:
   environment:
     description: "The environment to deploy to"
     required: false
+  node-version:
+    description: "The version of node to use"
+    required: false
+    default: "22"
   organization-name:
     description: "The name of the Github organization"
     required: false
@@ -65,7 +69,7 @@ runs:
     - name: Setup node
       uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
       with:
-        node-version: 22
+        node-version: ${{ inputs.node-version }}
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85 # v4
