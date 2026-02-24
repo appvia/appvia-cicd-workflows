@@ -67,7 +67,7 @@ runs:
     - name: Setup node
       uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6
       with:
-        node-version: 16
+        node-version: 22
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85 # v4
@@ -133,7 +133,7 @@ runs:
       shell: bash
       run: |
         git config --global url."https://x-access-token:${{steps.get_workflow_token.outputs.token}}@github.com/".insteadOf "https://github.com/"
-        
+
     - name: Terraform init
       id: init
       shell: bash
