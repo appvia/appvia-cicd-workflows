@@ -310,7 +310,7 @@ jobs:
           api-key: ${{ secrets.infracost-api-key }}
           currency: GBP
       - name: Download tfplan
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8
         with:
           name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
       - name: Generate Infracost Cost Estimate
@@ -431,7 +431,7 @@ jobs:
       - name: Calculate Plan Checksum
         run: sha256sum tfplan > tfplan.checksum
       - name: Upload tfplan
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
           name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
           compression-level: 9
@@ -444,7 +444,7 @@ jobs:
           touch ${{ inputs.additional-dir }}/.optional.file
       - name: Upload additional directory
         if: inputs.additional-dir
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
           name: additional-dir-${{ inputs.environment }}
           compression-level: 9
@@ -559,7 +559,7 @@ jobs:
       - commitlint
     steps:
       - name: Download tfplan
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8
         with:
           name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
         continue-on-error: true
@@ -690,7 +690,7 @@ jobs:
           working-directory: ${{ inputs.working-directory }}
           use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
       - name: Download tfplan
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8
         with:
           name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
         continue-on-error: true
@@ -702,7 +702,7 @@ jobs:
           fi
       - name: Download Additional Directories
         if: inputs.additional-dir
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8
         with:
           name: additional-dir-${{ inputs.environment }}
           path: ${{ inputs.additional-dir }}

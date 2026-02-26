@@ -239,7 +239,7 @@ jobs:
         run: |
           terraform -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
       - name: Upload tfplan
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
           name: tfplan-${{ inputs.environment }}
           path: "tfplan*"
@@ -251,7 +251,7 @@ jobs:
           touch ${{ inputs.additional-dir }}/.optional.file
       - name: Upload additional directory
         if: inputs.additional-dir
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
           name: additional-dir-${{ inputs.environment }}
           path: ${{ inputs.additional-dir }}
@@ -293,12 +293,12 @@ jobs:
           use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
           working-directory: ${{ inputs.working-directory }}
       - name: Download tfplan
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8
         with:
           name: tfplan-${{ inputs.environment }}
       - name: Download Additional Directories
         if: inputs.additional-dir
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8
         with:
           name: additional-dir-${{ inputs.environment }}
           path: ${{ inputs.additional-dir }}
