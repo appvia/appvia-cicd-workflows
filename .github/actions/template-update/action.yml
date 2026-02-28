@@ -74,8 +74,10 @@ runs:
       run: |
         echo "Current directory: $(pwd)"
 
-        if [[ -n "$(git diff --name-only)" ]]; then
-          echo "Changes detected in files"
+        changed_files="$(git status --porcelain)"
+        if [[ -n "${changed_files}" ]]; then
+          echo "Changes detected in files:"
+          echo "${changed_files}"
           echo "has-changes=true" >> "$GITHUB_OUTPUT"
         else
           echo "No changes detected in files"
@@ -83,7 +85,7 @@ runs:
         fi
 
     - name: Create Pull Request
-      if: steps.has-changes.outputs.has-changes == 'true'
+      if: steps.has-changes.outputs.has-changes == 'true' && inputs.enable-pull-request == 'true'
       uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # v8
       with:
         base: main
