@@ -431,7 +431,7 @@ jobs:
       - name: Calculate Plan Checksum
         run: sha256sum tfplan > tfplan.checksum
       - name: Upload tfplan
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
           compression-level: 9
@@ -444,7 +444,7 @@ jobs:
           touch ${{ inputs.additional-dir }}/.optional.file
       - name: Upload additional directory
         if: inputs.additional-dir
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: additional-dir-${{ inputs.environment }}
           compression-level: 9
