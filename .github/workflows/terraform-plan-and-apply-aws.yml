@@ -541,7 +541,7 @@ jobs:
           severity: "CRITICAL,HIGH"
           trivyignores: ${{ steps.security-exceptions.outputs.filename }}
           version: ${{ inputs.trivy-version }}
-          tf-vars: $TF_VAR_FILE
+          tf-vars: ${{ .env.TF_VAR_FILE }}
 
   update-pr:
     name: "Update PR"
