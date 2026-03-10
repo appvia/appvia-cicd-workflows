@@ -93,7 +93,7 @@ on:
         type: string
 
       trivy-version:
-        default: "v0.56.2"
+        default: "v0.69.3"
         description: "The version of trivy to use"
         required: false
         type: string
