@@ -65,8 +65,8 @@ jobs:
 - `terraform-dir` - Default: ".". The directory to validate
 - `terraform-init-extra-args` - Extra arguments to pass to terraform init
 - `terraform-tests-dir` - Default: ".". The terraform test directory
-- `terraform-version` - Default: "1.11.2". The version of terraform to use
-- `trivy-version` - Default: "v0.56.2". The version of trivy to use
+- `terraform-version` - The version of terraform to use
+- `trivy-version` - The version of trivy to use
 - `working-directory` - Default: ".". Working directory
 
 ### Optional Secrets
