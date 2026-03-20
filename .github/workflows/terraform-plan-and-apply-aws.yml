@@ -367,8 +367,8 @@ jobs:
           terraform-init-extra-args: ${{ inputs.terraform-init-extra-args }}
           terraform-state-key: ${{ inputs.terraform-state-key }}
           terraform-version: ${{ inputs.terraform-version }}
-          use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
           working-directory: ${{ inputs.working-directory }}
+          use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
       - name: Source Environment Variables
         env:
           TF_VARS_JSON: ${{ secrets.environment-variables }}
@@ -523,6 +523,7 @@ jobs:
           terraform-version: ${{ inputs.terraform-version }}
           working-directory: ${{ inputs.working-directory }}
       - name: Set terraform-values-file variable
+        id: terraform-values-file
         run: |
           if [ -n "${{ inputs.terraform-values-file }}" ]; then
             echo "TF_VAR_FILE=${{ inputs.terraform-values-file }}" >> "${GITHUB_ENV}"
@@ -536,12 +537,12 @@ jobs:
           exit-code: "1"
           format: "table"
           ignore-unfixed: true
-          scan-type: "config"
           scan-ref: ${{ inputs.working-directory }}
+          scan-type: "config"
           severity: "CRITICAL,HIGH"
           trivyignores: ${{ steps.security-exceptions.outputs.filename }}
           version: ${{ inputs.trivy-version }}
-          tf-vars: ${{ env.TF_VAR_FILE }}
+          tf-vars: ${{ steps.terraform-values-file.outputs.TF_VAR_FILE }}
 
   update-pr:
     name: "Update PR"

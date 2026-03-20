@@ -104,6 +104,12 @@ on:
         required: false
         type: string
 
+      node-version:
+        default: 22
+        description: "The version of node to use"
+        required: false
+        type: number
+
       organization-name:
         description: "The name of the Github organization (private modules access)"
         required: false
@@ -196,11 +202,12 @@ on:
 
 env:
   AWS_ROLE: ${{ inputs.aws-role }}
-  AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/web_identity_token_file
+  TG_BACKEND_BOOTSTRAP: false
+  TG_BACKEND_REQUIRE_BOOTSTRAP: false
 
 permissions:
-  id-token: write
   contents: read
+  id-token: write
   pull-requests: write
 
 jobs:
@@ -240,7 +247,7 @@ jobs:
       - name: Setup node
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
-          node-version: 16
+          node-version: ${{ inputs.node-version }}
       - name: Install Dependencies
         run: npm install @commitlint/config-conventional @commitlint/cli
       - name: Retrieve Commit Configuration
@@ -325,8 +332,8 @@ jobs:
           enable-private-access: ${{ inputs.enable-private-access }}
           environment: ${{ inputs.environment }}
           organization-name: ${{ inputs.organization-name }}
-          terragrunt-dir: ${{ inputs.terragrunt-dir }}
           terraform-version: ${{ inputs.terraform-version }}
+          terragrunt-dir: ${{ inputs.terragrunt-dir }}
           terragrunt-version: ${{ inputs.terragrunt-version }}
           use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
       - name: Format Terragrunt files
@@ -356,8 +363,8 @@ jobs:
           actions-secret: ${{ secrets.actions-secret }}
           enable-private-access: ${{ inputs.enable-private-access }}
           organization-name: ${{ inputs.organization-name }}
-          terragrunt-dir: ${{ inputs.terragrunt-dir }}
           terraform-version: ${{ inputs.terraform-version }}
+          terragrunt-dir: ${{ inputs.terragrunt-dir }}
           terragrunt-version: ${{ inputs.terragrunt-version }}
       - name: Setup TFLint
         uses: terraform-linters/setup-tflint@b480b8fcdaa6f2c577f8e4fa799e89e756bb7c93 # v6
@@ -416,8 +423,8 @@ jobs:
           actions-secret: ${{ secrets.actions-secret }}
           enable-private-access: ${{ inputs.enable-private-access }}
           organization-name: ${{ inputs.organization-name }}
-          terragrunt-dir: ${{ inputs.terragrunt-dir }}
           terraform-version: ${{ inputs.terraform-version }}
+          terragrunt-dir: ${{ inputs.terragrunt-dir }}
           terragrunt-version: ${{ inputs.terragrunt-version }}
       - name: Run Trivy vulnerability
         id: security
@@ -466,17 +473,19 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Terragrunt Plan Matrix
         id: matrix
-        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-matrix@main
+        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-matrix@terragrunt_test
         with:
-          terragrunt-dir: "${{ inputs.terragrunt-dir }}"
           account-files: "${{ inputs.terragrunt-config-file }}"
           exclude-patterns: ".terragrunt-cache,node_modules,.git"
-          include-region: "true"
+          group-by-parent: "true"
           include-account: "true"
-          include-unit-name: "true"
-          include-relative-path: "true"
-          matrix-key: "unit"
           include-path: "true"
+          include-region: "true"
+          include-relative-path: "true"
+          include-unit-name: "true"
+          matrix-key: "unit"
+          parent-pattern: "accounts/[^/]+/[^/]+"
+          terragrunt-dir: "${{ inputs.terragrunt-dir }}"
 
   terragrunt-plan-matrix:
     name: "Terragrunt Plan (${{ matrix.unit.region }}/${{ matrix.unit.unit_name }})"
@@ -493,6 +502,7 @@ jobs:
       fail-fast: false
     env:
       TG_PROVIDER_CACHE: "1"
+      TG_DISABLE_BUCKET_UPDATE: "true"
     outputs:
       result-auth: ${{ steps.bootstrap.outputs.outcome-auth }}
       result-plan: ${{ steps.plan.outcome }}
@@ -518,8 +528,8 @@ jobs:
           enable-private-access: ${{ inputs.enable-private-access }}
           environment: ${{ inputs.environment }}
           organization-name: ${{ inputs.organization-name }}
-          terragrunt-dir: ${{ steps.extract-directory-name.outputs.directory_name }}
           terraform-version: ${{ inputs.terraform-version }}
+          terragrunt-dir: ${{ steps.extract-directory-name.outputs.directory_name }}
           terragrunt-version: ${{ inputs.terragrunt-version }}
 
       - name: Process Unit
@@ -586,8 +596,8 @@ jobs:
           enable-private-access: ${{ inputs.enable-private-access }}
           environment: ${{ inputs.environment }}
           organization-name: ${{ inputs.organization-name }}
-          terragrunt-dir: ${{ inputs.terragrunt-dir }}
           terraform-version: ${{ inputs.terraform-version }}
+          terragrunt-dir: ${{ inputs.terragrunt-dir }}
           terragrunt-version: ${{ inputs.terragrunt-version }}
           use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
       - name: Terragrunt Validate
@@ -677,13 +687,13 @@ jobs:
           aws-read-role-name: ${{ inputs.aws-read-role-name }}
           aws-region: ${{ inputs.aws-region }}
           aws-role: ${{ inputs.aws-role }}
-          aws-web-identity-token-file: ${{ env.AWS_WEB_IDENTITY_TOKEN_FILE }}
+          aws-web-identity-token-file: ${{ inputs.aws-web-identity-token-file }}
           aws-write-role-name: ${{ inputs.aws-write-role-name }}
           enable-private-access: ${{ inputs.enable-private-access }}
           environment: ${{ inputs.environment }}
           organization-name: ${{ inputs.organization-name }}
-          terragrunt-dir: ${{ inputs.terragrunt-dir }}
           terraform-version: ${{ inputs.terraform-version }}
+          terragrunt-dir: ${{ inputs.terragrunt-dir }}
           terragrunt-version: ${{ inputs.terragrunt-version }}
           use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
       - name: Terragrunt Apply
@@ -718,16 +728,16 @@ jobs:
       - name: Add PR Comment
         uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-pr@main
         with:
+          environment: ${{ inputs.environment }}
+          status-auth: ${{ needs.terragrunt-plan-matrix.outputs.result-auth }}
+          status-commitlint: ${{ needs.commitlint.outputs.result }}
           status-format: ${{ needs.terragrunt-format.outputs.result }}
           status-hcl-format: ${{ needs.terragrunt-hclfmt.outputs.result }}
-          status-inputs-render: ${{ needs.terragrunt-render.outputs.result }}
           status-inputs-diff: ${{ needs.terragrunt-diff.outputs.result }}
+          status-inputs-render: ${{ needs.terragrunt-render.outputs.result }}
           status-linting: ${{ needs.terragrunt-lint.outputs.result }}
-          status-security: ${{ needs.terragrunt-security.outputs.result }}
-          status-auth: ${{ needs.terragrunt-plan-matrix.outputs.result-auth }}
           status-plan: ${{ needs.terragrunt-plan-matrix.outputs.result-plan }}
-          status-commitlint: ${{ needs.commitlint.outputs.result }}
-          environment: ${{ inputs.environment }}
+          status-security: ${{ needs.terragrunt-security.outputs.result }}
           working-directory: ${{ inputs.terragrunt-dir }}
 
   update-pr-comment:
@@ -752,14 +762,14 @@ jobs:
       - name: Add PR Comment
         uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-pr@main
         with:
+          environment: ${{ inputs.environment }}
+          status-auth: ${{ needs.terragrunt-plan.outputs.result-auth }}
+          status-commitlint: ${{ needs.commitlint.outputs.result }}
           status-format: ${{ needs.terragrunt-format.outputs.result }}
           status-hcl-format: ${{ needs.terragrunt-hclfmt.outputs.result }}
-          status-inputs-render: ${{ needs.terragrunt-render.outputs.result }}
           status-inputs-diff: ${{ needs.terragrunt-diff.outputs.result }}
+          status-inputs-render: ${{ needs.terragrunt-render.outputs.result }}
           status-linting: ${{ needs.terragrunt-lint.outputs.result }}
-          status-security: ${{ needs.terragrunt-security.outputs.result }}
-          status-auth: ${{ needs.terragrunt-plan.outputs.result-auth }}
           status-plan: ${{ needs.terragrunt-plan.outputs.result-plan }}
-          status-commitlint: ${{ needs.commitlint.outputs.result }}
-          environment: ${{ inputs.environment }}
+          status-security: ${{ needs.terragrunt-security.outputs.result }}
           working-directory: ${{ inputs.terragrunt-dir }}
