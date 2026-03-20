@@ -473,7 +473,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       - name: Terragrunt Plan Matrix
         id: matrix
-        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-matrix@terragrunt_test
+        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-matrix@main
         with:
           account-files: "${{ inputs.terragrunt-config-file }}"
           exclude-patterns: ".terragrunt-cache,node_modules,.git"
