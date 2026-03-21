@@ -61,12 +61,10 @@ runs:
           if [[ -n "${source_file}" ]]; then
             if [[ -f "./tmp/upstream-template/${source_file}" ]]; then
               echo "Copying file ${source_file} from upstream template to ${destination_file}"
-              # If the source file is a directory, copy the directory recursively
-              if [[ -d "${source_file}" ]]; then
-                cp -rf "./tmp/upstream-template/${source_file}" "${destination_file}"
-              else
-                cp -f "./tmp/upstream-template/${source_file}" "${destination_file}"
-              fi
+              cp -f "./tmp/upstream-template/${source_file}" "${destination_file}"
+            elif [[ -d "./tmp/upstream-template/${source_file}" ]]; then
+              echo "Copying directory ${source_file} from upstream template to ${destination_file}"
+              cp -rf "./tmp/upstream-template/${source_file}" "${destination_file}"
             else
               echo "File ${source_file} not found in upstream template"
             fi
