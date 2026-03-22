@@ -6,7 +6,7 @@ This GitHub Actions workflow template ([terragrunt-plan-and-apply-aws.yml](../.g
 
 Terragrunt is a thin wrapper for Terraform that provides extra tools for keeping your configurations DRY, working with multiple Terraform modules, and managing remote state. This workflow provides a complete CI/CD pipeline for Terragrunt-based infrastructure, with support for:
 
-- Multiple deployment units with matrix execution
+- Multiple deployment units with matrix execution for plan and, on pushes to `main`, for apply
 - HCL formatting and validation
 - Static security analysis
 - Cost estimation with Infracost
@@ -25,10 +25,10 @@ Terragrunt is a thin wrapper for Terraform that provides extra tools for keeping
 8. **Static Security Analysis:** Runs Trivy to scan for security misconfigurations (placeholder implementation)
 9. **Terragrunt Inputs Diff:** Detects which Terragrunt units have changed inputs
 10. **Terragrunt Matrix:** Generates a matrix of Terragrunt units for parallel execution (optional)
-11. **Terragrunt Plan:** Runs `terragrunt plan` for all or specific units, either in parallel (matrix mode) or sequentially
+11. **Terragrunt Plan:** Runs `terragrunt plan` for all or specific units, either in parallel (matrix mode, one job per unit) or sequentially in a single job
 12. **Get Cost Estimate:** Runs Infracost to estimate infrastructure costs (PR only, optional)
 13. **Add PR Comment:** Posts a comprehensive comment to the PR with all validation and plan results
-14. **Terragrunt Apply:** Automatically applies changes when merged to main (if enabled)
+14. **Terragrunt Apply:** Automatically applies changes when merged to `main` (if enabled), using the same per-unit matrix as plan when `enable-matrix` is true, or a single `terragrunt run --all apply` job otherwise
 
 ## Usage
 
@@ -85,7 +85,7 @@ jobs:
 - `enable-commitlint` - Default: true. Whether to run commitlint on the commit message
 - `enable-terragrunt-apply` - Default: true. Whether to run terragrunt apply on merge to main
 - `enable-terragrunt-plan` - Default: false. Whether to run terragrunt plan on merge to main (useful for scheduled drift detection)
-- `enable-matrix` - Default: false. Whether to run the terragrunt plan in matrix mode (parallel execution per unit)
+- `enable-matrix` - Default: false. Whether to run terragrunt plan and apply in matrix mode (one parallel GitHub Actions job per Terragrunt unit)
 - `enable-private-access` - Default: false. Flag to indicate if Terraform requires pulling private modules
 
 #### Environment Configuration
@@ -162,7 +162,7 @@ jobs:
 
 ### Matrix Mode (Parallel Execution)
 
-Enable parallel execution for faster planning:
+Enable parallel execution for faster planning and, on pushes to `main`, parallel apply (one job per unit):
 
 ```yml
 jobs:
@@ -288,16 +288,18 @@ jobs:
 The workflow supports two execution modes:
 
 ### Standard Mode (default)
-- Runs all Terragrunt units sequentially in a single job
+- Runs all Terragrunt units in a single plan job and a single apply job (`terragrunt run --all`)
 - Simpler logs and easier debugging
 - Better for smaller infrastructures
 - Use when: You have few Terragrunt units or prefer sequential execution
 
 ### Matrix Mode (`enable-matrix: true`)
-- Detects all Terragrunt units and executes them in parallel
+- Detects all Terragrunt units and executes **plan** in parallel: one GitHub Actions job per unit
+- On `main`, **apply** uses the same matrix (parallel per unit) instead of a single `terragrunt run --all apply` job
 - Significantly faster for large infrastructures
-- Each unit runs in its own job
-- Use when: You have many Terragrunt units and want faster feedback
+- Use when: You have many Terragrunt units and want faster feedback and deploys
+
+**Note:** Parallel applies run independently per unit. Ensure your stacks do not rely on a strict apply order across units unless dependencies are modeled in Terragrunt (or accept that GitHub will schedule matrix jobs concurrently).
 
 ## Pull Request Comments
 
@@ -344,7 +346,7 @@ repository/
 
 ## Best Practices
 
-1. **Enable Matrix Mode for Large Repos:** Use `enable-matrix: true` for faster feedback on repositories with many Terragrunt units
+1. **Enable Matrix Mode for Large Repos:** Use `enable-matrix: true` for faster plans on pull requests and faster parallel applies on `main` when you have many Terragrunt units
 2. **Use Infracost:** Enable cost estimation to understand the financial impact of changes
 3. **Pin Versions:** Specify exact versions for Terraform and Terragrunt for reproducibility
 4. **Environment Protection:** Use GitHub environment protection rules to require manual approval for production deploys
@@ -370,6 +372,7 @@ repository/
 - Ensure your Terragrunt structure follows the expected format
 - Check that `terragrunt.hcl` files are in the correct locations
 - Review the matrix generation step output for debugging
+- For failures during matrix apply on `main`, inspect the per-unit job that failed; jobs run concurrently, so cross-unit ordering is not guaranteed unless modeled in Terragrunt
 
 ### Formatting Failures
 - Run `terragrunt hclfmt` locally to fix HCL formatting

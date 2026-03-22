@@ -88,7 +88,7 @@ on:
 
       enable-matrix:
         default: false
-        description: "Indicates if should run the terragrunt plan matrix workflow"
+        description: "Whether to run terragrunt plan and apply using a per-unit matrix (parallel jobs)"
         required: false
         type: boolean
 
@@ -458,7 +458,7 @@ jobs:
 
   terragrunt-matrix:
     name: "Terragrunt Matrix"
-    if: inputs.enable-matrix == true && ((github.event_name == 'pull_request') || (github.ref == 'refs/heads/main' && contains(fromJSON('["schedule"]'), github.event_name)) || (github.ref == 'refs/heads/main' && inputs.enable-terragrunt-plan))
+    if: inputs.enable-matrix == true && ((github.event_name == 'pull_request') || (github.ref == 'refs/heads/main' && contains(fromJSON('["schedule"]'), github.event_name)) || (github.ref == 'refs/heads/main' && inputs.enable-terragrunt-plan) || (github.ref == 'refs/heads/main' && contains(fromJSON('["push", "workflow_dispatch"]'), github.event_name) && inputs.enable-terragrunt-apply))
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -488,7 +488,7 @@ jobs:
           terragrunt-dir: "${{ inputs.terragrunt-dir }}"
 
   terragrunt-plan-matrix:
-    name: "Terragrunt Plan (${{ matrix.unit.region }}/${{ matrix.unit.unit_name }})"
+    name: "${{ matrix.unit && format('Terragrunt Plan ({0}/{1})', matrix.unit.region, matrix.unit.unit_name) || 'Terragrunt Plan (matrix)' }}"
     if: inputs.enable-matrix == true && needs.terragrunt-matrix.outputs.count > 0 && ((github.event_name == 'pull_request') || (github.ref == 'refs/heads/main' && contains(fromJSON('["schedule"]'), github.event_name)) || (github.ref == 'refs/heads/main' && inputs.enable-terragrunt-plan))
     runs-on: ubuntu-latest
     defaults:
@@ -539,10 +539,6 @@ jobs:
           echo "Terragrunt Dir: ${{ steps.extract-directory-name.outputs.directory_name }}"
           echo "Region: ${{ matrix.unit.region }}"
           echo "Account: ${{ matrix.unit.account }}"
-      #      - name: Terragrunt Validate
-      #        id: validate
-      #        run: |
-      #          terragrunt validate --config ${{ steps.extract-directory-name.outputs.directory_name }}/${{ inputs.terragrunt-config-file }}
       - name: Source Environment Variables
         env:
           TF_VARS_JSON: ${{ secrets.environment-variables }}
@@ -658,7 +654,7 @@ jobs:
 
   terragrunt-apply:
     name: "Terragrunt Apply"
-    if: github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule", "workflow_dispatch"]'), github.event_name) && inputs.enable-terragrunt-apply
+    if: inputs.enable-matrix == false && github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule", "workflow_dispatch"]'), github.event_name) && inputs.enable-terragrunt-apply
     environment: ${{ inputs.environment }}
     runs-on: ${{ inputs.runs-on }}
     defaults:
@@ -697,6 +693,72 @@ jobs:
           terragrunt-version: ${{ inputs.terragrunt-version }}
           use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
       - name: Terragrunt Apply
+        run: |
+          terragrunt run --config ${{ inputs.terragrunt-config-file }} --all --summary-per-unit --non-interactive ${{ inputs.terragrunt-apply-extra-args }} -- \
+            apply \
+            -auto-approve \
+            -input=false \
+            -parallelism=${{ inputs.terraform-parallelism }} \
+            -lock-timeout=${{ inputs.terraform-lock-timeout }} \
+            ${{ inputs.terraform-apply-extra-args }}
+
+  terragrunt-apply-matrix:
+    name: "${{ matrix.unit && format('Terragrunt Apply ({0}/{1})', matrix.unit.region, matrix.unit.unit_name) || 'Terragrunt Apply (matrix)' }}"
+    if: inputs.enable-matrix == true && needs.terragrunt-matrix.outputs.count > 0 && github.ref == 'refs/heads/main' && contains(fromJSON('["push", "schedule", "workflow_dispatch"]'), github.event_name) && inputs.enable-terragrunt-apply
+    environment: ${{ inputs.environment }}
+    runs-on: ${{ inputs.runs-on }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.terragrunt-dir }}
+    needs:
+      - terragrunt-matrix
+      - terragrunt-format
+      - terragrunt-hclfmt
+      - terragrunt-lint
+      - terragrunt-render
+      - terragrunt-security
+      - debug-mode
+    strategy:
+      matrix: ${{ fromJson(needs.terragrunt-matrix.outputs.matrix) }}
+      fail-fast: false
+    env:
+      TF_LOG: ${{ needs.debug-mode.outputs.tf_log }}
+      TG_PROVIDER_CACHE: "1"
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Extract Directory Name
+        id: extract-directory-name
+        run: |
+          echo "directory_name=$(dirname ${{ matrix.unit.relative_path }})" >> "${GITHUB_OUTPUT}"
+      - name: Terragrunt Bootstrap
+        id: bootstrap
+        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@main
+        with:
+          actions-id: ${{ secrets.actions-id }}
+          actions-secret: ${{ secrets.actions-secret }}
+          aws-account-id: ${{ inputs.aws-account-id }}
+          aws-read-role-name: ${{ inputs.aws-read-role-name }}
+          aws-region: ${{ inputs.aws-region }}
+          aws-role: ${{ inputs.aws-role }}
+          aws-web-identity-token-file: ${{ inputs.aws-web-identity-token-file }}
+          aws-write-role-name: ${{ inputs.aws-write-role-name }}
+          enable-private-access: ${{ inputs.enable-private-access }}
+          environment: ${{ inputs.environment }}
+          organization-name: ${{ inputs.organization-name }}
+          terraform-version: ${{ inputs.terraform-version }}
+          terragrunt-dir: ${{ steps.extract-directory-name.outputs.directory_name }}
+          terragrunt-version: ${{ inputs.terragrunt-version }}
+          use-env-as-suffix: ${{ inputs.use-env-as-suffix }}
+      - name: Source Environment Variables
+        env:
+          TF_VARS_JSON: ${{ secrets.environment-variables }}
+        if: env.TF_VARS_JSON != ''
+        run: |
+          echo "Sourcing terraform variables from secret"
+          jq -n -r 'env.TF_VARS_JSON | gsub("[\n\r]";"") | fromjson | to_entries[] | "\(.key)=\(.value)"' >> "$GITHUB_ENV"
+      - name: Terragrunt Apply
+        working-directory: ${{ steps.extract-directory-name.outputs.directory_name }}
         run: |
           terragrunt run --config ${{ inputs.terragrunt-config-file }} --all --summary-per-unit --non-interactive ${{ inputs.terragrunt-apply-extra-args }} -- \
             apply \

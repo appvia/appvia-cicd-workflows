@@ -14,7 +14,7 @@ Please refer to the following documentation for more information on the workflow
 - [Terraform Drift Detection](./docs/terraform-drift.md) - Detect configuration drift in deployed infrastructure
 
 ### Terragrunt Workflows
-- [Terragrunt Plan & Apply (AWS)](./docs/terragrunt-plan-and-apply-aws.md) - Automated Terragrunt deployment pipeline for AWS
+- [Terragrunt Plan & Apply (AWS)](./docs/terragrunt-plan-and-apply-aws.md) - Automated Terragrunt deployment pipeline for AWS (optional per-unit matrix for plan and apply on `main`)
 - [Terragrunt Manual Dispatch](./docs/terragrunt-dispatch.md) - Manually trigger Terragrunt operations
 
 ### Docker Workflows
@@ -23,6 +23,16 @@ Please refer to the following documentation for more information on the workflow
 ### Utility Workflows
 - [GitHub Workflow Validation](./docs/github-workflow-validation.md) - Validate GitHub Actions workflow files
 - [Template Update](./docs/template-update.md) - Keep repository files in sync with templates
+
+## Validating workflow changes locally
+
+Workflows under `.github/workflows` are checked with [actionlint](https://github.com/rhysd/actionlint). From the repository root:
+
+```bash
+actionlint
+```
+
+Install via Homebrew (`brew install actionlint`), a [prebuilt binary](https://github.com/rhysd/actionlint/releases), or `go install github.com/rhysd/actionlint/cmd/actionlint@latest`. You can also use the reusable [GitHub Workflow Validation](./docs/github-workflow-validation.md) workflow in CI.
 
 ## How to setup Deployment Protection & Approval
 
