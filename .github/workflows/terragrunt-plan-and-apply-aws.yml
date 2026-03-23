@@ -273,7 +273,7 @@ jobs:
         with:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Setup Terragrunt
-        uses: gruntwork-io/terragrunt-action@5e86476ca61eaf74adb9c0525745f29f921f2199 # v3
+        uses: gruntwork-io/terragrunt-action@53dbdc2c3d43e82bf3bae10b734a968196442bec # v3.2.0
         with:
           tg_version: ${{ inputs.terragrunt-version }}
           tf_path: /bin/terraform
@@ -298,7 +298,7 @@ jobs:
         with:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Setup Terragrunt
-        uses: gruntwork-io/terragrunt-action@5e86476ca61eaf74adb9c0525745f29f921f2199 # v3
+        uses: gruntwork-io/terragrunt-action@53dbdc2c3d43e82bf3bae10b734a968196442bec # v3.2.0
         with:
           tg_version: ${{ inputs.terragrunt-version }}
           tf_path: /bin/terraform
