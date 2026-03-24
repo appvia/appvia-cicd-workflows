@@ -391,7 +391,7 @@ jobs:
       - name: Terraform S3 Backend Check
         id: s3-backend-check
         run: |
-          if grep -E '^[^#]*backend\s+"s3"' terraform.tf; then
+          if grep -E '^[[:space:]]*backend[[:space:]]*"s3"' terraform.tf; then
             echo "Terraform configuration references an S3 backend."
           else
             echo "Terraform configuration does not reference an S3 backend."
