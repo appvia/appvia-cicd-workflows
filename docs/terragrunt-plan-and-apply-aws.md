@@ -70,6 +70,7 @@ jobs:
 ### Optional Inputs
 
 #### AWS Configuration
+
 - `aws-role` - Default: Repository Name. The AWS role to assume
 - `aws-read-role-name` - Overrides the default behavior, and uses a custom role name for read-only access
 - `aws-write-role-name` - Overrides the default behavior, and uses a custom role name for read-write access
@@ -77,10 +78,12 @@ jobs:
 - `aws-web-identity-token-file` - Default: "/tmp/web_identity_token_file". The file containing the AWS web identity token
 
 #### CI/CD Configuration
+
 - `cicd-repository` - Default: "appvia/appvia-cicd-workflows". The repository to pull the CI/CD workflows from
 - `cicd-branch` - Default: "main". The branch to pull the CI/CD workflows from
 
 #### Feature Flags
+
 - `enable-infracost` - Default: false. Whether to run Infracost on the Terragrunt Plan (requires `infracost-api-key` secret)
 - `enable-commitlint` - Default: true. Whether to run commitlint on the commit message
 - `enable-terragrunt-apply` - Default: true. Whether to run terragrunt apply on merge to main
@@ -89,18 +92,21 @@ jobs:
 - `enable-private-access` - Default: false. Flag to indicate if Terraform requires pulling private modules
 
 #### Environment Configuration
+
 - `environment` - Default: "production". The environment to deploy to
 - `runs-on` - Default: "ubuntu-latest". Single label value for the GitHub runner to use
 - `use-env-as-suffix` - Default: false. Whether to use the environment as a suffix for the state file and IAM roles
 
 #### Terragrunt Configuration
+
 - `terragrunt-dir` - Default: ".". The directory to validate
-- `terragrunt-version` - Default: "0.88.1". The version of Terragrunt to use
+- `terragrunt-version` - Default: "0.99.4". The version of Terragrunt to use
 - `terragrunt-config-file` - Default: "terragrunt.hcl". The configuration file to use for Terragrunt
 - `terragrunt-apply-extra-args` - Default: "-parallelism=10". Extra arguments to pass to terragrunt apply
 - `terragrunt-plan-extra-args` - Default: "-parallelism=10". Extra arguments to pass to terragrunt plan
 
 #### Terraform Configuration
+
 - `terraform-version` - Default: "1.13.3". The version of Terraform to use
 - `terraform-apply-extra-args` - Extra arguments to pass to terraform apply
 - `terraform-plan-extra-args` - Extra arguments to pass to terraform plan
@@ -109,6 +115,7 @@ jobs:
 - `terraform-parallelism` - Default: 20. The number of parallel operations to run
 
 #### Security Configuration
+
 - `trivy-version` - Default: "v0.60.0". The version of Trivy to use
 
 ### Optional Secrets
@@ -228,7 +235,7 @@ Run plan operations on a schedule to detect infrastructure drift:
 name: Drift Detection
 on:
   schedule:
-    - cron: '0 0 * * *'  # Daily at midnight
+    - cron: "0 0 * * *" # Daily at midnight
 
 permissions:
   contents: read
@@ -288,12 +295,14 @@ jobs:
 The workflow supports two execution modes:
 
 ### Standard Mode (default)
+
 - Runs all Terragrunt units in a single plan job and a single apply job (`terragrunt run --all`)
 - Simpler logs and easier debugging
 - Better for smaller infrastructures
 - Use when: You have few Terragrunt units or prefer sequential execution
 
 ### Matrix Mode (`enable-matrix: true`)
+
 - Detects all Terragrunt units and executes **plan** in parallel: one GitHub Actions job per unit
 - On `main`, **apply** uses the same matrix (parallel per unit) instead of a single `terragrunt run --all apply` job
 - Significantly faster for large infrastructures
@@ -358,37 +367,41 @@ repository/
 ## Troubleshooting
 
 ### Authentication Failures
+
 - Verify your AWS OIDC configuration is correct
 - Ensure the IAM role has the necessary permissions
 - Check that the role trust policy includes your repository
 
 ### Plan Failures
+
 - Review the plan output in the GitHub Actions logs
 - Check for syntax errors or invalid configurations
 - Ensure all required variables are provided
 - Verify network connectivity to AWS
 
 ### Matrix Mode Issues
+
 - Ensure your Terragrunt structure follows the expected format
 - Check that `terragrunt.hcl` files are in the correct locations
 - Review the matrix generation step output for debugging
 - For failures during matrix apply on `main`, inspect the per-unit job that failed; jobs run concurrently, so cross-unit ordering is not guaranteed unless modeled in Terragrunt
 
 ### Formatting Failures
+
 - Run `terragrunt hclfmt` locally to fix HCL formatting
 - Run `terraform fmt -recursive` to fix Terraform formatting
 - Commit and push the formatted files
 
 ## Comparison with Terraform Workflow
 
-| Feature | Terragrunt Workflow | Terraform Workflow |
-|---------|-------------------|-------------------|
-| Tool | Terragrunt + Terraform | Terraform only |
-| DRY Config | Yes (Terragrunt) | No |
-| Matrix Execution | Yes (optional) | No |
-| HCL Formatting | Yes | N/A |
-| Multi-module | Native support | Manual management |
-| State Management | Terragrunt-managed | Manual configuration |
+| Feature          | Terragrunt Workflow    | Terraform Workflow   |
+| ---------------- | ---------------------- | -------------------- |
+| Tool             | Terragrunt + Terraform | Terraform only       |
+| DRY Config       | Yes (Terragrunt)       | No                   |
+| Matrix Execution | Yes (optional)         | No                   |
+| HCL Formatting   | Yes                    | N/A                  |
+| Multi-module     | Native support         | Manual management    |
+| State Management | Terragrunt-managed     | Manual configuration |
 
 **Note:** This template may change over time, so it is recommended that you point to a tagged version rather than the main branch.
 

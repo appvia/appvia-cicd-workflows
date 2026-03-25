@@ -177,7 +177,7 @@ on:
         type: string
 
       terragrunt-version:
-        default: "0.88.1"
+        default: "0.99.4"
         description: "The version of terragrunt to use"
         required: false
         type: string
