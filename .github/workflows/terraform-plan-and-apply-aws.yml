@@ -305,7 +305,7 @@ jobs:
       - terraform-plan
     steps:
       - name: Setup Infracost
-        uses: infracost/actions/setup@e9d6e6cd65e168e76b0de50ff9957d2fe8bb1832 # v3
+        uses: infracost/actions/setup@9accc4137ae3f13ede9182e0afa2bed39a23c4c0 # v4
         with:
           api-key: ${{ secrets.infracost-api-key }}
           currency: GBP
