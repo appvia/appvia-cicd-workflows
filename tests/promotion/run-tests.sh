@@ -111,10 +111,16 @@ run_fixture() {
   local message_contains
   message_contains=$(jq -r '.message_contains // empty' "$fixture_path/expected.json")
 
+  # Read promotion order (optional, defaults to dev,qa,staging,uat,prod)
+  local promotion_order="dev,qa,staging,uat,prod"
+  if [[ -f "$fixture_path/promotion-order.txt" ]]; then
+    promotion_order=$(cat "$fixture_path/promotion-order.txt" | xargs)
+  fi
+
   # Run validation
   local output
   local actual_exit=0
-  output=$("$VALIDATE_SCRIPT" "$tmpdir" "${changed_files[@]}" 2>&1) || actual_exit=$?
+  output=$("$VALIDATE_SCRIPT" "$tmpdir" "$promotion_order" "${changed_files[@]}" 2>&1) || actual_exit=$?
 
   # Validate exit code
   local test_passed=true

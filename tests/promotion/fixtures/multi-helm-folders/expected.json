@@ -1,7 +1,8 @@
 {
   "exit_code": 1,
   "results": {
-    "hello-helm/prod.yaml": "fail"
+    "hello-helm/prod.yaml": "fail",
+    "hello-api/prod.yaml": "fail"
   },
   "message_contains": "Higher environment version exceeds lower environment"
 }

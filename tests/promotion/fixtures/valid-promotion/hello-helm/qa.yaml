@@ -1,7 +1,7 @@
 helm:
   repository: https://helm.github.io/examples
   chart: hello-world
-  version: "0.2.0"
+  version: "0.1.1"
 sync:
   phase: primary
   duration: 60s

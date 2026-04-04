@@ -76,7 +76,7 @@ runs:
         fi
 
         # Run validation script
-        ./ci-scripts/validate-promotion.sh "${{ inputs.workloads-dir }}" $CHANGED_FILES | tee validation_output.txt
+        ./ci-scripts/validate-promotion.sh "${{ inputs.workloads-dir }}" "${{ inputs.promotion-order }}" $CHANGED_FILES | tee validation_output.txt
 
         # Capture exit code
         EXIT_CODE=${PIPESTATUS[0]}

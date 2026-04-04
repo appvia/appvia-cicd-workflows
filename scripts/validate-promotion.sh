@@ -17,9 +17,10 @@ set -euo pipefail
 #   1 - One or more validations failed
 # =============================================================================
 
-PROMOTION_ORDER=("dev" "qa" "staging" "uat" "prod")
 WORKLOADS_DIR="${1:-workloads/applications}"
-shift || true
+PROMOTION_ORDER_INPUT="${2:-dev,qa,staging,uat,prod}"
+IFS=',' read -ra PROMOTION_ORDER <<<"$PROMOTION_ORDER_INPUT"
+shift 2 || true
 CHANGED_FILES=("$@")
 
 # Track overall result
@@ -323,17 +324,19 @@ validate_file() {
     return
   fi
 
-  # Compare versions
+  # Compare versions - higher env cannot have version greater than lower env
   local cmp_result
   cmp_result=$(compare_semver "$target_version" "$predecessor_version")
 
   local predecessor_env_name
   predecessor_env_name=$(basename "$predecessor_file" .yaml)
 
-  if [[ "$cmp_result" -eq 2 ]]; then
-    log_fail "${app_name}/${env_name}.yaml" "Version regression: ${env_name} (${target_version}) < ${predecessor_env_name} (${predecessor_version})"
+  if [[ "$cmp_result" -eq 1 ]]; then
+    log_fail "${app_name}/${env_name}.yaml" "Higher environment version exceeds lower environment: ${env_name} (${target_version}) > ${predecessor_env_name} (${predecessor_version})"
+  elif [[ "$cmp_result" -eq 2 ]]; then
+    log_pass "${app_name}/${env_name}.yaml" "${env_name} (${target_version}) < ${predecessor_env_name} (${predecessor_version}) — promotion in progress"
   else
-    log_pass "${app_name}/${env_name}.yaml" "${env_name} (${target_version}) >= ${predecessor_env_name} (${predecessor_version})"
+    log_pass "${app_name}/${env_name}.yaml" "${env_name} (${target_version}) == ${predecessor_env_name} (${predecessor_version})"
   fi
 }
 
