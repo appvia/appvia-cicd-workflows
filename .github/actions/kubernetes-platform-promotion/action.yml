@@ -1,0 +1,154 @@
+---
+name: "Promotion Validation"
+description: "Validates environment promotions for Kubernetes platform workloads by ensuring semantic versions never regress"
+inputs:
+  cicd-branch:
+    description: "The branch for the cicd workflows"
+    required: true
+  cicd-repository:
+    description: "The repository for the cicd workflows"
+    required: true
+  github-token:
+    description: "GitHub token for PR comments"
+    required: false
+    default: ${{ github.token }}
+  promotion-order:
+    description: "Comma-separated promotion order"
+    required: false
+    default: "dev,qa,staging,uat,prod"
+  workloads-dir:
+    description: "Path to the workloads applications directory"
+    required: false
+    default: "workloads/applications"
+
+outputs:
+  result:
+    description: "The result of the validation (success/failure)"
+    value: ${{ steps.validate.outcome }}
+  summary:
+    description: "Summary of validation results"
+    value: ${{ steps.validate.outputs.summary }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Download Validation Script
+      shell: bash
+      run: |
+        mkdir -p ci-scripts
+        curl -s https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/scripts/validate-promotion.sh -o ./ci-scripts/validate-promotion.sh
+        chmod +x ./ci-scripts/validate-promotion.sh
+
+    - name: Get Changed Files
+      shell: bash
+      id: changed-files
+      run: |
+        # Get changed files between PR base and head
+        CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} -- '${{ inputs.workloads-dir }}/**/*.yaml' | grep -v '/values/' | grep -v '/overlays/' || true)
+
+        # Convert newline-separated to space-separated for arguments
+        FILES_SPACE=$(echo "$CHANGED_FILES" | tr '\n' ' ' | xargs)
+
+        echo "files<<FILESEOF" >> $GITHUB_OUTPUT
+        echo "$FILES_SPACE" >> $GITHUB_OUTPUT
+        echo "FILESEOF" >> $GITHUB_OUTPUT
+
+        # Count changed files
+        if [[ -z "$CHANGED_FILES" ]]; then
+          echo "count=0" >> $GITHUB_OUTPUT
+        else
+          FILE_COUNT=$(echo "$CHANGED_FILES" | wc -l | tr -d ' ')
+          echo "count=$FILE_COUNT" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Validate Promotion
+      shell: bash
+      id: validate
+      if: steps.changed-files.outputs.count != '0'
+      run: |
+        # Get changed files as arguments
+        CHANGED_FILES="${{ steps.changed-files.outputs.files }}"
+
+        if [[ -z "$CHANGED_FILES" ]]; then
+          echo "No relevant files changed."
+          echo "summary=No environment files changed." >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        # Run validation script
+        ./ci-scripts/validate-promotion.sh "${{ inputs.workloads-dir }}" $CHANGED_FILES | tee validation_output.txt
+
+        # Capture exit code
+        EXIT_CODE=${PIPESTATUS[0]}
+
+        # Extract summary for output
+        echo "summary<<SUMMARYEOF" >> $GITHUB_OUTPUT
+        cat validation_output.txt >> $GITHUB_OUTPUT
+        echo "SUMMARYEOF" >> $GITHUB_OUTPUT
+
+        exit $EXIT_CODE
+
+    - name: Comment on Pull Request
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+      id: comment
+      if: always() && steps.changed-files.outputs.count != '0'
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const fs = require('fs');
+
+          let summary = '';
+          try {
+            summary = fs.readFileSync('validation_output.txt', 'utf8');
+          } catch (e) {
+            summary = 'No validation output available.';
+          }
+
+          // Format the output for markdown
+          const formattedOutput = summary
+            .replace(/=========================================/g, '---')
+            .replace(/✅/g, '✅')
+            .replace(/❌/g, '❌')
+            .replace(/ℹ️/g, 'ℹ️');
+
+          const body = `### 🚀 Kubernetes Platform Promotion Validation
+
+          <details>
+          <summary>View Validation Results</summary>
+
+          \`\`\`
+          ${formattedOutput}
+          \`\`\`
+
+          </details>
+
+          ---
+          *Workflow Run: [${{ github.workflow }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})*`;
+
+          // Find existing comment
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+
+          const existingComment = comments.find(comment =>
+            comment.user.type === 'Bot' &&
+            comment.body.includes('🚀 Promotion Validation')
+          );
+
+          if (existingComment) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existingComment.id,
+              body: body
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });
+          }

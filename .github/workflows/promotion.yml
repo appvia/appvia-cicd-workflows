@@ -1,0 +1,55 @@
+---
+name: Validate Promotion Order
+
+on:
+  workflow_call:
+    inputs:
+      cicd-repository:
+        default: "appvia/appvia-cicd-workflows"
+        description: "The repository to pull the CI/CD workflows from"
+        required: false
+        type: string
+      cicd-branch:
+        default: "main"
+        description: "The branch to pull the CI/CD workflows from"
+        required: false
+        type: string
+      promotion-order:
+        default: "dev,qa,staging,uat,prod"
+        description: "Comma-separated list defining the promotion order of environments"
+        required: false
+        type: string
+      workloads-dir:
+        default: "workloads/applications"
+        description: "The directory containing the workload definitions"
+        required: false
+        type: string
+
+permissions:
+  # Require the permissions to the read the content
+  contents: read
+  # Required to authenticae the Github API
+  id-token: write
+  # Required to write PR comments with the validation results
+  pull-requests: write
+
+jobs:
+  validate-promotion:
+    name: Validate Promotion Order
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'promotion/skip-validation') }}
+    steps:
+      - name: Checkout PR Branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Validate Promotion
+        uses: ./.github/actions/kubernetes-platform-promotion
+        with:
+          cicd-branch: ${{ inputs.cicd-branch }}
+          cicd-repository: ${{ inputs.cicd-repository }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          promotion-order: ${{ inputs.promotion-order }}
+          workloads-dir: ${{ inputs.workloads-dir }}

@@ -1,0 +1,6 @@
+{
+  "exit_code": 0,
+  "results": {
+    "hello-helm/qa.yaml": "pass"
+  }
+}

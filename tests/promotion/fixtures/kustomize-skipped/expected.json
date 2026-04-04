@@ -1,0 +1,6 @@
+{
+  "exit_code": 0,
+  "results": {
+    "hello-kustomize/prod.yaml": "skip"
+  }
+}

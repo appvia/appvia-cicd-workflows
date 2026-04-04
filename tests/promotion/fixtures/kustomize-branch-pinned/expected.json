@@ -1,0 +1,7 @@
+{
+  "exit_code": 0,
+  "results": {
+    "hello-kustomize/prod.yaml": "warn"
+  },
+  "message_contains": "branch"
+}

@@ -1,0 +1,2 @@
+hello-helm/qa.yaml
+hello-test/qa.yaml

@@ -1,0 +1,7 @@
+{
+  "exit_code": 1,
+  "results": {
+    "hello-helm/dev.yaml": "fail"
+  },
+  "message_contains": "Invalid semver"
+}

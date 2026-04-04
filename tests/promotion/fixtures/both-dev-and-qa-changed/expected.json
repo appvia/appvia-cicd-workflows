@@ -1,0 +1,7 @@
+{
+  "exit_code": 1,
+  "results": {
+    "hello-helm/qa.yaml": "fail"
+  },
+  "message_contains": "Version regression"
+}

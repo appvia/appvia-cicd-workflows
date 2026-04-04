@@ -1,0 +1,6 @@
+helm:
+  repository: https://helm.github.io/examples
+  chart: hello-world
+  version: "not-a-version"
+sync:
+  phase: primary
