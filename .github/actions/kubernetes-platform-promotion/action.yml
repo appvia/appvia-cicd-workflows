@@ -5,9 +5,11 @@ inputs:
   cicd-branch:
     description: "The branch for the cicd workflows"
     required: true
+    default: main
   cicd-repository:
     description: "The repository for the cicd workflows"
     required: true
+    default: appvia/appvia-cicd-workflows
   github-token:
     description: "GitHub token for PR comments"
     required: false
