@@ -545,7 +545,7 @@ jobs:
         shell: bash
         run: |
             EXPECTED_SHA_COLLECTION="${{ inputs.trivy-sha256 }}"
-            ACTUAL_SHA="$(sha256sum $(which trivy) | awk '{print $1}')"
+            ACTUAL_SHA="$(sha256sum "$(which trivy)" | awk '{print $1}')"
             echo "Trivy SHA: $ACTUAL_SHA"
             if echo "$EXPECTED_SHA_COLLECTION" | grep -Fq "$ACTUAL_SHA"; then
               echo "Trivy binary checksum verified successfully."
