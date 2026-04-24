@@ -31,7 +31,7 @@ jobs:
         with:
           args: "--verbose ${{ steps.previous_release.outputs.LAST_TAG }}..HEAD"
           config: .cliff/cliff.toml
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          github_token: "${{ secrets.GITHUB_TOKEN }}"
         env:
           OUTPUT: CHANGELOG.md
           GITHUB_REPO: ${{ github.repository }}
