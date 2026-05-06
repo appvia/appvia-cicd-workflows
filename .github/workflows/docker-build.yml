@@ -271,7 +271,7 @@ jobs:
       - name: Login to Amazon ECR
         if: ${{ env.ENABLE_LOGIN_OIDC == 'true' && env.ENABLE_PUSH == 'true' }}
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@19d944daaa35f0fa1d3f7f8af1d3f2e5de25c5b7 # v2
+        uses: aws-actions/amazon-ecr-login@fa648b43de3d4d023bcb3f89ed6940096949c419 # v2
       - name: Prepare build args
         id: build-args
         run: |
