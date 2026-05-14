@@ -77,7 +77,7 @@ runs:
         terraform_version: ${{ inputs.terraform-version }}
 
     - name: Setup Terragrunt
-      uses: gruntwork-io/terragrunt-action@ad66bd184abd991249047d1f61bce1f29aaed2a6 # v3
+      uses: gruntwork-io/terragrunt-action@4ed5b7344c80315e5357f28f36159fc980bc2d5a # v3
       with:
         tg_version: ${{ inputs.terragrunt-version }}
         tf_path: /bin/terraform
