@@ -26,3 +26,15 @@ jobs:
       - name: Run Actionlint
         id: actionlint
         run: actionlint ${{ inputs.workflows-path }}/*.yml
+      - name: Check reusable workflow SHA Pinning
+        env:
+          WORKFLOWS_PATH: "${{ inputs.workflows-path }}"
+        run: |
+          violations=$(grep -E 'uses:.*appvia/appvia-cicd-workflows' "$WORKFLOWS_PATH"/*.yml \
+            | grep -vE '@[0-9a-f]{40}' || true)
+          if [ -n "$violations" ]; then
+            echo "ERROR: The following reusable workflow references do not use a commit SHA:"
+            echo "$violations"
+            exit 1
+          fi
+          echo "All reusable workflow references are properly SHA pinned."
