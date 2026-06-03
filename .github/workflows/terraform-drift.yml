@@ -136,7 +136,7 @@ jobs:
       result-s3-backend-check: ${{ steps.s3-backend-check.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - name: Terraform Bootstrap
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap@920657bbc2f0079d33f348b75d009bef74c290b3 # main
