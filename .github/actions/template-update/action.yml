@@ -46,15 +46,27 @@ runs:
       shell: bash
       run: |
         # Process template files - handle both newline and space separated inputs
+        base_dir="${{ inputs.base-directory }}"
+        base_dir="${base_dir%/}"
+
         echo "${{ inputs.template-files }}" | while IFS= read -r file; do
           # Set the source and destination file paths
           source_file="${file}"
-          destination_file="${{ inputs.base-directory}}/${file}"
+          destination_file="${base_dir}/${file}"
 
           # If the file has a ':', the first part is the source, the second part is the destination
           if [[ "${file}" == *:* ]]; then
             source_file="${file%%:*}"
             destination_file="${file#*:}"
+          elif [[ "${base_dir}" != "." ]]; then
+            # Avoid doubling the last path segment of base-directory when the template
+            # file path repeats it (e.g. base=foo/scripts + file=scripts/bar.sh -> foo/scripts/bar.sh)
+            last_segment="${base_dir##*/}"
+            if [[ "${file}" == "${last_segment}/"* ]]; then
+              destination_file="${base_dir}/${file#${last_segment}/}"
+            elif [[ "${file}" == "${base_dir}/"* ]]; then
+              destination_file="${file}"
+            fi
           fi
 
           # Skip empty lines
@@ -64,6 +76,7 @@ runs:
               cp -f "./tmp/upstream-template/${source_file}" "${destination_file}"
             elif [[ -d "./tmp/upstream-template/${source_file}" ]]; then
               echo "Copying directory ${source_file} from upstream template to ${destination_file}"
+              mkdir -p "$(dirname "${destination_file}")"
               cp -rf "./tmp/upstream-template/${source_file}" "${destination_file}"
             else
               echo "File ${source_file} not found in upstream template"
