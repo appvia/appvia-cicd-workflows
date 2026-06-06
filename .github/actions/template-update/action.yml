@@ -76,8 +76,10 @@ runs:
               cp -f "./tmp/upstream-template/${source_file}" "${destination_file}"
             elif [[ -d "./tmp/upstream-template/${source_file}" ]]; then
               echo "Copying directory ${source_file} from upstream template to ${destination_file}"
-              mkdir -p "$(dirname "${destination_file}")"
-              cp -rf "./tmp/upstream-template/${source_file}" "${destination_file}"
+              # Copy contents (./.) into destination so re-runs don't nest the dir
+              # inside itself (cp -rf SRC DEST puts SRC inside DEST when DEST exists).
+              mkdir -p "${destination_file}"
+              cp -rf "./tmp/upstream-template/${source_file}/." "${destination_file}/"
             else
               echo "File ${source_file} not found in upstream template"
             fi
