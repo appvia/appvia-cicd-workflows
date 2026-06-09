@@ -1,0 +1,42 @@
+--- 
+name: Deploy Documentation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  # Require the permissions to the read the content
+  contents: read
+  # Required to authenticate the Github API
+  id-token: write
+  # Required to write PR comments with the validation results
+  pull-requests: write
+
+env:
+  NODE_VERSION: '24'
+
+jobs:
+  deploy:
+    name: Deploy Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Build documentation
+        run: npm run build
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

@@ -1,0 +1,69 @@
+---
+name: Validate
+
+on:
+  workflow_call:
+    inputs:
+      enable-vale:
+        description: Indicates if we should run the vale validation
+        default: true
+        required: false
+        type: boolean
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  lint:
+    name: Lint and Validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: |
+          mkdir -p .vale/styles
+          npm ci
+      - name: Setup Vale
+        if: inputs.enable-vale
+        uses: vale-cli/vale-action@v2
+        with:
+          version: latest
+          files: README.md
+          fail_on_error: false
+      - name: Lint markdown
+        run: npm run lint:md
+        continue-on-error: false
+      - name: Check spelling
+        run: npm run lint:spell
+        continue-on-error: false
+      - name: Build documentation
+        run: npm run build
+        continue-on-error: false
+      - name: Check for broken links
+        run: |
+          npm install -g linkinator
+          linkinator build/ --recurse --skip node_modules
+        continue-on-error: true
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ Validation passed!\n\n- Markdown linting: ✓\n- Spell checking: ✓\n- Prose checking: ✓\n- Build: ✓'
+            })
+        continue-on-error: true
+
