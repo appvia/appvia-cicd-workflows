@@ -1,8 +1,8 @@
---- 
+---
 name: Deploy Documentation
 
 on:
-  workflow_dispatch:
+  workflow_call:
 
 permissions:
   # Require the permissions to the read the content
