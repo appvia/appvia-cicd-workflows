@@ -35,7 +35,7 @@ jobs:
           npm ci
       - name: Setup Vale
         if: inputs.enable-vale
-        uses: vale-cli/vale-action@v2
+        uses: vale-cli/vale-action@d89dee975228ae261d22c15adcd03578634d429c # v2
         with:
           version: latest
           files: README.md
