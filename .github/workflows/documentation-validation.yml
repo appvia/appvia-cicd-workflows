@@ -66,4 +66,3 @@ jobs:
               body: '✅ Validation passed!\n\n- Markdown linting: ✓\n- Spell checking: ✓\n- Prose checking: ✓\n- Build: ✓'
             })
         continue-on-error: true
-
