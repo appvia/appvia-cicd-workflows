@@ -319,7 +319,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - name: Terragrunt Bootstrap
-        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@21623d1ddbf418a574e565829a2bcca5cd574275 # main
+        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@da2bf7ed16cc9778fedff463249466ca88069df5 # main
         with:
           actions-id: ${{ secrets.actions-id }}
           actions-secret: ${{ secrets.actions-secret }}
@@ -357,7 +357,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - name: Terragrunt Bootstrap (Unauth)
-        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap-unauth@21623d1ddbf418a574e565829a2bcca5cd574275 # main
+        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap-unauth@da2bf7ed16cc9778fedff463249466ca88069df5 # main
         with:
           actions-id: ${{ secrets.actions-id }}
           actions-secret: ${{ secrets.actions-secret }}
@@ -417,7 +417,7 @@ jobs:
           fi
       - name: Terragrunt Bootstrap (Unauth)
         id: bootstrap
-        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap-unauth@21623d1ddbf418a574e565829a2bcca5cd574275 # main
+        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap-unauth@da2bf7ed16cc9778fedff463249466ca88069df5 # main
         with:
           actions-id: ${{ secrets.actions-id }}
           actions-secret: ${{ secrets.actions-secret }}
@@ -448,7 +448,7 @@ jobs:
 
       - name: Terragrunt Inputs Diff
         id: diff
-        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-diff@21623d1ddbf418a574e565829a2bcca5cd574275 # main
+        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-diff@da2bf7ed16cc9778fedff463249466ca88069df5 # main
         with:
           cicd-branch: ${{ inputs.cicd-branch }}
           cicd-repository: ${{ inputs.cicd-repository }}
@@ -473,7 +473,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - name: Terragrunt Plan Matrix
         id: matrix
-        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-matrix@21623d1ddbf418a574e565829a2bcca5cd574275 # main
+        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-matrix@da2bf7ed16cc9778fedff463249466ca88069df5 # main
         with:
           account-files: "${{ inputs.terragrunt-config-file }}"
           exclude-patterns: ".terragrunt-cache,node_modules,.git"
@@ -515,7 +515,7 @@ jobs:
           echo "directory_name=$(dirname ${{ matrix.unit.relative_path }})" >> "${GITHUB_OUTPUT}"
       - name: Terragrunt Bootstrap
         id: bootstrap
-        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@21623d1ddbf418a574e565829a2bcca5cd574275 # main
+        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@da2bf7ed16cc9778fedff463249466ca88069df5 # main
         with:
           actions-id: ${{ secrets.actions-id }}
           actions-secret: ${{ secrets.actions-secret }}
@@ -579,7 +579,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - name: Terragrunt Bootstrap
         id: bootstrap
-        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@21623d1ddbf418a574e565829a2bcca5cd574275 # main
+        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@da2bf7ed16cc9778fedff463249466ca88069df5 # main
         with:
           actions-id: ${{ secrets.actions-id }}
           actions-secret: ${{ secrets.actions-secret }}
@@ -675,7 +675,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - name: Terraform Bootstrap
         id: init
-        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@21623d1ddbf418a574e565829a2bcca5cd574275 # main
+        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@da2bf7ed16cc9778fedff463249466ca88069df5 # main
         with:
           actions-id: ${{ secrets.actions-id }}
           actions-secret: ${{ secrets.actions-secret }}
@@ -733,7 +733,7 @@ jobs:
           echo "directory_name=$(dirname ${{ matrix.unit.relative_path }})" >> "${GITHUB_OUTPUT}"
       - name: Terragrunt Bootstrap
         id: bootstrap
-        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@21623d1ddbf418a574e565829a2bcca5cd574275 # main
+        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-bootstrap@da2bf7ed16cc9778fedff463249466ca88069df5 # main
         with:
           actions-id: ${{ secrets.actions-id }}
           actions-secret: ${{ secrets.actions-secret }}
@@ -788,7 +788,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - name: Add PR Comment
-        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-pr@21623d1ddbf418a574e565829a2bcca5cd574275 # main
+        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-pr@da2bf7ed16cc9778fedff463249466ca88069df5 # main
         with:
           environment: ${{ inputs.environment }}
           status-auth: ${{ needs.terragrunt-plan-matrix.outputs.result-auth }}
@@ -822,7 +822,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - name: Add PR Comment
-        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-pr@21623d1ddbf418a574e565829a2bcca5cd574275 # main
+        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-pr@da2bf7ed16cc9778fedff463249466ca88069df5 # main
         with:
           environment: ${{ inputs.environment }}
           status-auth: ${{ needs.terragrunt-plan.outputs.result-auth }}
