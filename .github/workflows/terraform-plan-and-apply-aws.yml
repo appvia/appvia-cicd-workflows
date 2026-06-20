@@ -273,6 +273,9 @@ jobs:
           working-directory: ${{ inputs.working-directory }}
       - name: Setup Linter
         uses: terraform-linters/setup-tflint@b480b8fcdaa6f2c577f8e4fa799e89e756bb7c93 # v6
+        with:
+          cache: true
+          github_token: ${{github.token}}
       - name: Linter Initialize
         run: tflint --init
       - name: Linting Code
