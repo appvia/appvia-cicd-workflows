@@ -63,6 +63,7 @@ jobs:
 - `enable-infracost` - Default: false. Whether to run infracost on the Terraform Plan (requires `infracost-api-key` secret)
 - `enable-checkov` - Default: true. Whether to run Checkov security scanning
 - `enable-commitlint` - Default: true. Whether to run commitlint on the commit message
+- `enable-plan-encryption` - Default: true. Whether to encrypt Terraform plan artifacts at rest. When enabled, the binary plan (`tfplan`) and JSON plan (`tfplan.json`) are encrypted using AES-256-CBC before being uploaded as artifacts. An ephemeral key is generated per workflow run unless a static `encryption-key` secret is provided
 - `enable-terraform-apply` - Default: true. Whether to run terraform apply on merge to main
 - `enable-private-access` - Default: false. Flag to state if terraform requires pulling private modules
 - `organization-name` - Default: "appvia". The name of the GitHub organization
@@ -114,6 +115,7 @@ jobs:
       "my-file.txt": "SGVsbG8gV29ybGQh"
     }
   ```
+- `encryption-key` - Static encryption key for plan artifacts. If not set, an ephemeral key is generated per workflow run and passed between jobs via masked job outputs. To use a static key, generate one with `openssl rand -base64 32` and store it as a repository or organization secret.
 
 **Note:** This template may change over time, so it is recommended that you point to a tagged version rather than the main branch.
 

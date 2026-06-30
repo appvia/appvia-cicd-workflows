@@ -61,6 +61,8 @@ docs/              # Markdown docs for each workflow
 |---|---|
 | `terraform-bootstrap` | Setup Terraform + AWS OIDC auth + S3 backend init |
 | `terraform-bootstrap-noauth` | Setup Terraform without AWS auth (for lint/validate jobs) |
+| `terraform-plan-encrypt` | Encrypt plan artifacts (tfplan, tfplan.json) using AES-256-CBC |
+| `terraform-plan-decrypt` | Decrypt plan artifacts encrypted by terraform-plan-encrypt |
 | `terragrunt-bootstrap` | Setup Terragrunt + Terraform + AWS OIDC auth |
 | `terragrunt-bootstrap-unauth` | Setup Terragrunt without AWS auth |
 | `terragrunt-diff` | Compare Terragrunt inputs between PR and main, post PR comment |
@@ -104,12 +106,22 @@ docs/              # Markdown docs for each workflow
 - Comments include workflow run links, actor, and per-job status with emoji indicators
 - Terragrunt workflows aggregate matrix job results into a single comment
 
+### Plan Artifact Encryption
+
+- Controlled by `enable-plan-encryption` input (default: true)
+- Encrypts `tfplan` (binary) and `tfplan.json` using AES-256-CBC via `openssl`
+- Checksum computed on unencrypted plan, verified after decryption
+- Key management: ephemeral key generated per run (via `openssl rand -hex 32`), passed between jobs as masked job output
+- Static key override: provide `encryption-key` secret to use a fixed key instead
+- Unencrypted files in artifact: `tfplan-simple`, `tfplan-summary`, `tfplan.stdout`, `tfplan.checksum`
+- Uses `terraform-plan-encrypt` and `terraform-plan-decrypt` composite actions
+
 ### Job Structure
 
 - Debug mode job: determines `TF_LOG` level from runner debug mode
 - Bootstrap jobs: use composite actions, capture step outcomes as outputs
-- Plan jobs: upload `tfplan` as artifact with SHA256 checksums
-- Apply jobs: validate checksums, use GitHub environment protection (`environment: ${{ inputs.environment }}`)
+- Plan jobs: upload `tfplan` as artifact with SHA256 checksums and optional encryption
+- Apply jobs: decrypt (if encrypted), validate checksums, use GitHub environment protection (`environment: ${{ inputs.environment }}`)
 - Security scanning: Trivy and Checkov (both toggleable via `enable-*` inputs)
 - Cost estimation: Infracost (optional, requires API key)
 
