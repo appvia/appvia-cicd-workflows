@@ -9,6 +9,9 @@ on:
       actions-secret:
         description: "The GitHub App secret for the Actions App"
         required: false
+      encryption-key:
+        description: "Static encryption key for plan artifacts. If not set, an ephemeral key is generated per run."
+        required: false
 
     inputs:
       confirmation:
@@ -71,6 +74,12 @@ on:
         description: "The environment to deploy to"
         required: false
         type: string
+
+      enable-plan-encryption:
+        default: true
+        description: "Whether to encrypt Terraform plan artifacts at rest"
+        required: false
+        type: boolean
 
       enable-private-access:
         description: Optional flag to state if terraform requires pulling private modules
@@ -180,9 +189,27 @@ jobs:
       result-s3-backend-check: ${{ steps.s3-backend-check.outcome }}
       result-plan: ${{ steps.plan.outcome }}
       plan-stdout: ${{ steps.plan.outputs.stdout }}
+      encryption-key: ${{ steps.encryption-key.outputs.key }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Generate Encryption Key
+        id: encryption-key
+        if: inputs.enable-plan-encryption
+        shell: bash
+        run: |
+          if [ -n "$ENCRYPTION_KEY_SECRET" ]; then
+            echo "Using static encryption key from secret"
+            echo "$ENCRYPTION_KEY_SECRET" > /tmp/tfplan-enc-key
+          else
+            echo "Generating ephemeral encryption key"
+            ENCRYPTION_KEY=$(openssl rand -hex 32)
+            echo "::add-mask::${ENCRYPTION_KEY}"
+            echo "${ENCRYPTION_KEY}" > /tmp/tfplan-enc-key
+            echo "key=${ENCRYPTION_KEY}" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          ENCRYPTION_KEY_SECRET: ${{ secrets.encryption-key }}
       - name: Terraform Bootstrap
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap@da2bf7ed16cc9778fedff463249466ca88069df5 # main
@@ -238,6 +265,13 @@ jobs:
       - name: Terraform Plan JSON Output
         run: |
           terraform -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
+      - name: Calculate Plan Checksum
+        run: sha256sum tfplan > tfplan.checksum
+      - name: Encrypt Plan Artifacts
+        if: inputs.enable-plan-encryption
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-plan-encrypt@feat/terraform-encryption # TODO: pin to SHA once merged
+        with:
+          working-directory: ${{ inputs.working-directory }}
       - name: Upload tfplan
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -296,12 +330,51 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: tfplan-${{ inputs.environment }}
+        continue-on-error: true
+      - name: Restore Encryption Key
+        if: inputs.enable-plan-encryption
+        shell: bash
+        run: |
+          if [ -n "$ENCRYPTION_KEY_SECRET" ]; then
+            echo "$ENCRYPTION_KEY_SECRET" > /tmp/tfplan-enc-key
+          else
+            EPHEMERAL_KEY="${{ needs.terraform-plan.outputs.encryption-key }}"
+            echo "::add-mask::${EPHEMERAL_KEY}"
+            echo "${EPHEMERAL_KEY}" > /tmp/tfplan-enc-key
+          fi
+        env:
+          ENCRYPTION_KEY_SECRET: ${{ secrets.encryption-key }}
+      - name: Decrypt Plan Artifacts
+        if: inputs.enable-plan-encryption
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-plan-decrypt@feat/terraform-encryption # TODO: pin to SHA once merged
+        with:
+          working-directory: ${{ inputs.working-directory }}
+      - name: Check Artifact Availability
+        run: |
+          if [ ! -f tfplan ]; then
+            echo "tfplan artifact not found. Please regenerate the plan."
+            exit 1
+          fi
       - name: Download Additional Directories
         if: inputs.additional-dir
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: additional-dir-${{ inputs.environment }}
           path: ${{ inputs.additional-dir }}
+      - name: Validate Plan Checksum
+        run: |
+          if [ ! -f tfplan.checksum ]; then
+            echo "Checksum file is missing. The tfplan artifact may not have been generated or uploaded correctly. Halting Terraform Apply phase."
+            exit 1
+          fi
+          echo "Validating the checksum of the tfplan artifact..."
+          if sha256sum -c tfplan.checksum; then
+            echo "Checksum validation succeeded. The tfplan artifact is intact and matches the original plan."
+          else
+            echo "Checksum validation failed. The tfplan artifact has been modified or tampered with since the plan was generated."
+            echo "Halting Terraform Apply phase to ensure the integrity of the deployment process."
+            exit 1
+          fi
       - name: Terraform Apply
         run: |
           terraform apply -auto-approve -input=false \

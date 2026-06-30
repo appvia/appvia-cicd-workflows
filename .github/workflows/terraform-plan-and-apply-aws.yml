@@ -18,6 +18,9 @@ on:
       environment-files:
         description: "A JSON object of file paths and their base64 encoded contents to be created in the working directory"
         required: false
+      encryption-key:
+        description: "Static encryption key for plan artifacts. If not set, an ephemeral key is generated per run."
+        required: false
 
     inputs:
       additional-dir:
@@ -74,6 +77,11 @@ on:
       enable-commitlint:
         default: true
         description: "Whether to run commitlint on the commit message"
+        required: false
+        type: boolean
+      enable-plan-encryption:
+        default: true
+        description: "Whether to encrypt Terraform plan artifacts at rest"
         required: false
         type: boolean
       enable-terraform-apply:
@@ -316,6 +324,24 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
+      - name: Restore Encryption Key
+        if: inputs.enable-plan-encryption
+        shell: bash
+        run: |
+          if [ -n "$ENCRYPTION_KEY_SECRET" ]; then
+            echo "$ENCRYPTION_KEY_SECRET" > /tmp/tfplan-enc-key
+          else
+            EPHEMERAL_KEY="${{ needs.terraform-plan.outputs.encryption-key }}"
+            echo "::add-mask::${EPHEMERAL_KEY}"
+            echo "${EPHEMERAL_KEY}" > /tmp/tfplan-enc-key
+          fi
+        env:
+          ENCRYPTION_KEY_SECRET: ${{ secrets.encryption-key }}
+      - name: Decrypt Plan Artifacts
+        if: inputs.enable-plan-encryption
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-plan-decrypt@feat/terraform-encryption # TODO: pin to SHA once merged
+        with:
+          files: tfplan.json
       - name: Generate Infracost Cost Estimate
         run: |
           infracost breakdown --path=tfplan.json \
@@ -345,11 +371,29 @@ jobs:
       result-validate: ${{ steps.validate.outcome }}
       result-s3-backend-check: ${{ steps.s3-backend-check.outcome }}
       result-plan: ${{ steps.plan.outcome }}
+      encryption-key: ${{ steps.encryption-key.outputs.key }}
     env:
       TF_LOG: ${{ needs.debug-mode.outputs.tf_log }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Generate Encryption Key
+        id: encryption-key
+        if: inputs.enable-plan-encryption
+        shell: bash
+        run: |
+          if [ -n "$ENCRYPTION_KEY_SECRET" ]; then
+            echo "Using static encryption key from secret"
+            echo "$ENCRYPTION_KEY_SECRET" > /tmp/tfplan-enc-key
+          else
+            echo "Generating ephemeral encryption key"
+            ENCRYPTION_KEY=$(openssl rand -hex 32)
+            echo "::add-mask::${ENCRYPTION_KEY}"
+            echo "${ENCRYPTION_KEY}" > /tmp/tfplan-enc-key
+            echo "key=${ENCRYPTION_KEY}" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          ENCRYPTION_KEY_SECRET: ${{ secrets.encryption-key }}
       - name: Terraform Bootstrap
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap@da2bf7ed16cc9778fedff463249466ca88069df5 # main
@@ -433,6 +477,11 @@ jobs:
           fi
       - name: Calculate Plan Checksum
         run: sha256sum tfplan > tfplan.checksum
+      - name: Encrypt Plan Artifacts
+        if: inputs.enable-plan-encryption
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-plan-encrypt@feat/terraform-encryption # TODO: pin to SHA once merged
+        with:
+          working-directory: ${{ inputs.working-directory }}
       - name: Upload tfplan
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -698,6 +747,24 @@ jobs:
         with:
           name: tfplan-${{ inputs.environment }}-${{ github.event.pull_request.number }}
         continue-on-error: true
+      - name: Restore Encryption Key
+        if: inputs.enable-plan-encryption
+        shell: bash
+        run: |
+          if [ -n "$ENCRYPTION_KEY_SECRET" ]; then
+            echo "$ENCRYPTION_KEY_SECRET" > /tmp/tfplan-enc-key
+          else
+            EPHEMERAL_KEY="${{ needs.terraform-plan.outputs.encryption-key }}"
+            echo "::add-mask::${EPHEMERAL_KEY}"
+            echo "${EPHEMERAL_KEY}" > /tmp/tfplan-enc-key
+          fi
+        env:
+          ENCRYPTION_KEY_SECRET: ${{ secrets.encryption-key }}
+      - name: Decrypt Plan Artifacts
+        if: inputs.enable-plan-encryption
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-plan-decrypt@feat/terraform-encryption # TODO: pin to SHA once merged
+        with:
+          working-directory: ${{ inputs.working-directory }}
       - name: Check Artifact Availability
         run: |
           if [ ! -f tfplan ]; then
