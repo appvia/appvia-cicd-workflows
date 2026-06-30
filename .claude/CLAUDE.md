@@ -111,8 +111,7 @@ docs/              # Markdown docs for each workflow
 - Controlled by `enable-plan-encryption` input (default: true)
 - Encrypts `tfplan` (binary) and `tfplan.json` using AES-256-CBC via `openssl`
 - Checksum computed on unencrypted plan, verified after decryption
-- Key management: ephemeral key generated per run (via `openssl rand -hex 32`), passed between jobs as masked job output
-- Static key override: provide `encryption-key` secret to use a fixed key instead
+- Key management: static symmetric key provided via `encryption-key` secret (generate with `openssl rand -base64 32`)
 - Unencrypted files in artifact: `tfplan-simple`, `tfplan-summary`, `tfplan.stdout`, `tfplan.checksum`
 - Uses `terraform-plan-encrypt` and `terraform-plan-decrypt` composite actions
 
