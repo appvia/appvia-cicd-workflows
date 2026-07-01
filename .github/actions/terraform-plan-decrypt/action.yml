@@ -37,6 +37,7 @@ runs:
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       run: |
+        set -euo pipefail
         for file in ${{ inputs.files }}; do
           if [ -f "${file}.enc" ]; then
             echo "Decrypting ${file}.enc..."
