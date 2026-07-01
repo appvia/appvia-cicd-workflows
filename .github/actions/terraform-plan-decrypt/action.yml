@@ -22,7 +22,8 @@ runs:
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       run: |
-        echo "${{ inputs.encryption-key }}" > /tmp/tfplan-enc-key
+        umask 077
+        printf '%s' "${{ inputs.encryption-key }}" > /tmp/tfplan-enc-key
 
     - name: Verify Encryption Key
       shell: bash
