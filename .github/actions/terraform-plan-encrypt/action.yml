@@ -1,0 +1,57 @@
+---
+name: Terraform Plan Encrypt
+description: "Encrypts Terraform plan artifacts using AES-256-CBC before upload"
+inputs:
+  encryption-key:
+    description: "Static encryption key. If not set, expects key at /tmp/tfplan-enc-key"
+    required: false
+  working-directory:
+    description: "The working directory where plan files are located"
+    required: false
+    default: "."
+  files:
+    description: "Space-separated list of files to encrypt"
+    required: false
+    default: "tfplan tfplan.json"
+
+runs:
+  using: composite
+  steps:
+    - name: Write Static Encryption Key
+      if: inputs.encryption-key != ''
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        umask 077
+        printf '%s' "${{ inputs.encryption-key }}" > /tmp/tfplan-enc-key
+
+    - name: Verify Encryption Key
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        if [ ! -f /tmp/tfplan-enc-key ] || [ ! -s /tmp/tfplan-enc-key ]; then
+          echo "::error::Encryption key not found at /tmp/tfplan-enc-key. Either provide the encryption-key input or generate a key before calling this action."
+          exit 1
+        fi
+
+    - name: Encrypt Plan Files
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        for file in ${{ inputs.files }}; do
+          if [ -f "${file}" ]; then
+            echo "Encrypting ${file}..."
+            openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 \
+              -in "${file}" -out "${file}.enc" -pass file:/tmp/tfplan-enc-key
+            rm "${file}"
+            echo "Encrypted ${file} -> ${file}.enc"
+          else
+            echo "::warning::File ${file} not found, skipping encryption"
+          fi
+        done
+
+    - name: Clean Up Encryption Key
+      if: always()
+      shell: bash
+      run: rm -f /tmp/tfplan-enc-key

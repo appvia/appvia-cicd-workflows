@@ -63,6 +63,7 @@ jobs:
 - `enable-infracost` - Default: false. Whether to run infracost on the Terraform Plan (requires `infracost-api-key` secret)
 - `enable-checkov` - Default: true. Whether to run Checkov security scanning
 - `enable-commitlint` - Default: true. Whether to run commitlint on the commit message
+- `enable-plan-encryption` - Default: true. Whether to encrypt Terraform plan artifacts at rest. When enabled, the binary plan (`tfplan`) and JSON plan (`tfplan.json`) are encrypted using AES-256-CBC before being uploaded as artifacts. Requires the `encryption-key` secret to be set
 - `enable-terraform-apply` - Default: true. Whether to run terraform apply on merge to main
 - `enable-private-access` - Default: false. Flag to state if terraform requires pulling private modules
 - `organization-name` - Default: "appvia". The name of the GitHub organization
@@ -114,6 +115,7 @@ jobs:
       "my-file.txt": "SGVsbG8gV29ybGQh"
     }
   ```
+- `encryption-key` - Encryption key for plan artifacts. Required when `enable-plan-encryption` is true. Generate with `openssl rand -base64 32` and store as a repository or organization secret.
 
 **Note:** This template may change over time, so it is recommended that you point to a tagged version rather than the main branch.
 
