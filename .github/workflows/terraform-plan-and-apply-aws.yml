@@ -327,7 +327,7 @@ jobs:
           path: ${{ inputs.working-directory }}
       - name: Decrypt Plan Artifacts
         if: inputs.enable-plan-encryption
-        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-plan-decrypt@feat/terraform-encryption # TODO: pin to SHA once merged
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-plan-decrypt@c33db0da156d313efc5fa83d4194bfa89e0312cf
         with:
           encryption-key: ${{ secrets.encryption-key }}
           working-directory: ${{ inputs.working-directory }}
@@ -451,7 +451,7 @@ jobs:
         run: sha256sum tfplan > tfplan.checksum
       - name: Encrypt Plan Artifacts
         if: inputs.enable-plan-encryption
-        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-plan-encrypt@feat/terraform-encryption # TODO: pin to SHA once merged
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-plan-encrypt@c33db0da156d313efc5fa83d4194bfa89e0312cf
         with:
           encryption-key: ${{ secrets.encryption-key }}
           working-directory: ${{ inputs.working-directory }}
@@ -723,7 +723,7 @@ jobs:
         continue-on-error: true
       - name: Decrypt Plan Artifacts
         if: inputs.enable-plan-encryption
-        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-plan-decrypt@feat/terraform-encryption # TODO: pin to SHA once merged
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-plan-decrypt@c33db0da156d313efc5fa83d4194bfa89e0312cf
         with:
           encryption-key: ${{ secrets.encryption-key }}
           working-directory: ${{ inputs.working-directory }}
