@@ -80,7 +80,7 @@ on:
         required: false
         type: boolean
       enable-plan-encryption:
-        default: true
+        default: false
         description: "Whether to encrypt Terraform plan artifacts at rest"
         required: false
         type: boolean
