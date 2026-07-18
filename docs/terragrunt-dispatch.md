@@ -68,8 +68,8 @@ jobs:
     uses: appvia/appvia-cicd-workflows/.github/workflows/terragrunt-plan-and-apply-aws.yml@main
     name: "Terragrunt (Plan: ${{ inputs.enable_plan }}, Apply: ${{ inputs.enable_apply }})"
     secrets:
-      actions-id: "${{ secrets.ORG_ACTIONS_APP_ID }}"
-      actions-secret: "${{ secrets.ORG_ACTIONS_APP_SECRET }}"
+      actions-id: "${{ secrets.ACTION_ID }}"
+      actions-secret: "${{ secrets.ACTION_SECRET }}"
       github-token: ${{ secrets.REPO_GITHUB_TOKEN }}
       infracost-api-key: ${{ secrets.ORG_INFRACOST_API_KEY }}
     with:
@@ -147,8 +147,8 @@ terragrunt-dir: environments/production/networking
 
 The workflow requires the following secrets to be configured in your repository:
 
-- `ORG_ACTIONS_APP_ID` - GitHub App ID for accessing private modules
-- `ORG_ACTIONS_APP_SECRET` - GitHub App secret for accessing private modules
+- `ACTION_ID` - GitHub App ID for accessing private modules
+- `ACTION_SECRET` - GitHub App secret for accessing private modules
 - `REPO_GITHUB_TOKEN` - GitHub token for repository operations
 - `ORG_INFRACOST_API_KEY` - API key for Infracost cost estimation (optional)
 
