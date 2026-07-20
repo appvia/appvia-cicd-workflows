@@ -8,6 +8,7 @@ Please refer to the following documentation for more information on the workflow
 
 ### Terraform Workflows
 - [Terraform Plan & Apply (AWS)](./docs/terraform-plan-and-apply-aws.md) - Automated Terraform deployment pipeline for AWS
+- [Terraform Plan (Azure)](./docs/terraform-plan-azure.md) - Input-driven plan & review pipeline for Azure (Flow A)
 - [Terraform Module Validation](./docs/terraform-module-validation.md) - Validate Terraform modules
 - [Terraform Module Release](./docs/terraform-module-release.md) - Release and publish Terraform modules
 - [Terraform Destroy (AWS)](./docs/terraform-destroy.md) - Safely destroy Terraform-managed infrastructure
