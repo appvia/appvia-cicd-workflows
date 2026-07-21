@@ -1,0 +1,193 @@
+---
+# =============================================================================
+# Terraform Destroy (Azure)
+#
+# Reusable, INPUT-DRIVEN teardown workflow modelled on the AWS terraform-destroy
+# engine, for Azure. Guarded: it runs only when the `confirmation` input exactly
+# equals the calling repository (owner/name), so it cannot be triggered by
+# accident. Uses the READ-WRITE service principal via OIDC federated credentials.
+# =============================================================================
+name: Terraform Destroy (Azure)
+
+on:
+  workflow_call:
+    inputs:
+      # --- Guard ---
+      confirmation:
+        description: "Must equal <owner>/<repo> of the calling repository to proceed"
+        required: true
+        type: string
+      # --- Azure identity (destroy uses the READ-WRITE service principal) ---
+      azure-client-id:
+        description: "Client ID of the read-write Entra service principal"
+        required: true
+        type: string
+      azure-tenant-id:
+        description: "Entra tenant ID"
+        required: true
+        type: string
+      azure-subscription-id:
+        description: "Target subscription ID"
+        required: true
+        type: string
+      # --- Remote state backend (azurerm) ---
+      backend-resource-group-name:
+        description: "Resource group of the Terraform state storage account"
+        required: true
+        type: string
+      backend-storage-account-name:
+        description: "Terraform state storage account name"
+        required: true
+        type: string
+      backend-container-name:
+        description: "Blob container for state"
+        required: false
+        default: "tfstate"
+        type: string
+      terraform-state-key:
+        description: "State blob key (default: <environment>.tfstate)"
+        required: false
+        default: ""
+        type: string
+      # --- Terraform inputs ---
+      environment:
+        description: "The environment being destroyed (dev/tst/stg/prd)"
+        required: true
+        type: string
+      working-directory:
+        description: "Directory holding the root module"
+        required: false
+        default: "terraform"
+        type: string
+      terraform-version:
+        description: "Terraform version"
+        required: false
+        default: "1.14.0"
+        type: string
+      terraform-values-file:
+        description: "Env var-file (default: environments/<environment>/terraform.tfvars)"
+        required: false
+        default: ""
+        type: string
+      terraform-common-values-file:
+        description: "Shared var-file applied to every environment"
+        required: false
+        default: "environments/common/terraform.tfvars"
+        type: string
+      terraform-parallelism:
+        description: "Parallelism for destroy"
+        required: false
+        default: 10
+        type: number
+      runs-on:
+        description: "Runner label"
+        required: false
+        default: "ubuntu-latest"
+        type: string
+      # --- Private module access (GitHub App) ---
+      github-app-id:
+        description: "GitHub App ID used to pull private modules (blank disables)"
+        required: false
+        default: ""
+        type: string
+      github-app-owner:
+        description: "Owner the GitHub App token is scoped to"
+        required: false
+        default: "appvia"
+        type: string
+    secrets:
+      github-app-private-key:
+        description: "Private key for the GitHub App (required if github-app-id is set)"
+        required: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  destroy:
+    name: Destroy (${{ inputs.environment }})
+    # Guard: only proceed when the confirmation input matches this repository.
+    if: inputs.confirmation == github.repository
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 60
+    env:
+      ARM_CLIENT_ID: ${{ inputs.azure-client-id }}
+      ARM_TENANT_ID: ${{ inputs.azure-tenant-id }}
+      ARM_SUBSCRIPTION_ID: ${{ inputs.azure-subscription-id }}
+      ARM_USE_OIDC: "true"
+      ARM_USE_AZUREAD: "true"
+      TF_INPUT: "0"
+      TF_IN_AUTOMATION: "true"
+      ENV: ${{ inputs.environment }}
+      WORKING_DIR: ${{ inputs.working-directory }}
+    steps:
+      - name: Fail if confirmation does not match
+        if: inputs.confirmation != github.repository
+        run: |
+          echo "confirmation '${{ inputs.confirmation }}' does not match repository '${{ github.repository }}'. Refusing to destroy."
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+          terraform_wrapper: false
+
+      - name: Generate GitHub App token
+        id: app_token
+        if: inputs.github-app-id != ''
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ inputs.github-app-id }}
+          private-key: ${{ secrets.github-app-private-key }}
+          owner: ${{ inputs.github-app-owner }}
+
+      - name: Configure git to use GitHub App token
+        if: inputs.github-app-id != ''
+        env:
+          APP_TOKEN: ${{ steps.app_token.outputs.token }}
+        run: |
+          git config --global url."https://x-access-token:${APP_TOKEN}@github.com/".insteadOf "https://github.com/"
+
+      - name: Azure login (OIDC — read-write SP)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ inputs.azure-client-id }}
+          tenant-id: ${{ inputs.azure-tenant-id }}
+          subscription-id: ${{ inputs.azure-subscription-id }}
+
+      - name: Resolve state key and values file
+        run: |
+          KEY="${{ inputs.terraform-state-key }}"
+          [ -z "$KEY" ] && KEY="${ENV}.tfstate"
+          echo "TF_STATE_KEY=${KEY}" >> "$GITHUB_ENV"
+          VF="${{ inputs.terraform-values-file }}"
+          [ -z "$VF" ] && VF="environments/${ENV}/terraform.tfvars"
+          echo "TF_VALUES_FILE=${VF}" >> "$GITHUB_ENV"
+
+      - name: Terraform init
+        run: |
+          set -euo pipefail
+          terraform -chdir="$WORKING_DIR" init -input=false -reconfigure \
+            -backend-config="resource_group_name=${{ inputs.backend-resource-group-name }}" \
+            -backend-config="storage_account_name=${{ inputs.backend-storage-account-name }}" \
+            -backend-config="container_name=${{ inputs.backend-container-name }}" \
+            -backend-config="key=${TF_STATE_KEY}"
+
+      - name: Terraform destroy
+        run: |
+          set -euo pipefail
+          COMMON=""
+          if [ -n "${{ inputs.terraform-common-values-file }}" ] && [ -f "${WORKING_DIR}/${{ inputs.terraform-common-values-file }}" ]; then
+            COMMON="-var-file=${{ inputs.terraform-common-values-file }}"
+          fi
+          terraform -chdir="$WORKING_DIR" destroy \
+            ${COMMON} \
+            -var-file="${TF_VALUES_FILE}" \
+            -auto-approve \
+            -no-color -input=false \
+            -parallelism=${{ inputs.terraform-parallelism }}

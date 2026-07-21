@@ -1,6 +1,6 @@
-# Terraform Plan Workflow for Azure Infrastructure
+# Terraform Plan & Apply Workflow for Azure Infrastructure
 
-This GitHub Actions workflow template ([terraform-plan-azure.yml](../.github/workflows/terraform-plan-azure.yml)) is the **Flow A (plan & review)** reusable workflow for Azure Terraform repositories. It is modelled on the AWS [terraform-plan-and-apply-aws.yml](./terraform-plan-and-apply-aws.md) engine, but targets Azure: OIDC federation to Entra, an `azurerm` remote-state backend, and a per-environment plan whose JSON feeds the security / policy / cost checks before a single update-in-place PR comment and a merge gate.
+This GitHub Actions workflow template ([terraform-plan-azure.yml](../.github/workflows/terraform-plan-azure.yml)) is the **plan & apply** reusable workflow for Azure Terraform repositories. It is modelled on the AWS [terraform-plan-and-apply-aws.yml](./terraform-plan-and-apply-aws.md) engine, but targets Azure: OIDC federation to Entra, an `azurerm` remote-state backend, and a per-environment plan whose JSON feeds the security / policy / cost checks before a single update-in-place PR comment and a merge gate. On push to the default branch (i.e. after a PR merges) it runs an **apply** job using the read-write service principal.
 
 Unlike the env-var-driven Azure engines elsewhere in the org, this workflow is **input-driven** — every value arrives as a `workflow_call` input (rendered from `customer-install.sh` in the calling repo). Only true secrets come via `secrets:`. This keeps it compatible with the render-factory model used by the landing-zone accelerator.
 
@@ -24,6 +24,7 @@ The workflow runs one `validate-and-plan` job per environment, then a `comment` 
 14. **Infracost** (optional) — cost estimate (requires `infracost-api-key`).
 15. **Post PR comment** — one comment per environment with a status table and per-section, character-budgeted detail blocks (65k-safe), linking the HTML report artifact.
 16. **Final result** — blocks merge if the plan job did not succeed.
+17. **Apply** — on push to the default branch only (`enable-apply`, default `true`). Logs in with the **read-write** service principal (`azure-apply-client-id`, falling back to `azure-client-id` for single-SP setups), re-initialises the backend, and runs `terraform apply` (re-plan + apply model — the PR plan binary is intentionally not persisted).
 
 ## Usage
 

@@ -1,11 +1,13 @@
 ---
 # =============================================================================
-# Flow A — Terraform Plan & Review (Azure)
+# Terraform Plan & Apply (Azure)
 #
 # Reusable, INPUT-DRIVEN workflow modelled on the AWS
-# terraform-plan-and-apply-aws.yml engine, but for Azure. Runs on pull requests:
-# a single validate+plan job per environment (fmt, lint, plan, Checkov, OPA,
-# Infracost) followed by a per-environment PR comment and a merge gate.
+# terraform-plan-and-apply-aws.yml engine, but for Azure. On pull requests it
+# runs a single validate+plan job per environment (fmt, lint, plan, Checkov,
+# OPA, Infracost) with a per-environment PR comment and a merge gate. On push
+# to the default branch (i.e. after merge) it runs an apply job using the
+# read-write service principal (re-plan + apply).
 #
 # All configuration arrives as `inputs` (rendered from customer-install.sh in the
 # calling repo) — NOT GitHub environment vars. Only true secrets come via
@@ -37,6 +39,23 @@ on:
       azure-subscription-id:
         description: "Target subscription ID"
         required: true
+        type: string
+      # --- Azure identity for APPLY (the READ-WRITE service principal) ---
+      azure-apply-client-id:
+        description: "Client ID of the apply (read-write) Entra service principal. Falls back to azure-client-id when blank (single-SP setups)."
+        required: false
+        default: ""
+        type: string
+      # --- Apply behaviour (apply runs on push to main) ---
+      enable-apply:
+        description: "Run terraform apply on push to the default branch"
+        required: false
+        default: true
+        type: boolean
+      terraform-apply-extra-args:
+        description: "Extra args appended to terraform apply"
+        required: false
+        default: ""
         type: string
       # --- Remote state backend (azurerm) ---
       backend-resource-group-name:
@@ -902,4 +921,94 @@ jobs:
           if [ "${{ needs.comment.result }}" = "failure" ]; then
             echo "WARNING: Comment job failed, but this does not block the merge."
           fi
+
+  # ---------------------------------------------------------------------------
+  # Apply — runs ONLY on push to the default branch (i.e. after a PR merges).
+  # Uses the READ-WRITE service principal. Re-plans then applies (the PR plan
+  # binary is intentionally not persisted), so apply reflects current state.
+  # ---------------------------------------------------------------------------
+  apply:
+    name: Apply (${{ inputs.environment }})
+    if: >-
+      inputs.enable-apply &&
+      github.event_name == 'push' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 60
+    env:
+      ARM_CLIENT_ID: ${{ inputs.azure-apply-client-id != '' && inputs.azure-apply-client-id || inputs.azure-client-id }}
+      ARM_TENANT_ID: ${{ inputs.azure-tenant-id }}
+      ARM_SUBSCRIPTION_ID: ${{ inputs.azure-subscription-id }}
+      ARM_USE_OIDC: "true"
+      ARM_USE_AZUREAD: "true"
+      TF_INPUT: "0"
+      TF_IN_AUTOMATION: "true"
+      ENV: ${{ inputs.environment }}
+      WORKING_DIR: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+          terraform_wrapper: false
+
+      # Private modules/central policies (same GitHub App pattern as plan)
+      - name: Generate GitHub App token
+        id: app_token
+        if: inputs.github-app-id != ''
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ inputs.github-app-id }}
+          private-key: ${{ secrets.github-app-private-key }}
+          owner: ${{ inputs.github-app-owner }}
+
+      - name: Configure git to use GitHub App token
+        if: inputs.github-app-id != ''
+        env:
+          APP_TOKEN: ${{ steps.app_token.outputs.token }}
+        run: |
+          git config --global url."https://x-access-token:${APP_TOKEN}@github.com/".insteadOf "https://github.com/"
+
+      - name: Azure login (OIDC — read-write SP)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ inputs.azure-apply-client-id != '' && inputs.azure-apply-client-id || inputs.azure-client-id }}
+          tenant-id: ${{ inputs.azure-tenant-id }}
+          subscription-id: ${{ inputs.azure-subscription-id }}
+
+      - name: Resolve state key and values file
+        run: |
+          KEY="${{ inputs.terraform-state-key }}"
+          [ -z "$KEY" ] && KEY="${ENV}.tfstate"
+          echo "TF_STATE_KEY=${KEY}" >> "$GITHUB_ENV"
+          VF="${{ inputs.terraform-values-file }}"
+          [ -z "$VF" ] && VF="environments/${ENV}/terraform.tfvars"
+          echo "TF_VALUES_FILE=${VF}" >> "$GITHUB_ENV"
+
+      - name: Terraform init
+        run: |
+          set -euo pipefail
+          terraform -chdir="$WORKING_DIR" init -input=false -reconfigure \
+            -backend-config="resource_group_name=${{ inputs.backend-resource-group-name }}" \
+            -backend-config="storage_account_name=${{ inputs.backend-storage-account-name }}" \
+            -backend-config="container_name=${{ inputs.backend-container-name }}" \
+            -backend-config="key=${TF_STATE_KEY}"
+
+      - name: Terraform apply
+        run: |
+          set -euo pipefail
+          COMMON=""
+          if [ -n "${{ inputs.terraform-common-values-file }}" ] && [ -f "${WORKING_DIR}/${{ inputs.terraform-common-values-file }}" ]; then
+            COMMON="-var-file=${{ inputs.terraform-common-values-file }}"
+          fi
+          terraform -chdir="$WORKING_DIR" apply \
+            ${COMMON} \
+            -var-file="${TF_VALUES_FILE}" \
+            -auto-approve \
+            -no-color -input=false \
+            -parallelism=${{ inputs.terraform-parallelism }} \
+            ${{ inputs.terraform-apply-extra-args }}
           echo "Workflow gate passed."
