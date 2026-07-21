@@ -220,7 +220,7 @@ jobs:
       result: ${{ steps.commitlint.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
       - name: Setup node
@@ -246,7 +246,7 @@ jobs:
       result: ${{ steps.format.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
         with:
@@ -266,7 +266,7 @@ jobs:
       result_centralised_lint: ${{ steps.lintCentralised.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Terraform Bootstrap
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@313f07f46b44c4f3c82e878d71dc3182a0ce3c3d # main
@@ -365,7 +365,7 @@ jobs:
       TF_LOG: ${{ needs.debug-mode.outputs.tf_log }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Terraform Bootstrap
         id: bootstrap
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap@313f07f46b44c4f3c82e878d71dc3182a0ce3c3d # main
@@ -486,7 +486,7 @@ jobs:
       result: ${{ steps.security.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Ensure Checkov Configuration
         run: |
           [ -f ".checkov.yml" ] || echo "{}" > .checkov.yml
@@ -528,7 +528,7 @@ jobs:
       result: ${{ steps.security.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Check If Trivy Ignore File Exists
         id: security-exceptions
         run: |
@@ -693,7 +693,7 @@ jobs:
       - debug-mode
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Terraform Bootstrap
         id: init
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap@313f07f46b44c4f3c82e878d71dc3182a0ce3c3d # main
