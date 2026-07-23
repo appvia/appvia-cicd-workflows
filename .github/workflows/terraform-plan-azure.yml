@@ -1,0 +1,1014 @@
+---
+# =============================================================================
+# Terraform Plan & Apply (Azure)
+#
+# Reusable, INPUT-DRIVEN workflow modelled on the AWS
+# terraform-plan-and-apply-aws.yml engine, but for Azure. On pull requests it
+# runs a single validate+plan job per environment (fmt, lint, plan, Checkov,
+# OPA, Infracost) with a per-environment PR comment and a merge gate. On push
+# to the default branch (i.e. after merge) it runs an apply job using the
+# read-write service principal (re-plan + apply).
+#
+# All configuration arrives as `inputs` (rendered from customer-install.sh in the
+# calling repo) — NOT GitHub environment vars. Only true secrets come via
+# `secrets:`.
+#
+# Ports six operational improvements from the mikeguy example workflow while
+# staying input-driven:
+#   1. Delete the binary tfplan after JSON conversion (state hygiene).
+#   2. `terraform plan -detailed-exitcode` → real No-changes/Changes/Error status.
+#   3. GitHub App token + `git insteadOf` for private modules/central policies.
+#   4. Checksum-verified tool install + binary cache (blank-runner caching).
+#   5. Central + local OPA with `conftest verify` before `conftest test`.
+#   6. HTML plan report artifact + per-section PR-comment character budgets.
+# =============================================================================
+name: Terraform Plan (Azure)
+
+on:
+  workflow_call:
+    inputs:
+      # --- Azure identity (plan uses the READ-ONLY service principal) ---
+      azure-client-id:
+        description: "Client ID of the plan (read-only) Entra service principal"
+        required: true
+        type: string
+      azure-tenant-id:
+        description: "Entra tenant ID"
+        required: true
+        type: string
+      azure-subscription-id:
+        description: "Target subscription ID"
+        required: true
+        type: string
+      # --- Azure identity for APPLY (the READ-WRITE service principal) ---
+      azure-apply-client-id:
+        description: "Client ID of the apply (read-write) Entra service principal. Falls back to azure-client-id when blank (single-SP setups)."
+        required: false
+        default: ""
+        type: string
+      # --- Apply behaviour (apply runs on push to main) ---
+      enable-apply:
+        description: "Run terraform apply on push to the default branch"
+        required: false
+        default: true
+        type: boolean
+      terraform-apply-extra-args:
+        description: "Extra args appended to terraform apply"
+        required: false
+        default: ""
+        type: string
+      # --- Remote state backend (azurerm) ---
+      backend-resource-group-name:
+        description: "Resource group of the Terraform state storage account"
+        required: true
+        type: string
+      backend-storage-account-name:
+        description: "Terraform state storage account name"
+        required: true
+        type: string
+      backend-container-name:
+        description: "Blob container for state"
+        required: false
+        default: "tfstate"
+        type: string
+      terraform-state-key:
+        description: "State blob key (default: <environment>.tfstate)"
+        required: false
+        default: ""
+        type: string
+      # --- Terraform inputs ---
+      environment:
+        description: "The environment being planned (dev/tst/stg/prd)"
+        required: true
+        type: string
+      working-directory:
+        description: "Directory holding the root module"
+        required: false
+        default: "terraform"
+        type: string
+      terraform-version:
+        description: "Terraform version ('latest' resolves the newest release)"
+        required: false
+        default: "1.14.0"
+        type: string
+      tflint-version:
+        description: "TFLint version ('latest' resolves the newest release)"
+        required: false
+        default: "latest"
+        type: string
+      checkov-version:
+        description: "Checkov version ('latest' resolves the newest release)"
+        required: false
+        default: "latest"
+        type: string
+      conftest-version:
+        description: "Conftest version ('latest' resolves the newest release)"
+        required: false
+        default: "latest"
+        type: string
+      infracost-version:
+        description: "Infracost version ('latest' resolves the newest release)"
+        required: false
+        default: "latest"
+        type: string
+      commitlint-version:
+        description: "@commitlint/cli npm version ('latest' resolves newest)"
+        required: false
+        default: "latest"
+        type: string
+      terraform-values-file:
+        description: "Env var-file (default: environments/<environment>/terraform.tfvars)"
+        required: false
+        default: ""
+        type: string
+      terraform-common-values-file:
+        description: "Shared var-file applied to every environment"
+        required: false
+        default: "environments/common/terraform.tfvars"
+        type: string
+      terraform-plan-extra-args:
+        description: "Extra args appended to terraform plan"
+        required: false
+        default: ""
+        type: string
+      terraform-parallelism:
+        description: "Parallelism for plan"
+        required: false
+        default: 10
+        type: number
+      runs-on:
+        description: "Runner label"
+        required: false
+        default: "ubuntu-latest"
+        type: string
+      # --- Feature toggles (mirror the AWS engine) ---
+      enable-commitlint:
+        description: "Run commitlint on the PR commits"
+        required: false
+        default: false
+        type: boolean
+      enable-checkov:
+        description: "Run Checkov static analysis"
+        required: false
+        default: true
+        type: boolean
+      enable-opa:
+        description: "Run OPA/Conftest policy checks"
+        required: false
+        default: true
+        type: boolean
+      enable-infracost:
+        description: "Run Infracost cost estimation (needs infracost-api-key)"
+        required: false
+        default: false
+        type: boolean
+      # --- Private module / central policy access (GitHub App) ---
+      github-app-id:
+        description: "GitHub App ID used to pull private modules and central policies (blank disables)"
+        required: false
+        default: ""
+        type: string
+      github-app-owner:
+        description: "Owner the GitHub App token is scoped to"
+        required: false
+        default: "appvia"
+        type: string
+      # --- OPA policy sources ---
+      opa-policies-repo-and-path:
+        description: "Conftest pull source for central OPA policies (e.g. github.com/appvia/policies//policies/terraform). Blank skips central checks."
+        required: false
+        default: ""
+        type: string
+      opa-policies-version:
+        description: "Git ref (branch/tag/SHA) for the central OPA policies"
+        required: false
+        default: "main"
+        type: string
+      # --- Centralised config source ---
+      cicd-repository:
+        description: "Repo hosting centralised config (tflint, commitlint)"
+        required: false
+        default: "appvia/appvia-cicd-workflows"
+        type: string
+      cicd-branch:
+        description: "Ref of the centralised config repo"
+        required: false
+        default: "main"
+        type: string
+    secrets:
+      infracost-api-key:
+        description: "Infracost API key (required if enable-infracost)"
+        required: false
+      github-app-private-key:
+        description: "Private key for the GitHub App (required if github-app-id is set)"
+        required: false
+
+permissions:
+  id-token: write        # OIDC federation to Azure
+  contents: read
+  pull-requests: write   # PR comment
+  security-events: write # SARIF upload
+  actions: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Validate & Plan — single job so the plan binary never leaves the runner,
+  # tool binaries are installed once, and downstream analysis runs in-context.
+  # ---------------------------------------------------------------------------
+  validate-and-plan:
+    name: Validate and Plan (${{ inputs.environment }})
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 60
+    env:
+      ARM_CLIENT_ID: ${{ inputs.azure-client-id }}
+      ARM_TENANT_ID: ${{ inputs.azure-tenant-id }}
+      ARM_SUBSCRIPTION_ID: ${{ inputs.azure-subscription-id }}
+      ARM_USE_OIDC: "true"
+      ARM_USE_AZUREAD: "true"
+      TF_INPUT: "0"
+      TF_IN_AUTOMATION: "true"
+      ENV: ${{ inputs.environment }}
+      WORKING_DIR: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history so commitlint can reach the PR base commit
+          fetch-depth: 0
+
+      # -----------------------------------------------------------------------
+      # (4) Resolve tool versions — translate "latest" into concrete versions
+      #     and build a hash so the binary cache key is stable per version set.
+      # -----------------------------------------------------------------------
+      - name: Resolve tool versions
+        id: versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TF_VERSION: ${{ inputs.terraform-version }}
+          INPUT_TFLINT_VERSION: ${{ inputs.tflint-version }}
+          INPUT_CHECKOV_VERSION: ${{ inputs.checkov-version }}
+          INPUT_CONFTEST_VERSION: ${{ inputs.conftest-version }}
+          INPUT_INFRACOST_VERSION: ${{ inputs.infracost-version }}
+          INPUT_COMMITLINT_VERSION: ${{ inputs.commitlint-version }}
+        run: |
+          set -euo pipefail
+          resolve_gh() {
+            local repo="$1" ver="$2"
+            if [ "$ver" = "latest" ]; then
+              gh release view --repo "$repo" --json tagName -q .tagName | sed 's/^v//'
+            else
+              printf '%s' "$ver"
+            fi
+          }
+          resolve_npm() {
+            local pkg="$1" ver="$2"
+            if [ "$ver" = "latest" ]; then npm view "$pkg" version; else printf '%s' "$ver"; fi
+          }
+          resolve_pypi() {
+            local pkg="$1" ver="$2"
+            if [ "$ver" = "latest" ]; then
+              curl -fsSL "https://pypi.org/pypi/${pkg}/json" | jq -r .info.version
+            else
+              printf '%s' "$ver"
+            fi
+          }
+          TF_VER=$(resolve_gh "hashicorp/terraform" "$INPUT_TF_VERSION")
+          TFLINT_VER=$(resolve_gh "terraform-linters/tflint" "$INPUT_TFLINT_VERSION")
+          CHECKOV_VER=$(resolve_pypi "checkov" "$INPUT_CHECKOV_VERSION")
+          CONFTEST_VER=$(resolve_gh "open-policy-agent/conftest" "$INPUT_CONFTEST_VERSION")
+          INFRACOST_VER=$(resolve_gh "infracost/infracost" "$INPUT_INFRACOST_VERSION")
+          COMMITLINT_VER=$(resolve_npm "@commitlint/cli" "$INPUT_COMMITLINT_VERSION")
+          {
+            echo "terraform=$TF_VER"
+            echo "tflint=$TFLINT_VER"
+            echo "checkov=$CHECKOV_VER"
+            echo "conftest=$CONFTEST_VER"
+            echo "infracost=$INFRACOST_VER"
+            echo "commitlint=$COMMITLINT_VER"
+          } >> "$GITHUB_OUTPUT"
+          VERSIONS_HASH=$(printf '%s\n' "$TF_VER" "$TFLINT_VER" "$CHECKOV_VER" "$CONFTEST_VER" "$INFRACOST_VER" "$COMMITLINT_VER" | sha256sum | cut -d' ' -f1)
+          echo "versions_hash=$VERSIONS_HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Restore tool binary cache
+        id: tools_cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.local
+          key: tools-${{ runner.os }}-${{ steps.versions.outputs.versions_hash }}
+
+      - name: Install tool binaries
+        if: steps.tools_cache.outputs.cache-hit != 'true'
+        env:
+          TF_VERSION: ${{ steps.versions.outputs.terraform }}
+          TFLINT_VERSION: ${{ steps.versions.outputs.tflint }}
+          CHECKOV_VERSION: ${{ steps.versions.outputs.checkov }}
+          CONFTEST_VERSION: ${{ steps.versions.outputs.conftest }}
+          INFRACOST_VERSION: ${{ steps.versions.outputs.infracost }}
+          COMMITLINT_VERSION: ${{ steps.versions.outputs.commitlint }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.local/tools ~/.local/commitlint
+
+          # sha256sum -c resolves filenames relative to cwd, so each archive must
+          # be downloaded using the exact filename that appears in the checksum file.
+          verify_sha256() {
+            local checksum_file="$1" filename="$2"
+            grep "${filename}" "${checksum_file}" | sha256sum -c -
+          }
+
+          # Terraform
+          TF_ARCHIVE="terraform_${TF_VERSION}_linux_amd64.zip"
+          TF_BASE="https://releases.hashicorp.com/terraform/${TF_VERSION}"
+          curl -fsSL "${TF_BASE}/${TF_ARCHIVE}" -o "/tmp/${TF_ARCHIVE}"
+          curl -fsSL "${TF_BASE}/terraform_${TF_VERSION}_SHA256SUMS" -o /tmp/terraform_SHA256SUMS
+          ( cd /tmp && verify_sha256 terraform_SHA256SUMS "${TF_ARCHIVE}" )
+          unzip -q "/tmp/${TF_ARCHIVE}" -d ~/.local/tools terraform
+
+          # TFLint
+          TFLINT_ARCHIVE="tflint_linux_amd64.zip"
+          TFLINT_BASE="https://github.com/terraform-linters/tflint/releases/download/v${TFLINT_VERSION}"
+          curl -fsSL "${TFLINT_BASE}/${TFLINT_ARCHIVE}" -o "/tmp/${TFLINT_ARCHIVE}"
+          curl -fsSL "${TFLINT_BASE}/checksums.txt" -o /tmp/tflint_checksums.txt
+          ( cd /tmp && verify_sha256 tflint_checksums.txt "${TFLINT_ARCHIVE}" )
+          unzip -q "/tmp/${TFLINT_ARCHIVE}" -d ~/.local/tools tflint
+
+          # Checkov (pip into an isolated venv)
+          python3 -m venv ~/.local/checkov-venv
+          ~/.local/checkov-venv/bin/pip install --quiet "checkov==${CHECKOV_VERSION}"
+
+          # Conftest
+          CONFTEST_ARCHIVE="conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz"
+          CONFTEST_BASE="https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}"
+          curl -fsSL "${CONFTEST_BASE}/${CONFTEST_ARCHIVE}" -o "/tmp/${CONFTEST_ARCHIVE}"
+          curl -fsSL "${CONFTEST_BASE}/checksums.txt" -o /tmp/conftest_checksums.txt
+          ( cd /tmp && verify_sha256 conftest_checksums.txt "${CONFTEST_ARCHIVE}" )
+          tar -xz -C ~/.local/tools -f "/tmp/${CONFTEST_ARCHIVE}" conftest
+
+          # Infracost (per-asset .sha256 file carrying hash + original filename)
+          INFRACOST_ARCHIVE="infracost-linux-amd64.tar.gz"
+          INFRACOST_BASE="https://github.com/infracost/infracost/releases/download/v${INFRACOST_VERSION}"
+          curl -fsSL "${INFRACOST_BASE}/${INFRACOST_ARCHIVE}" -o "/tmp/${INFRACOST_ARCHIVE}"
+          curl -fsSL "${INFRACOST_BASE}/${INFRACOST_ARCHIVE}.sha256" -o "/tmp/${INFRACOST_ARCHIVE}.sha256"
+          ( cd /tmp && sha256sum -c "${INFRACOST_ARCHIVE}.sha256" )
+          tar -xz -C /tmp -f "/tmp/${INFRACOST_ARCHIVE}"
+          mv /tmp/infracost-linux-amd64 ~/.local/tools/infracost && chmod +x ~/.local/tools/infracost
+
+          # Commitlint (npm, cached alongside binaries)
+          npm install --prefix ~/.local/commitlint --no-fund --no-audit \
+            "@commitlint/cli@${COMMITLINT_VERSION}" \
+            "@commitlint/config-conventional@${COMMITLINT_VERSION}"
+
+      - name: Save tool binary cache
+        if: steps.tools_cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.local
+          key: ${{ steps.tools_cache.outputs.cache-primary-key }}
+
+      - name: Configure environment
+        run: |
+          {
+            echo "$HOME/.local/tools"
+            echo "$HOME/.local/checkov-venv/bin"
+            echo "$HOME/.local/commitlint/node_modules/.bin"
+          } >> "$GITHUB_PATH"
+          {
+            echo "NODE_PATH=$HOME/.local/commitlint/node_modules"
+            echo "TF_PLUGIN_CACHE_DIR=$HOME/.terraform.d/plugin-cache"
+          } >> "$GITHUB_ENV"
+          mkdir -p "$HOME/.terraform.d/plugin-cache"
+
+      # -----------------------------------------------------------------------
+      # Commitlint / Format / Lint (fast checks; non-blocking, reported later)
+      # -----------------------------------------------------------------------
+      - name: Retrieve commitlint config
+        if: github.event_name == 'pull_request' && inputs.enable-commitlint
+        run: |
+          curl -fsSL "https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/config/commitlint.config.js" -o commitlint.config.js
+
+      - name: Commitlint
+        id: commitlint
+        if: github.event_name == 'pull_request' && inputs.enable-commitlint
+        continue-on-error: true
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          commitlint --from "$BASE_SHA" --to "$HEAD_SHA" --config commitlint.config.js 2>&1 | tee "$GITHUB_WORKSPACE/commitlint_output_${ENV}.txt"
+
+      - name: Terraform format check
+        id: fmt_check
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          terraform -chdir="$WORKING_DIR" fmt -check -recursive 2>&1 | tee "$GITHUB_WORKSPACE/fmt_check_output_${ENV}.txt"
+
+      - name: Retrieve centralised tflint config
+        run: |
+          curl -fsSL "https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/config/.tflint.hcl" -o .tflint.hcl || echo "no centralised config; using repo .tflint.hcl"
+
+      - name: Run TFLint
+        id: tflint
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          tflint --chdir="$WORKING_DIR" --init
+          tflint --chdir="$WORKING_DIR" -f compact 2>&1 | tee "$GITHUB_WORKSPACE/tflint_output_${ENV}.txt"
+
+      # -----------------------------------------------------------------------
+      # (3) GitHub App token + git rewrite so private modules/policies resolve
+      # -----------------------------------------------------------------------
+      - name: Generate GitHub App token
+        id: app_token
+        if: inputs.github-app-id != ''
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ inputs.github-app-id }}
+          private-key: ${{ secrets.github-app-private-key }}
+          owner: ${{ inputs.github-app-owner }}
+
+      - name: Configure git to use GitHub App token
+        if: inputs.github-app-id != ''
+        env:
+          APP_TOKEN: ${{ steps.app_token.outputs.token }}
+        run: |
+          git config --global url."https://x-access-token:${APP_TOKEN}@github.com/".insteadOf "https://github.com/"
+
+      # -----------------------------------------------------------------------
+      # Azure auth + plan
+      # -----------------------------------------------------------------------
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ inputs.azure-client-id }}
+          tenant-id: ${{ inputs.azure-tenant-id }}
+          subscription-id: ${{ inputs.azure-subscription-id }}
+
+      - name: Restore Terraform provider cache
+        id: provider_cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: tf-providers-${{ runner.os }}-${{ hashFiles(format('{0}/.terraform.lock.hcl', inputs.working-directory)) }}
+          restore-keys: |
+            tf-providers-${{ runner.os }}-
+
+      - name: Resolve state key and values file
+        run: |
+          KEY="${{ inputs.terraform-state-key }}"
+          [ -z "$KEY" ] && KEY="${ENV}.tfstate"
+          echo "TF_STATE_KEY=${KEY}" >> "$GITHUB_ENV"
+          VF="${{ inputs.terraform-values-file }}"
+          [ -z "$VF" ] && VF="environments/${ENV}/terraform.tfvars"
+          echo "TF_VALUES_FILE=${VF}" >> "$GITHUB_ENV"
+
+      - name: Terraform init
+        id: init
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          terraform -chdir="$WORKING_DIR" init -input=false -reconfigure \
+            -backend-config="resource_group_name=${{ inputs.backend-resource-group-name }}" \
+            -backend-config="storage_account_name=${{ inputs.backend-storage-account-name }}" \
+            -backend-config="container_name=${{ inputs.backend-container-name }}" \
+            -backend-config="key=${TF_STATE_KEY}" 2>&1 | tee "$GITHUB_WORKSPACE/init_output_${ENV}.txt"
+
+      - name: Save Terraform provider cache
+        if: steps.provider_cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: tf-providers-${{ runner.os }}-${{ hashFiles(format('{0}/.terraform.lock.hcl', inputs.working-directory)) }}
+
+      - name: Terraform validate
+        id: validate
+        continue-on-error: true
+        run: terraform -chdir="$WORKING_DIR" validate -no-color
+
+      # (2) -detailed-exitcode: 0 = no changes, 2 = changes, 1 = error
+      - name: Terraform plan
+        id: plan
+        continue-on-error: true
+        run: |
+          set +e
+          COMMON=""
+          if [ -n "${{ inputs.terraform-common-values-file }}" ] && [ -f "${WORKING_DIR}/${{ inputs.terraform-common-values-file }}" ]; then
+            COMMON="-var-file=${{ inputs.terraform-common-values-file }}"
+          fi
+          terraform -chdir="$WORKING_DIR" plan \
+            ${COMMON} \
+            -var-file="${TF_VALUES_FILE}" \
+            -out="tfplan.${ENV}" \
+            -detailed-exitcode \
+            -no-color -input=false \
+            -parallelism=${{ inputs.terraform-parallelism }} \
+            ${{ inputs.terraform-plan-extra-args }} \
+            2>&1 | tee "$GITHUB_WORKSPACE/plan_output_${ENV}.txt"
+          PLAN_EXIT=${PIPESTATUS[0]}
+          set -e
+          echo "$PLAN_EXIT" > "$GITHUB_WORKSPACE/plan_exit_${ENV}.txt"
+          echo "plan_exit=$PLAN_EXIT" >> "$GITHUB_OUTPUT"
+          if [ "$PLAN_EXIT" -eq 1 ]; then echo "plan_failed=true" >> "$GITHUB_OUTPUT"; else echo "plan_failed=false" >> "$GITHUB_OUTPUT"; fi
+
+      # (1) Convert to JSON then DELETE the binary plan (it embeds state) before
+      #     any third-party tool touches the workspace.
+      - name: Convert plan to JSON and remove binary plan
+        id: plan_json
+        if: steps.plan.outputs.plan_failed == 'false'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          terraform -chdir="$WORKING_DIR" show -json "tfplan.${ENV}" > "${WORKING_DIR}/tfplan_${ENV}.json"
+          rm -f "${WORKING_DIR}/tfplan.${ENV}"
+
+      # (6) HTML plan report for long plans
+      - name: Generate plan HTML report
+        id: plan_html
+        if: steps.plan_json.outcome == 'success'
+        continue-on-error: true
+        run: |
+          node - "${WORKING_DIR}/tfplan_${ENV}.json" "$GITHUB_WORKSPACE/plan_report_${ENV}.html" <<'NODEJS'
+          const fs = require('fs');
+          const [,, src, dest] = process.argv;
+          const plan = JSON.parse(fs.readFileSync(src, 'utf8'));
+          const changes = (plan.resource_changes || []).filter(r => {
+            const a = r.change?.actions || [];
+            return !(a.length === 1 && a[0] === 'no-op');
+          });
+          const counts = { create: 0, update: 0, delete: 0, replace: 0 };
+          changes.forEach(r => {
+            const a = r.change.actions;
+            if (a.includes('create') && a.includes('delete')) counts.replace++;
+            else if (a.includes('create')) counts.create++;
+            else if (a.includes('delete')) counts.delete++;
+            else if (a.includes('update')) counts.update++;
+          });
+          const badge = (n, label, color) =>
+            n > 0 ? `<span style="background:${color};color:#fff;padding:2px 8px;border-radius:4px;margin-right:4px">${n} ${label}</span>` : '';
+          const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          const actionLabel = a => {
+            if (a.includes('create') && a.includes('delete')) return '<span style="color:#c00">&#8644; replace</span>';
+            if (a.includes('create')) return '<span style="color:#080">+ create</span>';
+            if (a.includes('delete')) return '<span style="color:#c00">&minus; destroy</span>';
+            if (a.includes('update')) return '<span style="color:#a60">~ update</span>';
+            return esc(a.join(', '));
+          };
+          const rows = changes.map(r => `
+            <details>
+              <summary><code>${esc(r.address)}</code> (${esc(r.type)}) &mdash; ${actionLabel(r.change.actions)}</summary>
+              <pre style="background:#f6f8fa;padding:12px;overflow:auto;border-radius:4px">${
+                esc(JSON.stringify(r.change.after ?? r.change.before ?? {}, null, 2))
+              }</pre>
+            </details>`).join('\n');
+          const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+          <title>Terraform Plan Report</title>
+          <style>
+            body{font-family:system-ui,sans-serif;max-width:960px;margin:32px auto;padding:0 16px;color:#1f2328}
+            h1{margin-bottom:8px}
+            details>summary{cursor:pointer;padding:6px 4px;border-radius:4px}
+            details>summary:hover{background:#f0f0f0}
+            details[open]>summary{font-weight:600}
+            pre{font-size:13px}
+          </style>
+          </head><body>
+          <h1>&#127758; Terraform Plan Report</h1>
+          <p>
+            ${badge(counts.create,'to add','#2a7')}
+            ${badge(counts.update,'to change','#b70')}
+            ${badge(counts.delete,'to destroy','#c33')}
+            ${badge(counts.replace,'to replace','#c33')}
+          </p>
+          <p>${changes.length} resource(s) with planned changes.</p>
+          ${rows || '<p>&#10003; No changes.</p>'}
+          </body></html>`;
+          fs.writeFileSync(dest, html);
+          NODEJS
+
+      # -----------------------------------------------------------------------
+      # Checkov — scans the directory (so inline skip-comments apply)
+      # -----------------------------------------------------------------------
+      - name: Checkov security scan
+        id: checkov
+        if: inputs.enable-checkov
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          CHECKOV_ARGS=(
+            -d "$WORKING_DIR"
+            --framework "terraform,secrets"
+            --compact --quiet
+            --output cli --output sarif
+            --output-file-path "console,checkov_${ENV}.sarif"
+          )
+          if [ -f "${WORKING_DIR}/${{ inputs.terraform-common-values-file }}" ]; then
+            CHECKOV_ARGS+=(--var-file "${WORKING_DIR}/${{ inputs.terraform-common-values-file }}")
+          fi
+          if [ -f "${WORKING_DIR}/${TF_VALUES_FILE}" ]; then
+            CHECKOV_ARGS+=(--var-file "${WORKING_DIR}/${TF_VALUES_FILE}")
+          fi
+          checkov "${CHECKOV_ARGS[@]}" 2>&1 | tee "checkov_output_${ENV}.txt"
+
+      - name: Upload Checkov SARIF
+        if: always() && inputs.enable-checkov && steps.checkov.outcome != 'cancelled'
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: checkov_${{ inputs.environment }}.sarif
+          category: checkov-${{ inputs.environment }}
+
+      # -----------------------------------------------------------------------
+      # (5) OPA — central (pulled) + local, each verified before test
+      # -----------------------------------------------------------------------
+      - name: Pull central OPA policies
+        id: pull_policies
+        if: inputs.enable-opa && inputs.opa-policies-repo-and-path != ''
+        continue-on-error: true
+        env:
+          ORG_POLICIES_REPO: ${{ inputs.opa-policies-repo-and-path }}
+          ORG_POLICIES_VERSION: ${{ inputs.opa-policies-version }}
+        run: |
+          set -euo pipefail
+          mkdir -p downloaded-policies
+          conftest pull --policy downloaded-policies "${ORG_POLICIES_REPO}?ref=${ORG_POLICIES_VERSION}"
+
+      - name: Verify central rego syntax
+        id: rego_validate_central
+        if: steps.pull_policies.outcome == 'success'
+        continue-on-error: true
+        run: conftest verify --policy downloaded-policies 2>&1 | tee "$GITHUB_WORKSPACE/rego_validate_central_output_${ENV}.txt"
+
+      - name: Verify local rego syntax
+        id: rego_validate_local
+        if: inputs.enable-opa && hashFiles('policies/opa/**/*.rego') != ''
+        continue-on-error: true
+        run: conftest verify --policy policies/opa 2>&1 | tee "$GITHUB_WORKSPACE/rego_validate_local_output_${ENV}.txt"
+
+      - name: OPA central policy check
+        id: opa_central
+        if: steps.plan_json.outcome == 'success' && steps.rego_validate_central.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          conftest test --policy downloaded-policies --all-namespaces --no-color --output json \
+            "${WORKING_DIR}/tfplan_${ENV}.json" > "$GITHUB_WORKSPACE/opa_central_output_${ENV}.txt" || true
+          FAILURES=$(jq '[.[] | select(.failures != null) | .failures[]] | length' "$GITHUB_WORKSPACE/opa_central_output_${ENV}.txt")
+          cat "$GITHUB_WORKSPACE/opa_central_output_${ENV}.txt"
+          [ "$FAILURES" -eq 0 ] || exit 1
+
+      - name: OPA local policy check
+        id: opa_local
+        if: steps.plan_json.outcome == 'success' && steps.rego_validate_local.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          conftest test --policy policies/opa --all-namespaces --no-color --output json \
+            "${WORKING_DIR}/tfplan_${ENV}.json" > "$GITHUB_WORKSPACE/opa_local_output_${ENV}.txt" || true
+          FAILURES=$(jq '[.[] | select(.failures != null) | .failures[]] | length' "$GITHUB_WORKSPACE/opa_local_output_${ENV}.txt")
+          cat "$GITHUB_WORKSPACE/opa_local_output_${ENV}.txt"
+          [ "$FAILURES" -eq 0 ] || exit 1
+
+      # -----------------------------------------------------------------------
+      # Infracost
+      # -----------------------------------------------------------------------
+      - name: Infracost
+        id: infracost
+        # env (not secrets) in `if:` — secrets can't be evaluated in conditions
+        if: inputs.enable-infracost && steps.plan_json.outcome == 'success' && env.INFRACOST_API_KEY != ''
+        continue-on-error: true
+        env:
+          INFRACOST_API_KEY: ${{ secrets.infracost-api-key }}
+        run: |
+          set -euo pipefail
+          infracost breakdown --path "${WORKING_DIR}/tfplan_${ENV}.json" --format table 2>&1 | tee "infracost_${ENV}.txt"
+
+      # -----------------------------------------------------------------------
+      # Collect outcomes + upload artifact (no binary plan — already deleted)
+      # -----------------------------------------------------------------------
+      - name: Collect step outcomes
+        if: always()
+        run: |
+          PLAN_EXIT_VALUE=$(cat "$GITHUB_WORKSPACE/plan_exit_${ENV}.txt" 2>/dev/null || echo "")
+          cat > "outcomes_${ENV}.json" <<EOF_OUTCOMES
+          {
+            "environment": "${ENV}",
+            "commitlint": "${{ steps.commitlint.outcome }}",
+            "fmt_check": "${{ steps.fmt_check.outcome }}",
+            "tflint": "${{ steps.tflint.outcome }}",
+            "init": "${{ steps.init.outcome }}",
+            "validate": "${{ steps.validate.outcome }}",
+            "plan": "${{ steps.plan.outcome }}",
+            "plan_json": "${{ steps.plan_json.outcome }}",
+            "plan_exit": "$PLAN_EXIT_VALUE",
+            "checkov": "${{ steps.checkov.outcome }}",
+            "opa_central": "${{ steps.opa_central.outcome }}",
+            "opa_local": "${{ steps.opa_local.outcome }}",
+            "infracost": "${{ steps.infracost.outcome }}"
+          }
+          EOF_OUTCOMES
+
+      - name: Upload plan outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: plan-${{ inputs.environment }}
+          path: |
+            outcomes_${{ inputs.environment }}.json
+            commitlint_output_${{ inputs.environment }}.txt
+            fmt_check_output_${{ inputs.environment }}.txt
+            init_output_${{ inputs.environment }}.txt
+            tflint_output_${{ inputs.environment }}.txt
+            plan_output_${{ inputs.environment }}.txt
+            plan_report_${{ inputs.environment }}.html
+            ${{ inputs.working-directory }}/tfplan_${{ inputs.environment }}.json
+            checkov_output_${{ inputs.environment }}.txt
+            rego_validate_central_output_${{ inputs.environment }}.txt
+            rego_validate_local_output_${{ inputs.environment }}.txt
+            opa_central_output_${{ inputs.environment }}.txt
+            opa_local_output_${{ inputs.environment }}.txt
+            infracost_${{ inputs.environment }}.txt
+          if-no-files-found: warn
+          retention-days: 14
+          compression-level: 9
+
+      - name: Final result
+        if: always()
+        run: |
+          FAILED=false
+          [ "${{ steps.fmt_check.outcome }}" = "failure" ] && FAILED=true
+          [ "${{ steps.tflint.outcome }}" = "failure" ] && FAILED=true
+          [ "${{ steps.init.outcome }}" = "failure" ] && FAILED=true
+          [ "${{ steps.validate.outcome }}" = "failure" ] && FAILED=true
+          [ "${{ steps.plan.outputs.plan_failed }}" = "true" ] && FAILED=true
+          [ "${{ steps.plan_json.outcome }}" = "failure" ] && FAILED=true
+          [ "${{ steps.commitlint.outcome }}" = "failure" ] && FAILED=true
+          [ "${{ steps.checkov.outcome }}" = "failure" ] && FAILED=true
+          [ "${{ steps.opa_central.outcome }}" = "failure" ] && FAILED=true
+          [ "${{ steps.opa_local.outcome }}" = "failure" ] && FAILED=true
+          if [ "$FAILED" = "true" ]; then
+            echo "One or more checks failed. See step results above."
+            exit 1
+          fi
+          echo "All checks passed."
+
+  # ---------------------------------------------------------------------------
+  # (6) PR comment — per-env, per-section character budgets, HTML report link
+  # ---------------------------------------------------------------------------
+  comment:
+    name: Post PR Comment
+    needs: [validate-and-plan]
+    runs-on: ${{ inputs.runs-on }}
+    if: always() && github.event_name == 'pull_request'
+    permissions:
+      pull-requests: write
+      actions: read
+    steps:
+      - name: Download plan artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: plan-*
+          merge-multiple: true
+
+      - name: Post / update comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const MAX_COMMENT_LENGTH = 65500;
+            const LIMITS = {
+              commitlint: 1500, fmt_check: 1500, tflint: 2000, init: 3000,
+              checkov: 3000, opa_central: 3000, opa_local: 2000, infracost: 2000, plan: 40000,
+            };
+
+            function readFile(p) {
+              try { return fs.readFileSync(p, 'utf8'); } catch (e) {
+                if (e.code === 'ENOENT') return ''; throw e;
+              }
+            }
+            const statusEmoji = o => o === 'success' ? '✅' : o === 'failure' ? '❌' : o === 'skipped' ? '⏭️' : '⚪';
+            const label = o => o === 'success' ? 'Pass' : o === 'failure' ? 'Fail' : o === 'skipped' ? 'Skipped' : '—';
+            function truncate(text, max) {
+              if (!text) return { content: 'No output', truncated: false };
+              const clean = text.replace(/\x1b\[[0-9;]*m/g, '');
+              if (clean.length <= max) return { content: clean, truncated: false };
+              return { content: clean.slice(0, max) + '\n\nOutput truncated...', truncated: true };
+            }
+            function detailSection(emoji, title, text, outcome, max, skippedMsg = '_Step was skipped_') {
+              let content, truncated = false;
+              if (outcome === 'skipped') content = skippedMsg;
+              else if (!text || !text.trim()) content = 'No output';
+              else ({ content, truncated } = truncate(text, max));
+              let section = `<details><summary>${emoji} <b>${title}</b></summary>\n\n\`\`\`\n${content}\n\`\`\`\n\n`;
+              if (truncated) section += `🔗 [View full output in raw logs](${runUrl})\n\n`;
+              return section + `</details>\n\n`;
+            }
+            function formatOpaOutput(rawText) {
+              try {
+                const results = JSON.parse(rawText);
+                if (!Array.isArray(results) || results.length === 0) return '✅ No policy violations detected.';
+                const failures = results.flatMap(r => (r.failures || []).map(f => `[${r.namespace}] ${f.msg}`));
+                const warnings = results.flatMap(r => (r.warnings || []).map(w => `[${r.namespace}] ${w.msg}`));
+                if (!failures.length && !warnings.length) return '✅ No policy violations detected.';
+                let out = '';
+                if (failures.length) out += 'Policy failures:\n' + failures.map(m => `  ✗ ${m}`).join('\n');
+                if (warnings.length) { if (out) out += '\n\n'; out += 'Policy warnings:\n' + warnings.map(m => `  ⚠ ${m}`).join('\n'); }
+                return out;
+              } catch { return rawText.trim() ? rawText : 'No output'; }
+            }
+
+            const { data: { artifacts } } = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner, repo: context.repo.repo, run_id: context.runId,
+            });
+            const getArtifactUrl = envName => {
+              const a = artifacts.find(x => x.name === `plan-${envName}`);
+              return a ? `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}/artifacts/${a.id}` : null;
+            };
+
+            function buildBody(env, artifactUrl) {
+              const marker = `<!-- terraform-plan-${env.environment} -->`;
+              const overallOk = ['fmt_check','tflint','init','validate','plan_json','checkov','opa_central','opa_local']
+                .every(k => env[k] === 'success' || env[k] === 'skipped') && env.plan_exit !== '1';
+              const envTitle = env.environment.charAt(0).toUpperCase() + env.environment.slice(1);
+              const planExit = env.plan_exit != null ? String(env.plan_exit) : '';
+              const planIcon = planExit === '0' ? '✅' : planExit === '2' ? '⚠️' : '❌';
+              const planLabel = planExit === '0' ? 'No changes' : planExit === '2' ? 'Changes detected' : planExit === '1' ? 'Error' : label(env.plan);
+              const infracostIcon = env.infracost === 'success' ? 'ℹ️' : statusEmoji(env.infracost);
+              const infracostLabel = env.infracost === 'success' ? 'Review estimate' : label(env.infracost);
+
+              let body = `${marker}\n# 🌍 Validate and Plan Results - ${envTitle} ${overallOk ? '✅' : '❌'}\n\n`;
+              body += `| Check | Result |\n|---|---|\n`;
+              body += `| 📝 **Commitlint** | ${statusEmoji(env.commitlint)} \`${label(env.commitlint)}\` |\n`;
+              body += `| 📐 **Terraform Format** | ${statusEmoji(env.fmt_check)} \`${label(env.fmt_check)}\` |\n`;
+              body += `| 🔧 **TFLint** | ${statusEmoji(env.tflint)} \`${label(env.tflint)}\` |\n`;
+              body += `| ⚙️ **Terraform Init** | ${statusEmoji(env.init)} \`${label(env.init)}\` |\n`;
+              body += `| 🤖 **Terraform Validate** | ${statusEmoji(env.validate)} \`${label(env.validate)}\` |\n`;
+              body += `| 📖 **Terraform Plan** | ${planIcon} \`${planLabel}\` |\n`;
+              body += `| 🔒 **Checkov** | ${statusEmoji(env.checkov)} \`${label(env.checkov)}\` |\n`;
+              body += `| 🔍 **OPA (Central)** | ${statusEmoji(env.opa_central)} \`${label(env.opa_central)}\` |\n`;
+              body += `| 🔍 **OPA (Local)** | ${statusEmoji(env.opa_local)} \`${label(env.opa_local)}\` |\n`;
+              body += `| 💰 **Infracost** | ${infracostIcon} \`${infracostLabel}\` |\n\n`;
+
+              body += detailSection('📝', 'Commitlint', readFile(`commitlint_output_${env.environment}.txt`), env.commitlint, LIMITS.commitlint);
+              body += detailSection('📐', 'Terraform Format', readFile(`fmt_check_output_${env.environment}.txt`), env.fmt_check, LIMITS.fmt_check);
+              body += detailSection('🔧', 'TFLint', readFile(`tflint_output_${env.environment}.txt`), env.tflint, LIMITS.tflint);
+              body += detailSection('⚙️', 'Terraform Init', readFile(`init_output_${env.environment}.txt`), env.init, LIMITS.init);
+
+              const planClean = (readFile(`plan_output_${env.environment}.txt`) || '').replace(/\x1b\[[0-9;]*m/g, '');
+              body += `<details><summary>📖 <b>Terraform Plan</b></summary>\n\n`;
+              if (artifactUrl) body += `📊 **[Download results ZIP (human-readable HTML plan)](${artifactUrl})**\n\n`;
+              if (!planClean) body += `No output\n\n`;
+              else if (planClean.length > LIMITS.plan) body += `\`\`\`\nOutput truncated...\n\`\`\`\n\n🔗 [View full output in raw logs](${runUrl})\n\n`;
+              else body += `\`\`\`\n${planClean}\n\`\`\`\n\n`;
+              body += `</details>\n\n`;
+
+              body += detailSection('🔒', 'Checkov', readFile(`checkov_output_${env.environment}.txt`), env.checkov, LIMITS.checkov);
+              const opaCentral = env.opa_central !== 'skipped' ? formatOpaOutput(readFile(`opa_central_output_${env.environment}.txt`)) : '';
+              body += detailSection('🔍', 'OPA (Central)', opaCentral, env.opa_central, LIMITS.opa_central);
+              const opaLocal = env.opa_local !== 'skipped' ? formatOpaOutput(readFile(`opa_local_output_${env.environment}.txt`)) : '';
+              body += detailSection('🔍', 'OPA (Local)', opaLocal, env.opa_local, LIMITS.opa_local, '_No local policies found_');
+              body += detailSection('💰', 'Infracost', readFile(`infracost_${env.environment}.txt`), env.infracost, LIMITS.infracost);
+
+              body += `*🧑 **Pusher:** @${context.actor}, **Action:** \`${context.eventName}\`*\n`;
+              body += `*🔗 **Workflow Run:** [${runUrl}](${runUrl})*`;
+              return body;
+            }
+            function enforceLimit(body) {
+              if (body.length <= MAX_COMMENT_LENGTH) return body;
+              const footerIdx = body.lastIndexOf('\n*🧑');
+              const footer = footerIdx !== -1 ? body.slice(footerIdx) : '';
+              const allowance = MAX_COMMENT_LENGTH - footer.length - 80;
+              return body.slice(0, allowance) + `\n\n_(comment truncated — [view full logs](${runUrl}))_` + footer;
+            }
+
+            const envFiles = fs.readdirSync('.').filter(f => f.startsWith('outcomes_') && f.endsWith('.json'));
+            const environments = envFiles.map(f => {
+              try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; }
+            }).filter(Boolean).sort((a, b) => a.environment.localeCompare(b.environment));
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number, per_page: 100,
+            });
+
+            for (const env of environments) {
+              const marker = `<!-- terraform-plan-${env.environment} -->`;
+              const body = enforceLimit(buildBody(env, getArtifactUrl(env.environment)));
+              const existing = comments.find(c => c.body && c.body.includes(marker));
+              if (existing) {
+                await github.rest.issues.updateComment({ owner: context.repo.owner, repo: context.repo.repo, comment_id: existing.id, body });
+              } else {
+                await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.payload.pull_request.number, body });
+              }
+            }
+
+  # ---------------------------------------------------------------------------
+  # Merge gate — blocks if the plan job did not succeed
+  # ---------------------------------------------------------------------------
+  final-result:
+    name: Final Result
+    needs: [validate-and-plan, comment]
+    runs-on: ${{ inputs.runs-on }}
+    if: always()
+    steps:
+      - name: Check plan job result
+        run: |
+          if [ "${{ needs.validate-and-plan.result }}" != "success" ]; then
+            echo "Plan job did not succeed (result: ${{ needs.validate-and-plan.result }}). Blocking merge."
+            exit 1
+          fi
+          if [ "${{ needs.comment.result }}" = "failure" ]; then
+            echo "WARNING: Comment job failed, but this does not block the merge."
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Apply — runs ONLY on push to the default branch (i.e. after a PR merges).
+  # Uses the READ-WRITE service principal. Re-plans then applies (the PR plan
+  # binary is intentionally not persisted), so apply reflects current state.
+  # ---------------------------------------------------------------------------
+  apply:
+    name: Apply (${{ inputs.environment }})
+    if: >-
+      inputs.enable-apply &&
+      github.event_name == 'push' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 60
+    env:
+      ARM_CLIENT_ID: ${{ inputs.azure-apply-client-id != '' && inputs.azure-apply-client-id || inputs.azure-client-id }}
+      ARM_TENANT_ID: ${{ inputs.azure-tenant-id }}
+      ARM_SUBSCRIPTION_ID: ${{ inputs.azure-subscription-id }}
+      ARM_USE_OIDC: "true"
+      ARM_USE_AZUREAD: "true"
+      TF_INPUT: "0"
+      TF_IN_AUTOMATION: "true"
+      ENV: ${{ inputs.environment }}
+      WORKING_DIR: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+          terraform_wrapper: false
+
+      # Private modules/central policies (same GitHub App pattern as plan)
+      - name: Generate GitHub App token
+        id: app_token
+        if: inputs.github-app-id != ''
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ inputs.github-app-id }}
+          private-key: ${{ secrets.github-app-private-key }}
+          owner: ${{ inputs.github-app-owner }}
+
+      - name: Configure git to use GitHub App token
+        if: inputs.github-app-id != ''
+        env:
+          APP_TOKEN: ${{ steps.app_token.outputs.token }}
+        run: |
+          git config --global url."https://x-access-token:${APP_TOKEN}@github.com/".insteadOf "https://github.com/"
+
+      - name: Azure login (OIDC — read-write SP)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ inputs.azure-apply-client-id != '' && inputs.azure-apply-client-id || inputs.azure-client-id }}
+          tenant-id: ${{ inputs.azure-tenant-id }}
+          subscription-id: ${{ inputs.azure-subscription-id }}
+
+      - name: Resolve state key and values file
+        run: |
+          KEY="${{ inputs.terraform-state-key }}"
+          [ -z "$KEY" ] && KEY="${ENV}.tfstate"
+          echo "TF_STATE_KEY=${KEY}" >> "$GITHUB_ENV"
+          VF="${{ inputs.terraform-values-file }}"
+          [ -z "$VF" ] && VF="environments/${ENV}/terraform.tfvars"
+          echo "TF_VALUES_FILE=${VF}" >> "$GITHUB_ENV"
+
+      - name: Terraform init
+        run: |
+          set -euo pipefail
+          terraform -chdir="$WORKING_DIR" init -input=false -reconfigure \
+            -backend-config="resource_group_name=${{ inputs.backend-resource-group-name }}" \
+            -backend-config="storage_account_name=${{ inputs.backend-storage-account-name }}" \
+            -backend-config="container_name=${{ inputs.backend-container-name }}" \
+            -backend-config="key=${TF_STATE_KEY}"
+
+      - name: Terraform apply
+        run: |
+          set -euo pipefail
+          COMMON=""
+          if [ -n "${{ inputs.terraform-common-values-file }}" ] && [ -f "${WORKING_DIR}/${{ inputs.terraform-common-values-file }}" ]; then
+            COMMON="-var-file=${{ inputs.terraform-common-values-file }}"
+          fi
+          terraform -chdir="$WORKING_DIR" apply \
+            ${COMMON} \
+            -var-file="${TF_VALUES_FILE}" \
+            -auto-approve \
+            -no-color -input=false \
+            -parallelism=${{ inputs.terraform-parallelism }} \
+            ${{ inputs.terraform-apply-extra-args }}
+          echo "Workflow gate passed."

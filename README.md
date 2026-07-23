@@ -8,10 +8,13 @@ Please refer to the following documentation for more information on the workflow
 
 ### Terraform Workflows
 - [Terraform Plan & Apply (AWS)](./docs/terraform-plan-and-apply-aws.md) - Automated Terraform deployment pipeline for AWS
+- [Terraform Plan & Apply (Azure)](./docs/terraform-plan-azure.md) - Input-driven plan, review & apply pipeline for Azure
 - [Terraform Module Validation](./docs/terraform-module-validation.md) - Validate Terraform modules
 - [Terraform Module Release](./docs/terraform-module-release.md) - Release and publish Terraform modules
 - [Terraform Destroy (AWS)](./docs/terraform-destroy.md) - Safely destroy Terraform-managed infrastructure
+- [Terraform Destroy (Azure)](./docs/terraform-destroy-azure.md) - Guarded, input-driven teardown for Azure
 - [Terraform Drift Detection](./docs/terraform-drift.md) - Detect configuration drift in deployed infrastructure
+- [Terraform Drift Detection (Azure)](./docs/terraform-drift-azure.md) - Scheduled drift detection for Azure (issue + optional Slack)
 
 ### Terragrunt Workflows
 - [Terragrunt Plan & Apply (AWS)](./docs/terragrunt-plan-and-apply-aws.md) - Automated Terragrunt deployment pipeline for AWS (optional per-unit matrix for plan and apply on `main`)
