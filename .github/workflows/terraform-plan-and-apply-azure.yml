@@ -118,14 +118,14 @@ on:
         default: "latest"
         type: string
       terraform-values-file:
-        description: "Env var-file (default: environments/<environment>/terraform.tfvars)"
+        description: "Env var-file (default: environments/<environment>.tfvars)"
         required: false
         default: ""
         type: string
       terraform-common-values-file:
         description: "Shared var-file applied to every environment"
         required: false
-        default: "environments/common/terraform.tfvars"
+        default: "environments/common.tfvars"
         type: string
       terraform-plan-extra-args:
         description: "Extra args appended to terraform plan"
@@ -160,6 +160,11 @@ on:
         type: boolean
       enable-infracost:
         description: "Run Infracost cost estimation (needs infracost-api-key)"
+        required: false
+        default: false
+        type: boolean
+      enable-terraform-debug:
+        description: "Enable Terraform debug logging (sets TF_LOG=DEBUG on plan & apply)"
         required: false
         default: false
         type: boolean
@@ -232,6 +237,7 @@ jobs:
       ARM_USE_AZUREAD: "true"
       TF_INPUT: "0"
       TF_IN_AUTOMATION: "true"
+      TF_LOG: ${{ inputs.enable-terraform-debug && 'TRACE' || '' }}
       ENV: ${{ matrix.environment }}
       WORKING_DIR: ${{ inputs.working-directory }}
     steps:
@@ -417,7 +423,7 @@ jobs:
           [ -z "$KEY" ] && KEY="${ENV}.tfstate"
           echo "TF_STATE_KEY=${KEY}" >> "$GITHUB_ENV"
           VF="${{ inputs.terraform-values-file }}"
-          [ -z "$VF" ] && VF="environments/${ENV}/terraform.tfvars"
+          [ -z "$VF" ] && VF="environments/${ENV}.tfvars"
           echo "TF_VALUES_FILE=${VF}" >> "$GITHUB_ENV"
 
       # -----------------------------------------------------------------------
@@ -998,6 +1004,7 @@ jobs:
       ARM_USE_AZUREAD: "true"
       TF_INPUT: "0"
       TF_IN_AUTOMATION: "true"
+      TF_LOG: ${{ inputs.enable-terraform-debug && 'TRACE' || '' }}
       ENV: ${{ matrix.environment }}
       WORKING_DIR: ${{ inputs.working-directory }}
     steps:
@@ -1040,7 +1047,7 @@ jobs:
           [ -z "$KEY" ] && KEY="${ENV}.tfstate"
           echo "TF_STATE_KEY=${KEY}" >> "$GITHUB_ENV"
           VF="${{ inputs.terraform-values-file }}"
-          [ -z "$VF" ] && VF="environments/${ENV}/terraform.tfvars"
+          [ -z "$VF" ] && VF="environments/${ENV}.tfvars"
           echo "TF_VALUES_FILE=${VF}" >> "$GITHUB_ENV"
 
       - name: Terraform init
