@@ -4,10 +4,14 @@
 #
 # Reusable, INPUT-DRIVEN workflow modelled on the AWS
 # terraform-plan-and-apply-aws.yml engine, but for Azure. On pull requests it
-# runs a single validate+plan job per environment (fmt, lint, plan, Checkov,
+# runs a single validate+plan job per environment (fmt, lint, Checkov, plan,
 # OPA, Infracost) with a per-environment PR comment and a merge gate. On push
 # to the default branch (i.e. after merge) it runs an apply job using the
 # read-write service principal (re-plan + apply).
+#
+# The binary plan is never persisted or reused: the PR job deletes it after
+# JSON conversion, and the apply job re-plans against current state before
+# applying — no saved plan artifact is carried from PR to merge.
 #
 # All configuration arrives as `inputs` (rendered from customer-install.sh in the
 # calling repo) — NOT GitHub environment vars. Only true secrets come via
@@ -22,7 +26,7 @@
 #   5. Central + local OPA with `conftest verify` before `conftest test`.
 #   6. HTML plan report artifact + per-section PR-comment character budgets.
 # =============================================================================
-name: Terraform Plan (Azure)
+name: Terraform Plan & Apply (Azure)
 
 on:
   workflow_call:
@@ -77,8 +81,8 @@ on:
         default: ""
         type: string
       # --- Terraform inputs ---
-      environment:
-        description: "The environment being planned (dev/tst/stg/prd)"
+      environments:
+        description: 'JSON array of environments to plan/apply, e.g. ["dev","tst","stg","prd"]. One matrix leg runs per entry; pass a shorter array to run a subset (e.g. ["dev"]).'
         required: true
         type: string
       working-directory:
@@ -96,11 +100,8 @@ on:
         required: false
         default: "latest"
         type: string
-      checkov-version:
-        description: "Checkov version ('latest' resolves the newest release)"
-        required: false
-        default: "latest"
-        type: string
+      # Note: no checkov-version input — the pinned bridgecrewio/checkov-action
+      # fixes the Checkov version via its Docker tag.
       conftest-version:
         description: "Conftest version ('latest' resolves the newest release)"
         required: false
@@ -216,9 +217,13 @@ jobs:
   # tool binaries are installed once, and downstream analysis runs in-context.
   # ---------------------------------------------------------------------------
   validate-and-plan:
-    name: Validate and Plan (${{ inputs.environment }})
+    name: Validate and Plan (${{ matrix.environment }})
     runs-on: ${{ inputs.runs-on }}
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ fromJson(inputs.environments) }}
     env:
       ARM_CLIENT_ID: ${{ inputs.azure-client-id }}
       ARM_TENANT_ID: ${{ inputs.azure-tenant-id }}
@@ -227,7 +232,7 @@ jobs:
       ARM_USE_AZUREAD: "true"
       TF_INPUT: "0"
       TF_IN_AUTOMATION: "true"
-      ENV: ${{ inputs.environment }}
+      ENV: ${{ matrix.environment }}
       WORKING_DIR: ${{ inputs.working-directory }}
     steps:
       - name: Checkout
@@ -246,12 +251,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           INPUT_TF_VERSION: ${{ inputs.terraform-version }}
           INPUT_TFLINT_VERSION: ${{ inputs.tflint-version }}
-          INPUT_CHECKOV_VERSION: ${{ inputs.checkov-version }}
           INPUT_CONFTEST_VERSION: ${{ inputs.conftest-version }}
           INPUT_INFRACOST_VERSION: ${{ inputs.infracost-version }}
           INPUT_COMMITLINT_VERSION: ${{ inputs.commitlint-version }}
         run: |
           set -euo pipefail
+          # Checkov is intentionally absent: it runs via the pinned
+          # bridgecrewio/checkov-action, whose Docker tag fixes the version.
           resolve_gh() {
             local repo="$1" ver="$2"
             if [ "$ver" = "latest" ]; then
@@ -264,29 +270,19 @@ jobs:
             local pkg="$1" ver="$2"
             if [ "$ver" = "latest" ]; then npm view "$pkg" version; else printf '%s' "$ver"; fi
           }
-          resolve_pypi() {
-            local pkg="$1" ver="$2"
-            if [ "$ver" = "latest" ]; then
-              curl -fsSL "https://pypi.org/pypi/${pkg}/json" | jq -r .info.version
-            else
-              printf '%s' "$ver"
-            fi
-          }
           TF_VER=$(resolve_gh "hashicorp/terraform" "$INPUT_TF_VERSION")
           TFLINT_VER=$(resolve_gh "terraform-linters/tflint" "$INPUT_TFLINT_VERSION")
-          CHECKOV_VER=$(resolve_pypi "checkov" "$INPUT_CHECKOV_VERSION")
           CONFTEST_VER=$(resolve_gh "open-policy-agent/conftest" "$INPUT_CONFTEST_VERSION")
           INFRACOST_VER=$(resolve_gh "infracost/infracost" "$INPUT_INFRACOST_VERSION")
           COMMITLINT_VER=$(resolve_npm "@commitlint/cli" "$INPUT_COMMITLINT_VERSION")
           {
             echo "terraform=$TF_VER"
             echo "tflint=$TFLINT_VER"
-            echo "checkov=$CHECKOV_VER"
             echo "conftest=$CONFTEST_VER"
             echo "infracost=$INFRACOST_VER"
             echo "commitlint=$COMMITLINT_VER"
           } >> "$GITHUB_OUTPUT"
-          VERSIONS_HASH=$(printf '%s\n' "$TF_VER" "$TFLINT_VER" "$CHECKOV_VER" "$CONFTEST_VER" "$INFRACOST_VER" "$COMMITLINT_VER" | sha256sum | cut -d' ' -f1)
+          VERSIONS_HASH=$(printf '%s\n' "$TF_VER" "$TFLINT_VER" "$CONFTEST_VER" "$INFRACOST_VER" "$COMMITLINT_VER" | sha256sum | cut -d' ' -f1)
           echo "versions_hash=$VERSIONS_HASH" >> "$GITHUB_OUTPUT"
 
       - name: Restore tool binary cache
@@ -301,7 +297,6 @@ jobs:
         env:
           TF_VERSION: ${{ steps.versions.outputs.terraform }}
           TFLINT_VERSION: ${{ steps.versions.outputs.tflint }}
-          CHECKOV_VERSION: ${{ steps.versions.outputs.checkov }}
           CONFTEST_VERSION: ${{ steps.versions.outputs.conftest }}
           INFRACOST_VERSION: ${{ steps.versions.outputs.infracost }}
           COMMITLINT_VERSION: ${{ steps.versions.outputs.commitlint }}
@@ -332,9 +327,8 @@ jobs:
           ( cd /tmp && verify_sha256 tflint_checksums.txt "${TFLINT_ARCHIVE}" )
           unzip -q "/tmp/${TFLINT_ARCHIVE}" -d ~/.local/tools tflint
 
-          # Checkov (pip into an isolated venv)
-          python3 -m venv ~/.local/checkov-venv
-          ~/.local/checkov-venv/bin/pip install --quiet "checkov==${CHECKOV_VERSION}"
+          # Checkov is NOT installed here — it runs via the pinned
+          # bridgecrewio/checkov-action (Docker), which brings its own binary.
 
           # Conftest
           CONFTEST_ARCHIVE="conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz"
@@ -369,7 +363,6 @@ jobs:
         run: |
           {
             echo "$HOME/.local/tools"
-            echo "$HOME/.local/checkov-venv/bin"
             echo "$HOME/.local/commitlint/node_modules/.bin"
           } >> "$GITHUB_PATH"
           {
@@ -416,6 +409,106 @@ jobs:
           tflint --chdir="$WORKING_DIR" --init
           tflint --chdir="$WORKING_DIR" -f compact 2>&1 | tee "$GITHUB_WORKSPACE/tflint_output_${ENV}.txt"
 
+      # Resolve state key + values file early: Checkov's --var-file needs
+      # TF_VALUES_FILE, and init/plan reuse both further down.
+      - name: Resolve state key and values file
+        run: |
+          KEY="${{ inputs.terraform-state-key }}"
+          [ -z "$KEY" ] && KEY="${ENV}.tfstate"
+          echo "TF_STATE_KEY=${KEY}" >> "$GITHUB_ENV"
+          VF="${{ inputs.terraform-values-file }}"
+          [ -z "$VF" ] && VF="environments/${ENV}/terraform.tfvars"
+          echo "TF_VALUES_FILE=${VF}" >> "$GITHUB_ENV"
+
+      # -----------------------------------------------------------------------
+      # Checkov — runs early (static directory scan, so inline skip-comments
+      # apply and no plan output is required). Kept alongside fmt/tflint rather
+      # than after plan so security issues surface before the slower plan/OPA
+      # stages. Mirrors the AWS engine: the pinned bridgecrewio/checkov-action
+      # with an optional .checkov.yml config and external-module scanning. The
+      # SARIF upload + PR-comment output capture below are Azure additions kept
+      # on top of the AWS scanner (AWS surfaces only pass/fail).
+      # -----------------------------------------------------------------------
+      - name: Ensure Checkov configuration
+        if: inputs.enable-checkov
+        run: |
+          [ -f ".checkov.yml" ] || echo "{}" > .checkov.yml
+
+      - name: Resolve Checkov var-files
+        id: checkov_varfiles
+        if: inputs.enable-checkov
+        run: |
+          set -euo pipefail
+          # bridgecrewio/checkov-action takes newline-separated var_file paths,
+          # each relative to `directory` (WORKING_DIR). Include the common and
+          # env var-files only when they exist.
+          VF=""
+          if [ -f "${WORKING_DIR}/${{ inputs.terraform-common-values-file }}" ]; then
+            VF="${{ inputs.terraform-common-values-file }}"
+          fi
+          if [ -f "${WORKING_DIR}/${TF_VALUES_FILE}" ]; then
+            VF="${VF:+${VF}$'\n'}${TF_VALUES_FILE}"
+          fi
+          {
+            echo "var_file<<EOF_VF"
+            printf '%b\n' "$VF"
+            echo "EOF_VF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Checkov security scan
+        id: checkov
+        if: inputs.enable-checkov
+        continue-on-error: true
+        uses: bridgecrewio/checkov-action@7b972723c44fb3d256283fac96fae5d7c1894bb7 # v12
+        with:
+          config_file: .checkov.yml
+          directory: ${{ inputs.working-directory }}
+          download_external_modules: true
+          framework: terraform,secrets
+          output_format: cli,sarif
+          # Each entry is a DIRECTORY; checkov writes results_cli.txt /
+          # results_sarif.sarif inside it (per-format filenames are resolved
+          # by glob below rather than hard-coded).
+          output_file_path: "checkov_cli_${{ matrix.environment }},checkov_sarif_${{ matrix.environment }}"
+          # Azure is stricter than AWS here: soft_fail false so findings exit
+          # non-zero. `continue-on-error` above keeps the job running (SARIF
+          # upload, PR comment, outcome collection) while the merge gate blocks
+          # on steps.checkov.outcome == 'failure'.
+          soft_fail: false
+          var_file: ${{ steps.checkov_varfiles.outputs.var_file }}
+
+      # Flatten the action's output into the names the SARIF upload + PR-comment
+      # steps expect, resolving actual filenames by glob (checkov's exact output
+      # filename varies by version, so don't hard-code it).
+      - name: Capture Checkov output
+        if: always() && inputs.enable-checkov
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          CLI_FILE=$(find "checkov_cli_${ENV}" -maxdepth 1 -type f -name '*.txt' 2>/dev/null | head -n1 || true)
+          if [ -n "$CLI_FILE" ]; then
+            cp "$CLI_FILE" "checkov_output_${ENV}.txt"
+          else
+            echo "Checkov CLI output not found; see workflow logs." > "checkov_output_${ENV}.txt"
+          fi
+          SARIF_FILE=$(find "checkov_sarif_${ENV}" -maxdepth 1 -type f -name '*.sarif' 2>/dev/null | head -n1 || true)
+          if [ -n "$SARIF_FILE" ]; then
+            cp "$SARIF_FILE" "checkov_${ENV}.sarif"
+            echo "sarif_present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "sarif_present=false" >> "$GITHUB_OUTPUT"
+          fi
+        # id needed so the upload step can gate on whether a SARIF was produced
+        id: checkov_capture
+
+      - name: Upload Checkov SARIF
+        if: always() && inputs.enable-checkov && steps.checkov_capture.outputs.sarif_present == 'true'
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: checkov_${{ matrix.environment }}.sarif
+          category: checkov-${{ matrix.environment }}
+
       # -----------------------------------------------------------------------
       # (3) GitHub App token + git rewrite so private modules/policies resolve
       # -----------------------------------------------------------------------
@@ -453,15 +546,6 @@ jobs:
           key: tf-providers-${{ runner.os }}-${{ hashFiles(format('{0}/.terraform.lock.hcl', inputs.working-directory)) }}
           restore-keys: |
             tf-providers-${{ runner.os }}-
-
-      - name: Resolve state key and values file
-        run: |
-          KEY="${{ inputs.terraform-state-key }}"
-          [ -z "$KEY" ] && KEY="${ENV}.tfstate"
-          echo "TF_STATE_KEY=${KEY}" >> "$GITHUB_ENV"
-          VF="${{ inputs.terraform-values-file }}"
-          [ -z "$VF" ] && VF="environments/${ENV}/terraform.tfvars"
-          echo "TF_VALUES_FILE=${VF}" >> "$GITHUB_ENV"
 
       - name: Terraform init
         id: init
@@ -587,38 +671,6 @@ jobs:
           NODEJS
 
       # -----------------------------------------------------------------------
-      # Checkov — scans the directory (so inline skip-comments apply)
-      # -----------------------------------------------------------------------
-      - name: Checkov security scan
-        id: checkov
-        if: inputs.enable-checkov
-        continue-on-error: true
-        run: |
-          set -euo pipefail
-          CHECKOV_ARGS=(
-            -d "$WORKING_DIR"
-            --framework "terraform,secrets"
-            --compact --quiet
-            --output cli --output sarif
-            --output-file-path "console,checkov_${ENV}.sarif"
-          )
-          if [ -f "${WORKING_DIR}/${{ inputs.terraform-common-values-file }}" ]; then
-            CHECKOV_ARGS+=(--var-file "${WORKING_DIR}/${{ inputs.terraform-common-values-file }}")
-          fi
-          if [ -f "${WORKING_DIR}/${TF_VALUES_FILE}" ]; then
-            CHECKOV_ARGS+=(--var-file "${WORKING_DIR}/${TF_VALUES_FILE}")
-          fi
-          checkov "${CHECKOV_ARGS[@]}" 2>&1 | tee "checkov_output_${ENV}.txt"
-
-      - name: Upload Checkov SARIF
-        if: always() && inputs.enable-checkov && steps.checkov.outcome != 'cancelled'
-        continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: checkov_${{ inputs.environment }}.sarif
-          category: checkov-${{ inputs.environment }}
-
-      # -----------------------------------------------------------------------
       # (5) OPA — central (pulled) + local, each verified before test
       # -----------------------------------------------------------------------
       - name: Pull central OPA policies
@@ -712,22 +764,21 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: plan-${{ inputs.environment }}
+          name: plan-${{ matrix.environment }}
           path: |
-            outcomes_${{ inputs.environment }}.json
-            commitlint_output_${{ inputs.environment }}.txt
-            fmt_check_output_${{ inputs.environment }}.txt
-            init_output_${{ inputs.environment }}.txt
-            tflint_output_${{ inputs.environment }}.txt
-            plan_output_${{ inputs.environment }}.txt
-            plan_report_${{ inputs.environment }}.html
-            ${{ inputs.working-directory }}/tfplan_${{ inputs.environment }}.json
-            checkov_output_${{ inputs.environment }}.txt
-            rego_validate_central_output_${{ inputs.environment }}.txt
-            rego_validate_local_output_${{ inputs.environment }}.txt
-            opa_central_output_${{ inputs.environment }}.txt
-            opa_local_output_${{ inputs.environment }}.txt
-            infracost_${{ inputs.environment }}.txt
+            outcomes_${{ matrix.environment }}.json
+            commitlint_output_${{ matrix.environment }}.txt
+            fmt_check_output_${{ matrix.environment }}.txt
+            init_output_${{ matrix.environment }}.txt
+            tflint_output_${{ matrix.environment }}.txt
+            plan_output_${{ matrix.environment }}.txt
+            plan_report_${{ matrix.environment }}.html
+            checkov_output_${{ matrix.environment }}.txt
+            rego_validate_central_output_${{ matrix.environment }}.txt
+            rego_validate_local_output_${{ matrix.environment }}.txt
+            opa_central_output_${{ matrix.environment }}.txt
+            opa_local_output_${{ matrix.environment }}.txt
+            infracost_${{ matrix.environment }}.txt
           if-no-files-found: warn
           retention-days: 14
           compression-level: 9
@@ -928,13 +979,17 @@ jobs:
   # binary is intentionally not persisted), so apply reflects current state.
   # ---------------------------------------------------------------------------
   apply:
-    name: Apply (${{ inputs.environment }})
+    name: Apply (${{ matrix.environment }})
     if: >-
       inputs.enable-apply &&
       github.event_name == 'push' &&
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ${{ inputs.runs-on }}
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ fromJson(inputs.environments) }}
     env:
       ARM_CLIENT_ID: ${{ inputs.azure-apply-client-id != '' && inputs.azure-apply-client-id || inputs.azure-client-id }}
       ARM_TENANT_ID: ${{ inputs.azure-tenant-id }}
@@ -943,7 +998,7 @@ jobs:
       ARM_USE_AZUREAD: "true"
       TF_INPUT: "0"
       TF_IN_AUTOMATION: "true"
-      ENV: ${{ inputs.environment }}
+      ENV: ${{ matrix.environment }}
       WORKING_DIR: ${{ inputs.working-directory }}
     steps:
       - name: Checkout
