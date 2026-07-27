@@ -9,6 +9,11 @@ permissions:
   contents: read
   # Required to authenticate the Github API
   id-token: write
+  # Required by actions/configure-pages to read the Pages site, and by
+  # actions/deploy-pages to publish. A reusable workflow that declares its own
+  # permissions block does not inherit the caller's, so omitting this makes the
+  # caller's `pages: write` ineffective.
+  pages: write
   # Required to write PR comments with the validation results
   pull-requests: write
 
@@ -19,6 +24,11 @@ jobs:
   deploy:
     name: Deploy Documentation
     runs-on: ubuntu-latest
+    # actions/deploy-pages publishes through the github-pages environment, so
+    # the job has to declare it.
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
