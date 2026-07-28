@@ -46,8 +46,8 @@ on:
         default: ""
         type: string
       # --- Terraform inputs ---
-      environment:
-        description: "The environment being checked (dev/tst/stg/prd)"
+      environments:
+        description: 'JSON array of environments to drift-check, e.g. ["dev","tst","stg","prd"]. One matrix leg runs per entry; pass a shorter array to check a subset (e.g. ["dev"]).'
         required: true
         type: string
       working-directory:
@@ -61,14 +61,14 @@ on:
         default: "1.14.0"
         type: string
       terraform-values-file:
-        description: "Env var-file (default: environments/<environment>/terraform.tfvars)"
+        description: "Env var-file (default: environments/<environment>.tfvars)"
         required: false
         default: ""
         type: string
       terraform-common-values-file:
         description: "Shared var-file applied to every environment"
         required: false
-        default: "environments/common/terraform.tfvars"
+        default: "environments/common.tfvars"
         type: string
       terraform-parallelism:
         description: "Parallelism for plan"
@@ -80,6 +80,11 @@ on:
         required: false
         default: "ubuntu-latest"
         type: string
+      enable-terraform-debug:
+        description: "Enable Terraform debug logging (sets TF_LOG=TRACE on the drift plan)"
+        required: false
+        default: false
+        type: boolean
       # --- Private module access (GitHub App) ---
       github-app-id:
         description: "GitHub App ID used to pull private modules (blank disables)"
@@ -106,9 +111,13 @@ permissions:
 
 jobs:
   drift:
-    name: Drift (${{ inputs.environment }})
+    name: Drift (${{ matrix.environment }})
     runs-on: ${{ inputs.runs-on }}
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ fromJson(inputs.environments) }}
     env:
       ARM_CLIENT_ID: ${{ inputs.azure-client-id }}
       ARM_TENANT_ID: ${{ inputs.azure-tenant-id }}
@@ -117,14 +126,15 @@ jobs:
       ARM_USE_AZUREAD: "true"
       TF_INPUT: "0"
       TF_IN_AUTOMATION: "true"
-      ENV: ${{ inputs.environment }}
+      TF_LOG: ${{ inputs.enable-terraform-debug && 'TRACE' || '' }}
+      ENV: ${{ matrix.environment }}
       WORKING_DIR: ${{ inputs.working-directory }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Install Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
         with:
           terraform_version: ${{ inputs.terraform-version }}
           terraform_wrapper: false
@@ -132,7 +142,7 @@ jobs:
       - name: Generate GitHub App token
         id: app_token
         if: inputs.github-app-id != ''
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         with:
           app-id: ${{ inputs.github-app-id }}
           private-key: ${{ secrets.github-app-private-key }}
@@ -146,7 +156,7 @@ jobs:
           git config --global url."https://x-access-token:${APP_TOKEN}@github.com/".insteadOf "https://github.com/"
 
       - name: Azure login (OIDC — read-only SP)
-        uses: azure/login@v2
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2
         with:
           client-id: ${{ inputs.azure-client-id }}
           tenant-id: ${{ inputs.azure-tenant-id }}
@@ -158,7 +168,7 @@ jobs:
           [ -z "$KEY" ] && KEY="${ENV}.tfstate"
           echo "TF_STATE_KEY=${KEY}" >> "$GITHUB_ENV"
           VF="${{ inputs.terraform-values-file }}"
-          [ -z "$VF" ] && VF="environments/${ENV}/terraform.tfvars"
+          [ -z "$VF" ] && VF="environments/${ENV}.tfvars"
           echo "TF_VALUES_FILE=${VF}" >> "$GITHUB_ENV"
 
       - name: Terraform init
@@ -196,7 +206,7 @@ jobs:
 
       - name: Open or update drift issue
         if: steps.plan.outputs.plan_exit == '2'
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             const fs = require('fs');
@@ -230,5 +240,5 @@ jobs:
           webhook-type: incoming-webhook
           payload: |
             {
-              "text": "⚠️ Terraform drift detected in ${{ github.repository }} (${{ inputs.environment }}). See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              "text": "⚠️ Terraform drift detected in ${{ github.repository }} (${{ matrix.environment }}). See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             }

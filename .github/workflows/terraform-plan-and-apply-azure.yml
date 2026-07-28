@@ -242,7 +242,7 @@ jobs:
       WORKING_DIR: ${{ inputs.working-directory }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           # Full history so commitlint can reach the PR base commit
           fetch-depth: 0
@@ -293,7 +293,7 @@ jobs:
 
       - name: Restore tool binary cache
         id: tools_cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.local
           key: tools-${{ runner.os }}-${{ steps.versions.outputs.versions_hash }}
@@ -360,7 +360,7 @@ jobs:
 
       - name: Save tool binary cache
         if: steps.tools_cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.local
           key: ${{ steps.tools_cache.outputs.cache-primary-key }}
@@ -510,7 +510,7 @@ jobs:
       - name: Upload Checkov SARIF
         if: always() && inputs.enable-checkov && steps.checkov_capture.outputs.sarif_present == 'true'
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4
         with:
           sarif_file: checkov_${{ matrix.environment }}.sarif
           category: checkov-${{ matrix.environment }}
@@ -521,7 +521,7 @@ jobs:
       - name: Generate GitHub App token
         id: app_token
         if: inputs.github-app-id != ''
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         with:
           app-id: ${{ inputs.github-app-id }}
           private-key: ${{ secrets.github-app-private-key }}
@@ -538,7 +538,7 @@ jobs:
       # Azure auth + plan
       # -----------------------------------------------------------------------
       - name: Azure login (OIDC)
-        uses: azure/login@v2
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2
         with:
           client-id: ${{ inputs.azure-client-id }}
           tenant-id: ${{ inputs.azure-tenant-id }}
@@ -546,7 +546,7 @@ jobs:
 
       - name: Restore Terraform provider cache
         id: provider_cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.terraform.d/plugin-cache
           key: tf-providers-${{ runner.os }}-${{ hashFiles(format('{0}/.terraform.lock.hcl', inputs.working-directory)) }}
@@ -567,7 +567,7 @@ jobs:
       - name: Save Terraform provider cache
         if: steps.provider_cache.outputs.cache-hit != 'true'
         continue-on-error: true
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.terraform.d/plugin-cache
           key: tf-providers-${{ runner.os }}-${{ hashFiles(format('{0}/.terraform.lock.hcl', inputs.working-directory)) }}
@@ -768,7 +768,7 @@ jobs:
 
       - name: Upload plan outputs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: plan-${{ matrix.environment }}
           path: |
@@ -822,13 +822,13 @@ jobs:
       actions: read
     steps:
       - name: Download plan artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: plan-*
           merge-multiple: true
 
       - name: Post / update comment
-        uses: actions/github-script@v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             const fs = require('fs');
@@ -1009,10 +1009,10 @@ jobs:
       WORKING_DIR: ${{ inputs.working-directory }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Install Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
         with:
           terraform_version: ${{ inputs.terraform-version }}
           terraform_wrapper: false
@@ -1021,7 +1021,7 @@ jobs:
       - name: Generate GitHub App token
         id: app_token
         if: inputs.github-app-id != ''
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         with:
           app-id: ${{ inputs.github-app-id }}
           private-key: ${{ secrets.github-app-private-key }}
@@ -1035,7 +1035,7 @@ jobs:
           git config --global url."https://x-access-token:${APP_TOKEN}@github.com/".insteadOf "https://github.com/"
 
       - name: Azure login (OIDC — read-write SP)
-        uses: azure/login@v2
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2
         with:
           client-id: ${{ inputs.azure-apply-client-id != '' && inputs.azure-apply-client-id || inputs.azure-client-id }}
           tenant-id: ${{ inputs.azure-tenant-id }}

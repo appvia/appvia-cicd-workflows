@@ -6,6 +6,12 @@
 # engine, for Azure. Guarded: it runs only when the `confirmation` input exactly
 # equals the calling repository (owner/name), so it cannot be triggered by
 # accident. Uses the READ-WRITE service principal via OIDC federated credentials.
+#
+# DELIBERATE DIVERGENCE from the plan/drift engines: destroy takes a SINGLE
+# `environment` (not a JSON-array `environments` matrix). This is intentional —
+# a teardown should be one explicit environment per dispatch, never a matrix
+# that destroys every environment at once. Do not "align" this to the plural
+# contract; the singular input IS the safety property.
 # =============================================================================
 name: Terraform Destroy (Azure)
 
@@ -65,14 +71,14 @@ on:
         default: "1.14.0"
         type: string
       terraform-values-file:
-        description: "Env var-file (default: environments/<environment>/terraform.tfvars)"
+        description: "Env var-file (default: environments/<environment>.tfvars)"
         required: false
         default: ""
         type: string
       terraform-common-values-file:
         description: "Shared var-file applied to every environment"
         required: false
-        default: "environments/common/terraform.tfvars"
+        default: "environments/common.tfvars"
         type: string
       terraform-parallelism:
         description: "Parallelism for destroy"
@@ -84,6 +90,11 @@ on:
         required: false
         default: "ubuntu-latest"
         type: string
+      enable-terraform-debug:
+        description: "Enable Terraform debug logging (sets TF_LOG=TRACE on the destroy run)"
+        required: false
+        default: false
+        type: boolean
       # --- Private module access (GitHub App) ---
       github-app-id:
         description: "GitHub App ID used to pull private modules (blank disables)"
@@ -119,6 +130,7 @@ jobs:
       ARM_USE_AZUREAD: "true"
       TF_INPUT: "0"
       TF_IN_AUTOMATION: "true"
+      TF_LOG: ${{ inputs.enable-terraform-debug && 'TRACE' || '' }}
       ENV: ${{ inputs.environment }}
       WORKING_DIR: ${{ inputs.working-directory }}
     steps:
@@ -129,10 +141,10 @@ jobs:
           exit 1
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Install Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
         with:
           terraform_version: ${{ inputs.terraform-version }}
           terraform_wrapper: false
@@ -140,7 +152,7 @@ jobs:
       - name: Generate GitHub App token
         id: app_token
         if: inputs.github-app-id != ''
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         with:
           app-id: ${{ inputs.github-app-id }}
           private-key: ${{ secrets.github-app-private-key }}
@@ -154,7 +166,7 @@ jobs:
           git config --global url."https://x-access-token:${APP_TOKEN}@github.com/".insteadOf "https://github.com/"
 
       - name: Azure login (OIDC — read-write SP)
-        uses: azure/login@v2
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2
         with:
           client-id: ${{ inputs.azure-client-id }}
           tenant-id: ${{ inputs.azure-tenant-id }}
@@ -166,7 +178,7 @@ jobs:
           [ -z "$KEY" ] && KEY="${ENV}.tfstate"
           echo "TF_STATE_KEY=${KEY}" >> "$GITHUB_ENV"
           VF="${{ inputs.terraform-values-file }}"
-          [ -z "$VF" ] && VF="environments/${ENV}/terraform.tfvars"
+          [ -z "$VF" ] && VF="environments/${ENV}.tfvars"
           echo "TF_VALUES_FILE=${VF}" >> "$GITHUB_ENV"
 
       - name: Terraform init
