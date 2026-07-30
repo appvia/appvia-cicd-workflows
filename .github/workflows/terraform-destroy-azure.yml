@@ -46,9 +46,8 @@ on:
         required: true
         type: string
       backend-container-name:
-        description: "Blob container for state"
-        required: false
-        default: "tfstate"
+        description: "Blob container for state. One container per repository; the storage account is shared across the tenant."
+        required: true
         type: string
       terraform-state-key:
         description: "State blob key (default: <environment>.tfstate)"
@@ -68,7 +67,7 @@ on:
       terraform-version:
         description: "Terraform version"
         required: false
-        default: "1.14.0"
+        default: "1.15.8"
         type: string
       terraform-values-file:
         description: "Env var-file (default: environments/<environment>.tfvars)"
@@ -90,11 +89,16 @@ on:
         required: false
         default: "ubuntu-latest"
         type: string
-      enable-terraform-debug:
-        description: "Enable Terraform debug logging (sets TF_LOG=TRACE on the destroy run)"
+      job-timeout-minutes:
+        description: "Job timeout in minutes. Raise for slow Azure resources — Azure Firewall and similar can take ~45 minutes for a single resource."
         required: false
-        default: false
-        type: boolean
+        default: 90
+        type: number
+      terraform-log-level:
+        description: "Value for TF_LOG on the destroy run: TRACE, DEBUG, INFO, WARN, ERROR or OFF. Blank (default) disables Terraform debug logging."
+        required: false
+        default: ""
+        type: string
       # --- Private module access (GitHub App) ---
       github-app-id:
         description: "GitHub App ID used to pull private modules (blank disables)"
@@ -121,7 +125,7 @@ jobs:
     # Guard: only proceed when the confirmation input matches this repository.
     if: inputs.confirmation == github.repository
     runs-on: ${{ inputs.runs-on }}
-    timeout-minutes: 60
+    timeout-minutes: ${{ inputs.job-timeout-minutes }}
     env:
       ARM_CLIENT_ID: ${{ inputs.azure-client-id }}
       ARM_TENANT_ID: ${{ inputs.azure-tenant-id }}
@@ -130,7 +134,7 @@ jobs:
       ARM_USE_AZUREAD: "true"
       TF_INPUT: "0"
       TF_IN_AUTOMATION: "true"
-      TF_LOG: ${{ inputs.enable-terraform-debug && 'TRACE' || '' }}
+      TF_LOG: ${{ inputs.terraform-log-level }}
       ENV: ${{ inputs.environment }}
       WORKING_DIR: ${{ inputs.working-directory }}
     steps:
@@ -139,6 +143,23 @@ jobs:
         run: |
           echo "confirmation '${{ inputs.confirmation }}' does not match repository '${{ github.repository }}'. Refusing to destroy."
           exit 1
+
+      # Terraform does not reject an invalid TF_LOG — it prints a warning and
+      # falls back to TRACE, the loudest level. Catch a typo here so it cannot
+      # turn a targeted DEBUG run into gigabytes of TRACE output.
+      - name: Validate Terraform log level
+        if: inputs.terraform-log-level != ''
+        env:
+          LOG_LEVEL: ${{ inputs.terraform-log-level }}
+        run: |
+          # Case-insensitive: Terraform upper-cases TF_LOG itself, so rejecting
+          # "debug" here would be stricter than the tool we are guarding.
+          # `tr` rather than ${VAR^^} — the latter needs bash 4+, and `runs-on`
+          # is caller-supplied (a macOS runner still ships bash 3.2).
+          case "$(printf '%s' "$LOG_LEVEL" | tr '[:lower:]' '[:upper:]')" in
+            TRACE|DEBUG|INFO|WARN|ERROR|OFF) ;;
+            *) echo "::error::terraform-log-level must be one of TRACE, DEBUG, INFO, WARN, ERROR, OFF (got '$LOG_LEVEL')"; exit 1 ;;
+          esac
 
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
