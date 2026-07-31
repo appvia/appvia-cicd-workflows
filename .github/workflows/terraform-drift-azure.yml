@@ -36,7 +36,7 @@ on:
         required: true
         type: string
       backend-container-name:
-        description: "Blob container for state. One container per repository; the storage account is shared across the tenant."
+        description: "Blob container for state; one container per repository"
         required: true
         type: string
       terraform-state-key:
@@ -183,14 +183,33 @@ jobs:
           tenant-id: ${{ inputs.azure-tenant-id }}
           subscription-id: ${{ inputs.azure-subscription-id }}
 
-      - name: Resolve state key and values file
+      # NOTE: do not use the `[ -z "$X" ] && X=...` one-liner form here — it
+      # returns 1 when the variable is already set, which `set -e` treats as a
+      # step failure. Use explicit `if` blocks.
+      - name: Resolve state key and values files
         run: |
+          set -euo pipefail
+
           KEY="${{ inputs.terraform-state-key }}"
-          [ -z "$KEY" ] && KEY="${ENV}.tfstate"
+          if [ -z "$KEY" ]; then KEY="${ENV}.tfstate"; fi
           echo "TF_STATE_KEY=${KEY}" >> "$GITHUB_ENV"
+
+          # Fail here rather than in the drift plan, where a missing file would
+          # surface as a plan error (exit 1) and look like real breakage.
           VF="${{ inputs.terraform-values-file }}"
-          [ -z "$VF" ] && VF="environments/${ENV}.tfvars"
+          if [ -z "$VF" ]; then VF="environments/${ENV}.tfvars"; fi
+          if [ ! -f "${WORKING_DIR}/${VF}" ]; then
+            echo "::error::Values file '${WORKING_DIR}/${VF}' not found for environment '${ENV}'."
+            exit 1
+          fi
           echo "TF_VALUES_FILE=${VF}" >> "$GITHUB_ENV"
+
+          # The common var-file is genuinely optional — resolve it once here so
+          # the plan step only has to test the variable.
+          COMMON="${{ inputs.terraform-common-values-file }}"
+          if [ -n "$COMMON" ] && [ -f "${WORKING_DIR}/${COMMON}" ]; then
+            echo "TF_COMMON_VALUES_FILE=${COMMON}" >> "$GITHUB_ENV"
+          fi
 
       - name: Terraform init
         run: |
@@ -206,12 +225,13 @@ jobs:
         id: plan
         run: |
           set +e
-          COMMON=""
-          if [ -n "${{ inputs.terraform-common-values-file }}" ] && [ -f "${WORKING_DIR}/${{ inputs.terraform-common-values-file }}" ]; then
-            COMMON="-var-file=${{ inputs.terraform-common-values-file }}"
+          # Array, not a string: an unquoted ${COMMON} would word-split (SC2086).
+          COMMON=()
+          if [ -n "${TF_COMMON_VALUES_FILE:-}" ]; then
+            COMMON=(-var-file="${TF_COMMON_VALUES_FILE}")
           fi
           terraform -chdir="$WORKING_DIR" plan \
-            ${COMMON} \
+            "${COMMON[@]}" \
             -var-file="${TF_VALUES_FILE}" \
             -detailed-exitcode \
             -no-color -input=false \

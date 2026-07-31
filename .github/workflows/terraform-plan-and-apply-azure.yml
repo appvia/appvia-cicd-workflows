@@ -71,7 +71,7 @@ on:
         required: true
         type: string
       backend-container-name:
-        description: "Blob container for state. One container per repository; the storage account is shared across the tenant."
+        description: "Blob container for state; one container per repository"
         required: true
         type: string
       terraform-state-key:
