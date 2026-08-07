@@ -314,7 +314,7 @@ jobs:
 
       - name: Restore tool binary cache
         id: tools_cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.local
           key: tools-${{ runner.os }}-${{ steps.versions.outputs.versions_hash }}
@@ -381,7 +381,7 @@ jobs:
 
       - name: Save tool binary cache
         if: steps.tools_cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.local
           key: ${{ steps.tools_cache.outputs.cache-primary-key }}
@@ -567,7 +567,7 @@ jobs:
 
       - name: Restore Terraform provider cache
         id: provider_cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.terraform.d/plugin-cache
           key: tf-providers-${{ runner.os }}-${{ hashFiles(format('{0}/.terraform.lock.hcl', inputs.working-directory)) }}
@@ -588,7 +588,7 @@ jobs:
       - name: Save Terraform provider cache
         if: steps.provider_cache.outputs.cache-hit != 'true'
         continue-on-error: true
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.terraform.d/plugin-cache
           key: tf-providers-${{ runner.os }}-${{ hashFiles(format('{0}/.terraform.lock.hcl', inputs.working-directory)) }}
