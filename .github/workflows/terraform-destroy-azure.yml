@@ -1,0 +1,246 @@
+---
+# =============================================================================
+# Terraform Destroy (Azure)
+#
+# Reusable, INPUT-DRIVEN teardown workflow modelled on the AWS terraform-destroy
+# engine, for Azure. Guarded: it runs only when the `confirmation` input exactly
+# equals the calling repository (owner/name), so it cannot be triggered by
+# accident. Uses the READ-WRITE service principal via OIDC federated credentials.
+#
+# DELIBERATE DIVERGENCE from the plan/drift engines: destroy takes a SINGLE
+# `environment` (not a JSON-array `environments` matrix). This is intentional —
+# a teardown should be one explicit environment per dispatch, never a matrix
+# that destroys every environment at once. Do not "align" this to the plural
+# contract; the singular input IS the safety property.
+# =============================================================================
+name: Terraform Destroy (Azure)
+
+on:
+  workflow_call:
+    inputs:
+      # --- Guard ---
+      confirmation:
+        description: "Must equal <owner>/<repo> of the calling repository to proceed"
+        required: true
+        type: string
+      # --- Azure identity (destroy uses the READ-WRITE service principal) ---
+      azure-client-id:
+        description: "Client ID of the read-write Entra service principal"
+        required: true
+        type: string
+      azure-tenant-id:
+        description: "Entra tenant ID"
+        required: true
+        type: string
+      azure-subscription-id:
+        description: "Target subscription ID"
+        required: true
+        type: string
+      # --- Remote state backend (azurerm) ---
+      backend-resource-group-name:
+        description: "Resource group of the Terraform state storage account"
+        required: true
+        type: string
+      backend-storage-account-name:
+        description: "Terraform state storage account name"
+        required: true
+        type: string
+      backend-container-name:
+        description: "Blob container for state; one container per repository"
+        required: true
+        type: string
+      terraform-state-key:
+        description: "State blob key (default: <environment>.tfstate)"
+        required: false
+        default: ""
+        type: string
+      # --- Terraform inputs ---
+      environment:
+        description: "The environment being destroyed (dev/tst/stg/prd)"
+        required: true
+        type: string
+      working-directory:
+        description: "Directory holding the root module"
+        required: false
+        default: "terraform"
+        type: string
+      terraform-version:
+        description: "Terraform version"
+        required: false
+        default: "1.15.8"
+        type: string
+      terraform-values-file:
+        description: "Env var-file (default: environments/<environment>.tfvars)"
+        required: false
+        default: ""
+        type: string
+      terraform-common-values-file:
+        description: "Shared var-file applied to every environment"
+        required: false
+        default: "environments/common.tfvars"
+        type: string
+      terraform-parallelism:
+        description: "Parallelism for destroy"
+        required: false
+        default: 10
+        type: number
+      runs-on:
+        description: "Runner label"
+        required: false
+        default: "ubuntu-latest"
+        type: string
+      job-timeout-minutes:
+        description: "Job timeout in minutes. Raise for slow Azure resources — Azure Firewall and similar can take ~45 minutes for a single resource."
+        required: false
+        default: 90
+        type: number
+      terraform-log-level:
+        description: "Value for TF_LOG on the destroy run: TRACE, DEBUG, INFO, WARN, ERROR or OFF. Blank (default) disables Terraform debug logging."
+        required: false
+        default: ""
+        type: string
+      # --- Private module access (GitHub App) ---
+      github-app-id:
+        description: "GitHub App ID used to pull private modules (blank disables)"
+        required: false
+        default: ""
+        type: string
+      github-app-owner:
+        description: "Owner the GitHub App token is scoped to"
+        required: false
+        default: "appvia"
+        type: string
+    secrets:
+      github-app-private-key:
+        description: "Private key for the GitHub App (required if github-app-id is set)"
+        required: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  destroy:
+    name: Destroy (${{ inputs.environment }})
+    # Guard: only proceed when the confirmation input matches this repository.
+    if: inputs.confirmation == github.repository
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.job-timeout-minutes }}
+    env:
+      ARM_CLIENT_ID: ${{ inputs.azure-client-id }}
+      ARM_TENANT_ID: ${{ inputs.azure-tenant-id }}
+      ARM_SUBSCRIPTION_ID: ${{ inputs.azure-subscription-id }}
+      ARM_USE_OIDC: "true"
+      ARM_USE_AZUREAD: "true"
+      TF_INPUT: "0"
+      TF_IN_AUTOMATION: "true"
+      TF_LOG: ${{ inputs.terraform-log-level }}
+      ENV: ${{ inputs.environment }}
+      WORKING_DIR: ${{ inputs.working-directory }}
+    steps:
+      - name: Fail if confirmation does not match
+        if: inputs.confirmation != github.repository
+        run: |
+          echo "confirmation '${{ inputs.confirmation }}' does not match repository '${{ github.repository }}'. Refusing to destroy."
+          exit 1
+
+      # Terraform does not reject an invalid TF_LOG — it prints a warning and
+      # falls back to TRACE, the loudest level. Catch a typo here so it cannot
+      # turn a targeted DEBUG run into gigabytes of TRACE output.
+      - name: Validate Terraform log level
+        if: inputs.terraform-log-level != ''
+        env:
+          LOG_LEVEL: ${{ inputs.terraform-log-level }}
+        run: |
+          # Case-insensitive: Terraform upper-cases TF_LOG itself, so rejecting
+          # "debug" here would be stricter than the tool we are guarding.
+          # `tr` rather than ${VAR^^} — the latter needs bash 4+, and `runs-on`
+          # is caller-supplied (a macOS runner still ships bash 3.2).
+          case "$(printf '%s' "$LOG_LEVEL" | tr '[:lower:]' '[:upper:]')" in
+            TRACE|DEBUG|INFO|WARN|ERROR|OFF) ;;
+            *) echo "::error::terraform-log-level must be one of TRACE, DEBUG, INFO, WARN, ERROR, OFF (got '$LOG_LEVEL')"; exit 1 ;;
+          esac
+
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+          terraform_wrapper: false
+
+      - name: Generate GitHub App token
+        id: app_token
+        if: inputs.github-app-id != ''
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          app-id: ${{ inputs.github-app-id }}
+          private-key: ${{ secrets.github-app-private-key }}
+          owner: ${{ inputs.github-app-owner }}
+
+      - name: Configure git to use GitHub App token
+        if: inputs.github-app-id != ''
+        env:
+          APP_TOKEN: ${{ steps.app_token.outputs.token }}
+        run: |
+          git config --global url."https://x-access-token:${APP_TOKEN}@github.com/".insteadOf "https://github.com/"
+
+      - name: Azure login (OIDC — read-write SP)
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2
+        with:
+          client-id: ${{ inputs.azure-client-id }}
+          tenant-id: ${{ inputs.azure-tenant-id }}
+          subscription-id: ${{ inputs.azure-subscription-id }}
+
+      # NOTE: do not use the `[ -z "$X" ] && X=...` one-liner form here — it
+      # returns 1 when the variable is already set, which `set -e` treats as a
+      # step failure. Use explicit `if` blocks.
+      - name: Resolve state key and values files
+        run: |
+          set -euo pipefail
+
+          KEY="${{ inputs.terraform-state-key }}"
+          if [ -z "$KEY" ]; then KEY="${ENV}.tfstate"; fi
+          echo "TF_STATE_KEY=${KEY}" >> "$GITHUB_ENV"
+
+          # Fail here rather than partway through the teardown: -var-file is
+          # passed unconditionally to terraform destroy below.
+          VF="${{ inputs.terraform-values-file }}"
+          if [ -z "$VF" ]; then VF="environments/${ENV}.tfvars"; fi
+          if [ ! -f "${WORKING_DIR}/${VF}" ]; then
+            echo "::error::Values file '${WORKING_DIR}/${VF}' not found for environment '${ENV}'."
+            exit 1
+          fi
+          echo "TF_VALUES_FILE=${VF}" >> "$GITHUB_ENV"
+
+          # The common var-file is genuinely optional — resolve it once here so
+          # the destroy step only has to test the variable.
+          COMMON="${{ inputs.terraform-common-values-file }}"
+          if [ -n "$COMMON" ] && [ -f "${WORKING_DIR}/${COMMON}" ]; then
+            echo "TF_COMMON_VALUES_FILE=${COMMON}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Terraform init
+        run: |
+          set -euo pipefail
+          terraform -chdir="$WORKING_DIR" init -input=false -reconfigure \
+            -backend-config="resource_group_name=${{ inputs.backend-resource-group-name }}" \
+            -backend-config="storage_account_name=${{ inputs.backend-storage-account-name }}" \
+            -backend-config="container_name=${{ inputs.backend-container-name }}" \
+            -backend-config="key=${TF_STATE_KEY}"
+
+      - name: Terraform destroy
+        run: |
+          set -euo pipefail
+          # Array, not a string: an unquoted ${COMMON} would word-split (SC2086).
+          COMMON=()
+          if [ -n "${TF_COMMON_VALUES_FILE:-}" ]; then
+            COMMON=(-var-file="${TF_COMMON_VALUES_FILE}")
+          fi
+          terraform -chdir="$WORKING_DIR" destroy \
+            "${COMMON[@]}" \
+            -var-file="${TF_VALUES_FILE}" \
+            -auto-approve \
+            -no-color -input=false \
+            -parallelism=${{ inputs.terraform-parallelism }}

@@ -1,0 +1,285 @@
+---
+# =============================================================================
+# Terraform Drift Detection (Azure)
+#
+# Reusable, INPUT-DRIVEN drift check modelled on the AWS terraform-drift engine,
+# for Azure. The CALLER schedules it (cron). It runs `terraform plan
+# -detailed-exitcode` against the deployed state using the READ-ONLY service
+# principal; exit code 2 means drift. On drift it opens (or updates) a GitHub
+# issue, and optionally posts to Slack when a webhook is supplied.
+# =============================================================================
+name: Terraform Drift Detection (Azure)
+
+on:
+  workflow_call:
+    inputs:
+      # --- Azure identity (drift uses the READ-ONLY service principal) ---
+      azure-client-id:
+        description: "Client ID of the read-only Entra service principal"
+        required: true
+        type: string
+      azure-tenant-id:
+        description: "Entra tenant ID"
+        required: true
+        type: string
+      azure-subscription-id:
+        description: "Target subscription ID"
+        required: true
+        type: string
+      # --- Remote state backend (azurerm) ---
+      backend-resource-group-name:
+        description: "Resource group of the Terraform state storage account"
+        required: true
+        type: string
+      backend-storage-account-name:
+        description: "Terraform state storage account name"
+        required: true
+        type: string
+      backend-container-name:
+        description: "Blob container for state; one container per repository"
+        required: true
+        type: string
+      terraform-state-key:
+        description: "State blob key (default: <environment>.tfstate)"
+        required: false
+        default: ""
+        type: string
+      # --- Terraform inputs ---
+      environments:
+        description: 'JSON array of environments to drift-check, e.g. ["dev","tst","stg","prd"]. One matrix leg runs per entry; pass a shorter array to check a subset (e.g. ["dev"]).'
+        required: true
+        type: string
+      working-directory:
+        description: "Directory holding the root module"
+        required: false
+        default: "terraform"
+        type: string
+      terraform-version:
+        description: "Terraform version"
+        required: false
+        default: "1.15.8"
+        type: string
+      terraform-values-file:
+        description: "Env var-file (default: environments/<environment>.tfvars)"
+        required: false
+        default: ""
+        type: string
+      terraform-common-values-file:
+        description: "Shared var-file applied to every environment"
+        required: false
+        default: "environments/common.tfvars"
+        type: string
+      terraform-parallelism:
+        description: "Parallelism for plan"
+        required: false
+        default: 10
+        type: number
+      runs-on:
+        description: "Runner label"
+        required: false
+        default: "ubuntu-latest"
+        type: string
+      job-timeout-minutes:
+        description: "Job timeout in minutes, per environment leg. Raise for slow Azure resources — Azure Firewall and similar can take ~45 minutes for a single resource."
+        required: false
+        default: 90
+        type: number
+      terraform-log-level:
+        description: "Value for TF_LOG on the drift plan: TRACE, DEBUG, INFO, WARN, ERROR or OFF. Blank (default) disables Terraform debug logging."
+        required: false
+        default: ""
+        type: string
+      # --- Private module access (GitHub App) ---
+      github-app-id:
+        description: "GitHub App ID used to pull private modules (blank disables)"
+        required: false
+        default: ""
+        type: string
+      github-app-owner:
+        description: "Owner the GitHub App token is scoped to"
+        required: false
+        default: "appvia"
+        type: string
+    secrets:
+      github-app-private-key:
+        description: "Private key for the GitHub App (required if github-app-id is set)"
+        required: false
+      slack-webhook-url:
+        description: "Optional Slack incoming-webhook URL for drift alerts"
+        required: false
+
+permissions:
+  id-token: write
+  contents: read
+  issues: write
+
+jobs:
+  drift:
+    name: Drift (${{ matrix.environment }})
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.job-timeout-minutes }}
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ fromJson(inputs.environments) }}
+    env:
+      ARM_CLIENT_ID: ${{ inputs.azure-client-id }}
+      ARM_TENANT_ID: ${{ inputs.azure-tenant-id }}
+      ARM_SUBSCRIPTION_ID: ${{ inputs.azure-subscription-id }}
+      ARM_USE_OIDC: "true"
+      ARM_USE_AZUREAD: "true"
+      TF_INPUT: "0"
+      TF_IN_AUTOMATION: "true"
+      TF_LOG: ${{ inputs.terraform-log-level }}
+      ENV: ${{ matrix.environment }}
+      WORKING_DIR: ${{ inputs.working-directory }}
+    steps:
+      # Terraform does not reject an invalid TF_LOG — it prints a warning and
+      # falls back to TRACE, the loudest level. Catch a typo here so it cannot
+      # turn a targeted DEBUG run into gigabytes of TRACE output.
+      - name: Validate Terraform log level
+        if: inputs.terraform-log-level != ''
+        env:
+          LOG_LEVEL: ${{ inputs.terraform-log-level }}
+        run: |
+          # Case-insensitive: Terraform upper-cases TF_LOG itself, so rejecting
+          # "debug" here would be stricter than the tool we are guarding.
+          # `tr` rather than ${VAR^^} — the latter needs bash 4+, and `runs-on`
+          # is caller-supplied (a macOS runner still ships bash 3.2).
+          case "$(printf '%s' "$LOG_LEVEL" | tr '[:lower:]' '[:upper:]')" in
+            TRACE|DEBUG|INFO|WARN|ERROR|OFF) ;;
+            *) echo "::error::terraform-log-level must be one of TRACE, DEBUG, INFO, WARN, ERROR, OFF (got '$LOG_LEVEL')"; exit 1 ;;
+          esac
+
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+          terraform_wrapper: false
+
+      - name: Generate GitHub App token
+        id: app_token
+        if: inputs.github-app-id != ''
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          app-id: ${{ inputs.github-app-id }}
+          private-key: ${{ secrets.github-app-private-key }}
+          owner: ${{ inputs.github-app-owner }}
+
+      - name: Configure git to use GitHub App token
+        if: inputs.github-app-id != ''
+        env:
+          APP_TOKEN: ${{ steps.app_token.outputs.token }}
+        run: |
+          git config --global url."https://x-access-token:${APP_TOKEN}@github.com/".insteadOf "https://github.com/"
+
+      - name: Azure login (OIDC — read-only SP)
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2
+        with:
+          client-id: ${{ inputs.azure-client-id }}
+          tenant-id: ${{ inputs.azure-tenant-id }}
+          subscription-id: ${{ inputs.azure-subscription-id }}
+
+      # NOTE: do not use the `[ -z "$X" ] && X=...` one-liner form here — it
+      # returns 1 when the variable is already set, which `set -e` treats as a
+      # step failure. Use explicit `if` blocks.
+      - name: Resolve state key and values files
+        run: |
+          set -euo pipefail
+
+          KEY="${{ inputs.terraform-state-key }}"
+          if [ -z "$KEY" ]; then KEY="${ENV}.tfstate"; fi
+          echo "TF_STATE_KEY=${KEY}" >> "$GITHUB_ENV"
+
+          # Fail here rather than in the drift plan, where a missing file would
+          # surface as a plan error (exit 1) and look like real breakage.
+          VF="${{ inputs.terraform-values-file }}"
+          if [ -z "$VF" ]; then VF="environments/${ENV}.tfvars"; fi
+          if [ ! -f "${WORKING_DIR}/${VF}" ]; then
+            echo "::error::Values file '${WORKING_DIR}/${VF}' not found for environment '${ENV}'."
+            exit 1
+          fi
+          echo "TF_VALUES_FILE=${VF}" >> "$GITHUB_ENV"
+
+          # The common var-file is genuinely optional — resolve it once here so
+          # the plan step only has to test the variable.
+          COMMON="${{ inputs.terraform-common-values-file }}"
+          if [ -n "$COMMON" ] && [ -f "${WORKING_DIR}/${COMMON}" ]; then
+            echo "TF_COMMON_VALUES_FILE=${COMMON}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Terraform init
+        run: |
+          set -euo pipefail
+          terraform -chdir="$WORKING_DIR" init -input=false -reconfigure \
+            -backend-config="resource_group_name=${{ inputs.backend-resource-group-name }}" \
+            -backend-config="storage_account_name=${{ inputs.backend-storage-account-name }}" \
+            -backend-config="container_name=${{ inputs.backend-container-name }}" \
+            -backend-config="key=${TF_STATE_KEY}"
+
+      # -detailed-exitcode: 0 = no drift, 2 = drift, 1 = error
+      - name: Terraform plan (drift check)
+        id: plan
+        run: |
+          set +e
+          # Array, not a string: an unquoted ${COMMON} would word-split (SC2086).
+          COMMON=()
+          if [ -n "${TF_COMMON_VALUES_FILE:-}" ]; then
+            COMMON=(-var-file="${TF_COMMON_VALUES_FILE}")
+          fi
+          terraform -chdir="$WORKING_DIR" plan \
+            "${COMMON[@]}" \
+            -var-file="${TF_VALUES_FILE}" \
+            -detailed-exitcode \
+            -no-color -input=false \
+            -parallelism=${{ inputs.terraform-parallelism }} \
+            2>&1 | tee "$GITHUB_WORKSPACE/drift_output.txt"
+          PLAN_EXIT=${PIPESTATUS[0]}
+          set -e
+          echo "plan_exit=$PLAN_EXIT" >> "$GITHUB_OUTPUT"
+          if [ "$PLAN_EXIT" -eq 1 ]; then
+            echo "Terraform plan errored." >&2
+            exit 1
+          fi
+
+      - name: Open or update drift issue
+        if: steps.plan.outputs.plan_exit == '2'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const fs = require('fs');
+            const env = process.env.ENV;
+            const marker = `<!-- drift-${env} -->`;
+            let plan = '';
+            try { plan = fs.readFileSync('drift_output.txt', 'utf8'); } catch {}
+            if (plan.length > 55000) plan = plan.slice(0, 55000) + '\n... (truncated)';
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = `${marker}\n### ⚠️ Infrastructure drift detected — \`${env}\`\n\n` +
+              `\`terraform plan\` reported changes against the deployed state.\n\n` +
+              `<details><summary>Plan output</summary>\n\n\`\`\`\n${plan}\n\`\`\`\n\n</details>\n\n` +
+              `🔗 [Workflow run](${runUrl})`;
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo, state: 'open', per_page: 100,
+            });
+            const existing = issues.find(i => i.body && i.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.update({ owner: context.repo.owner, repo: context.repo.repo, issue_number: existing.number, body });
+            } else {
+              await github.rest.issues.create({ owner: context.repo.owner, repo: context.repo.repo, title: `Terraform drift detected: ${env}`, body, labels: ['drift'] });
+            }
+
+      - name: Send Slack notification if drift is detected
+        if: steps.plan.outputs.plan_exit == '2' && env.SLACK_WEBHOOK != ''
+        env:
+          SLACK_WEBHOOK: ${{ secrets.slack-webhook-url }}
+        uses: slackapi/slack-github-action@b0fa283ad8fea605de13dc3f449259339835fc52 # v2.1.0
+        with:
+          webhook: ${{ secrets.slack-webhook-url }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "⚠️ Terraform drift detected in ${{ github.repository }} (${{ matrix.environment }}). See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }
