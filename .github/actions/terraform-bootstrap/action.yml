@@ -114,7 +114,7 @@ runs:
       shell: bash
       run: |
         if [ -n "${{ inputs.terraform-state-key }}" ]; then
-          echo "name=${{ inputs.terraform-state-key }}" >> "${GITHUB_OUTPUT}"
+          echo "name=${{ inputs.terraform-state-key }}.tfstate" >> "${GITHUB_OUTPUT}"
         else
           if [ "${{ inputs.use-env-as-suffix }}" == "true" ]; then
             echo "name=${{ github.event.repository.name }}-${{ inputs.environment }}.tfstate" >> "${GITHUB_OUTPUT}"
