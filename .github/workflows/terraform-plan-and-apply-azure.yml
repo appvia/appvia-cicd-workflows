@@ -31,26 +31,6 @@ name: Terraform Plan & Apply (Azure)
 on:
   workflow_call:
     inputs:
-      # --- Azure identity (plan uses the READ-ONLY service principal) ---
-      azure-client-id:
-        description: "Client ID of the plan (read-only) Entra service principal"
-        required: true
-        type: string
-      azure-tenant-id:
-        description: "Entra tenant ID"
-        required: true
-        type: string
-      azure-subscription-id:
-        description: "Target subscription ID"
-        required: true
-        type: string
-      # --- Azure identity for APPLY (the READ-WRITE service principal) ---
-      azure-apply-client-id:
-        description: "Client ID of the apply (read-write) Entra service principal. Falls back to azure-client-id when blank (single-SP setups)."
-        required: false
-        default: ""
-        type: string
-      # --- Apply behaviour (apply runs on push to main) ---
       enable-apply:
         description: "Run terraform apply on push to the default branch"
         required: false
@@ -62,14 +42,6 @@ on:
         default: ""
         type: string
       # --- Remote state backend (azurerm) ---
-      backend-resource-group-name:
-        description: "Resource group of the Terraform state storage account"
-        required: true
-        type: string
-      backend-storage-account-name:
-        description: "Terraform state storage account name"
-        required: true
-        type: string
       backend-container-name:
         description: "Blob container for state; one container per repository"
         required: true
@@ -238,11 +210,11 @@ jobs:
     # The ARM_* names are not ours to choose: the azurerm provider reads them for OIDC auth. The
     # BACKEND_* ones exist so `run:` blocks never interpolate a caller-supplied string into shell.
     env:
-      ARM_CLIENT_ID: ${{ inputs.azure-client-id }}
-      ARM_TENANT_ID: ${{ inputs.azure-tenant-id }}
-      ARM_SUBSCRIPTION_ID: ${{ inputs.azure-subscription-id }}
-      BACKEND_RESOURCE_GROUP_NAME: ${{ inputs.backend-resource-group-name }}
-      BACKEND_STORAGE_ACCOUNT_NAME: ${{ inputs.backend-storage-account-name }}
+      ARM_CLIENT_ID: ${{ vars.ALZ_AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.ALZ_AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.ALZ_AZURE_SUBSCRIPTION_ID }}
+      BACKEND_RESOURCE_GROUP_NAME: ${{ vars.ALZ_BACKEND_RESOURCE_GROUP_NAME }}
+      BACKEND_STORAGE_ACCOUNT_NAME: ${{ vars.ALZ_BACKEND_STORAGE_ACCOUNT_NAME }}
       BACKEND_CONTAINER_NAME: ${{ inputs.backend-container-name }}
       ARM_USE_OIDC: "true"
       ARM_USE_AZUREAD: "true"
@@ -1029,11 +1001,11 @@ jobs:
     # ARM_CLIENT_ID is resolved here rather than at the login step: the read-write fallback is
     # expressed once, instead of repeating the ternary everywhere the client ID is needed.
     env:
-      ARM_CLIENT_ID: ${{ inputs.azure-apply-client-id != '' && inputs.azure-apply-client-id || inputs.azure-client-id }}
-      ARM_TENANT_ID: ${{ inputs.azure-tenant-id }}
-      ARM_SUBSCRIPTION_ID: ${{ inputs.azure-subscription-id }}
-      BACKEND_RESOURCE_GROUP_NAME: ${{ inputs.backend-resource-group-name }}
-      BACKEND_STORAGE_ACCOUNT_NAME: ${{ inputs.backend-storage-account-name }}
+      ARM_CLIENT_ID: ${{ vars.ALZ_AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.ALZ_AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.ALZ_AZURE_SUBSCRIPTION_ID }}
+      BACKEND_RESOURCE_GROUP_NAME: ${{ vars.ALZ_BACKEND_RESOURCE_GROUP_NAME }}
+      BACKEND_STORAGE_ACCOUNT_NAME: ${{ vars.ALZ_BACKEND_STORAGE_ACCOUNT_NAME }}
       BACKEND_CONTAINER_NAME: ${{ inputs.backend-container-name }}
       ARM_USE_OIDC: "true"
       ARM_USE_AZUREAD: "true"
