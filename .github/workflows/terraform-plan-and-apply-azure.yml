@@ -994,9 +994,6 @@ jobs:
       matrix:
         environment: ${{ fromJson(inputs.environments) }}
     environment: ${{ matrix.environment }}-apply
-    # As in the plan job, the only place identity and backend inputs are read — and the reason
-    # ARM_CLIENT_ID is resolved here rather than at the login step: the read-write fallback is
-    # expressed once, instead of repeating the ternary everywhere the client ID is needed.
     env:
       ARM_CLIENT_ID: ${{ vars.ALZ_AZURE_CLIENT_ID }}
       ARM_TENANT_ID: ${{ vars.ALZ_AZURE_TENANT_ID }}

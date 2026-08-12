@@ -1,6 +1,6 @@
 # Terraform Drift Detection Workflow for Azure Infrastructure
 
-This GitHub Actions workflow template ([terraform-drift-azure.yml](../.github/workflows/terraform-drift-azure.yml)) is the **scheduled drift detection** reusable workflow for Azure Terraform repositories. It mirrors the AWS [terraform-drift.yml](./terraform-drift.md) engine, but targets Azure: OIDC federation to Entra and an `azurerm` remote-state backend. It is **input-driven**.
+This GitHub Actions workflow template ([terraform-drift-azure.yml](../.github/workflows/terraform-drift-azure.yml)) is the **scheduled drift detection** reusable workflow for Azure Terraform repositories. It mirrors the AWS [terraform-drift.yml](./terraform-drift.md) engine, but targets Azure: OIDC federation to Entra and an `azurerm` remote-state backend. Behaviour is **input-driven**, while the Azure identity and state backend come from Actions variables on the GitHub Environment each leg enters.
 
 ## How it works
 
@@ -41,11 +41,8 @@ jobs:
   drift:
     uses: appvia/appvia-cicd-workflows/.github/workflows/terraform-drift-azure.yml@main
     with:
-      azure-client-id: "<CUSTOMER_TENANT_ID_PLAN_CLIENT_ID>"
-      azure-tenant-id: "<CUSTOMER_TENANT_ID>"
-      azure-subscription-id: "<CUSTOMER_MANAGEMENT_SUBSCRIPTION_ID>"
-      backend-resource-group-name: ${{ vars.AZURE_TFSTATE_RESOURCE_GROUP }}
-      backend-storage-account-name: ${{ vars.AZURE_TFSTATE_STORAGE_ACCOUNT }}
+      # Azure identity and state backend are NOT passed here — they come from
+      # Actions variables on each leg's GitHub Environment. See below.
       backend-container-name: tfstate
       # Terraform environments to check — one matrix leg each, and each
       # also names its GitHub Environment (dev-plan, tst-plan, ...)
@@ -58,6 +55,18 @@ jobs:
 
 **The GitHub Environment is named after the Terraform environment.** Each entry in `environments` does both jobs: it selects that leg's var-file and state key, and it names the environment the leg enters — `dev` runs in `dev-plan`, `prd` in `prd-plan`. These are the same environments the [plan & apply](./terraform-plan-and-apply-azure.md) workflow uses for its PR plans, so a matrix of `["dev", "tst", "stg", "prd"]` needs `dev-plan`, `tst-plan`, `stg-plan` and `prd-plan` to exist already. The workflow does not create them.
 
-They hold no configuration. Entering one puts the `environment` claim in the OIDC token, which is what the Entra federated credential subject for the read-only service principal is scoped to — so that SP needs a credential registered for each `<env>-plan` name it is expected to serve.
+Entering one supplies that leg's Azure identity and state backend from the environment's Actions variables, and puts the `environment` claim in the OIDC token — which is what the Entra federated credential subject for the read-only service principal is scoped to, so that SP needs a credential registered for each `<env>-plan` name it is expected to serve.
+
+### Actions variables
+
+Read from each `<env>-plan` environment. These are the same variables the [plan & apply](./terraform-plan-and-apply-azure.md) workflow's plan job uses, so if that workflow already runs against these environments there is nothing extra to set up:
+
+| Variable | Purpose |
+| --- | --- |
+| `ALZ_AZURE_CLIENT_ID` | Read-only Entra service principal client ID |
+| `ALZ_AZURE_TENANT_ID` | Entra tenant ID |
+| `ALZ_AZURE_SUBSCRIPTION_ID` | Target subscription ID for that environment |
+| `ALZ_BACKEND_RESOURCE_GROUP_NAME` | Resource group of the Terraform state storage account |
+| `ALZ_BACKEND_STORAGE_ACCOUNT_NAME` | Terraform state storage account name |
 
 **Leave every `<env>-plan` free of protection rules.** Drift runs on a schedule with no one watching; a required reviewer on one of those environments would leave that leg queued awaiting approval instead of reporting drift.
