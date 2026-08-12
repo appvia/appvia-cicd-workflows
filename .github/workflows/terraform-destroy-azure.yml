@@ -105,10 +105,6 @@ jobs:
     runs-on: ${{ inputs.runs-on }}
     timeout-minutes: ${{ inputs.job-timeout-minutes }}
     environment: ${{ inputs.environment }}-apply
-    # This block is the ONLY place identity and backend inputs are read. Steps below reference
-    # `${{ env.ARM_* }}` in `with:` and plain `${VAR}` in `run:` — never `${{ inputs.* }}` again.
-    # The ARM_* names are not ours to choose: the azurerm provider reads them for OIDC auth. The
-    # BACKEND_* ones exist so `run:` blocks never interpolate a caller-supplied string into shell.
     env:
       ARM_CLIENT_ID: ${{ vars.ALZ_AZURE_CLIENT_ID }}
       ARM_TENANT_ID: ${{ vars.ALZ_AZURE_TENANT_ID }}
