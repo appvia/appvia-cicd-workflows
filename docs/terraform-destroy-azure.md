@@ -44,8 +44,6 @@ jobs:
       backend-resource-group-name: ${{ vars.AZURE_TFSTATE_RESOURCE_GROUP }}
       backend-storage-account-name: ${{ vars.AZURE_TFSTATE_STORAGE_ACCOUNT }}
       backend-container-name: tfstate
-      # Terraform environment being torn down; also names the
-      # GitHub Environment the job enters, prd-apply
       environment: prd
     secrets:
       github-app-private-key: ${{ secrets.ORG_LZ_ACTION_SECRET }}
