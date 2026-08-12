@@ -15,9 +15,7 @@
 #
 # All configuration arrives as `inputs` (rendered from customer-install.sh in the
 # calling repo) — NOT GitHub environment vars. Only true secrets come via
-# `secrets:`. The jobs still enter GitHub Environments (`<prefix>-plan` and
-# `<prefix>-apply`), but for the OIDC `environment` claim and the apply approval
-# gate, not to source configuration.
+# `secrets:`.
 #
 # Ports six operational improvements from the mikeguy example workflow while
 # staying input-driven:

@@ -130,10 +130,6 @@ jobs:
     if: inputs.confirmation == github.repository
     runs-on: ${{ inputs.runs-on }}
     timeout-minutes: ${{ inputs.job-timeout-minutes }}
-    # Entering the environment is what puts the `environment` claim in the OIDC token, which the
-    # Entra federated credential's subject is scoped to. Destroy uses the read-write SP, so it
-    # enters the apply environment — whose required-reviewer rules then gate the teardown, a
-    # second check alongside the `confirmation` guard above.
     environment: ${{ inputs.github-environment-prefix }}-apply
     env:
       ARM_CLIENT_ID: ${{ inputs.azure-client-id }}

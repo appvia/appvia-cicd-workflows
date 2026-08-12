@@ -126,10 +126,6 @@ jobs:
       fail-fast: false
       matrix:
         environment: ${{ fromJson(inputs.environments) }}
-    # Entering the environment is what puts the `environment` claim in the OIDC token, which the
-    # Entra federated credential's subject is scoped to. Drift is read-only, so it enters the
-    # plan environment — leave that one unprotected, or the scheduled run will sit awaiting
-    # approval instead of reporting drift.
     environment: ${{ inputs.github-environment-prefix }}-plan
     env:
       ARM_CLIENT_ID: ${{ inputs.azure-client-id }}
