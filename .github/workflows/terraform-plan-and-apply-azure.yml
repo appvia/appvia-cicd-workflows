@@ -13,11 +13,11 @@
 # JSON conversion, and the apply job re-plans against current state before
 # applying — no saved plan artifact is carried from PR to merge.
 #
-# Configuration arrives as `inputs` (rendered from customer-install.sh in the
-# calling repo), except for the Azure identity and state backend, which are read
-# from Actions variables on each job's GitHub Environment — `<prefix>-plan` for
-# the read-only SP and `<prefix>-apply` for the read-write SP. Only true secrets
-# come via `secrets:`.
+# All configuration arrives as `inputs` (rendered from customer-install.sh in the
+# calling repo) — NOT GitHub environment vars. Only true secrets come via
+# `secrets:`. The jobs still enter GitHub Environments (`<prefix>-plan` and
+# `<prefix>-apply`), but for the OIDC `environment` claim and the apply approval
+# gate, not to source configuration.
 #
 # Ports six operational improvements from the mikeguy example workflow while
 # staying input-driven:
@@ -33,13 +33,22 @@ name: Terraform Plan & Apply (Azure)
 on:
   workflow_call:
     inputs:
+      # --- Azure identity (plan uses the READ-ONLY service principal) ---
+      azure-client-id:
+        description: "Client ID of the plan (read-only) Entra service principal"
+        required: true
+        type: string
+      azure-tenant-id:
+        description: "Entra tenant ID"
+        required: true
+        type: string
+      azure-subscription-id:
+        description: "Target subscription ID"
+        required: true
+        type: string
       # --- Azure identity for APPLY (the READ-WRITE service principal) ---
-      # Identity and backend configuration are read from Actions variables on each job's
-      # environment (ALZ_AZURE_CLIENT_ID, ALZ_AZURE_TENANT_ID, ALZ_AZURE_SUBSCRIPTION_ID,
-      # ALZ_BACKEND_RESOURCE_GROUP_NAME, ALZ_BACKEND_STORAGE_ACCOUNT_NAME) — the read-only SP
-      # on '<prefix>-plan' and the read-write SP on '<prefix>-apply'.
       azure-apply-client-id:
-        description: "Client ID of the apply (read-write) Entra service principal. Falls back to the ALZ_AZURE_CLIENT_ID Actions variable on the apply environment when blank."
+        description: "Client ID of the apply (read-write) Entra service principal. Falls back to azure-client-id when blank (single-SP setups)."
         required: false
         default: ""
         type: string
@@ -55,6 +64,14 @@ on:
         default: ""
         type: string
       # --- Remote state backend (azurerm) ---
+      backend-resource-group-name:
+        description: "Resource group of the Terraform state storage account"
+        required: true
+        type: string
+      backend-storage-account-name:
+        description: "Terraform state storage account name"
+        required: true
+        type: string
       backend-container-name:
         description: "Blob container for state; one container per repository"
         required: true
@@ -66,7 +83,7 @@ on:
         type: string
       # --- Terraform inputs ---
       github-environment-prefix:
-        description: "Prefix of the GitHub Environments the jobs run in: the plan job runs in '<prefix>-plan' and the apply job in '<prefix>-apply'. Both environments must already exist — that is what makes their Actions variables readable, and the environment name becomes the OIDC environment claim."
+        description: "Prefix of the GitHub Environments the jobs run in: the plan job runs in '<prefix>-plan' and the apply job in '<prefix>-apply'. Both must already exist. They carry no configuration — the environment name becomes the OIDC environment claim the Entra federated credentials are scoped to, and required-reviewer rules on '<prefix>-apply' gate the apply."
         required: false
         default: "prod"
         type: string
@@ -225,11 +242,11 @@ jobs:
         environment: ${{ fromJson(inputs.environments) }}
     environment: ${{ inputs.github-environment-prefix }}-plan
     env:
-      ARM_CLIENT_ID: ${{ vars.ALZ_AZURE_CLIENT_ID }}
-      ARM_TENANT_ID: ${{ vars.ALZ_AZURE_TENANT_ID }}
-      ARM_SUBSCRIPTION_ID: ${{ vars.ALZ_AZURE_SUBSCRIPTION_ID }}
-      BACKEND_RESOURCE_GROUP_NAME: ${{ vars.ALZ_BACKEND_RESOURCE_GROUP_NAME }}
-      BACKEND_STORAGE_ACCOUNT_NAME: ${{ vars.ALZ_BACKEND_STORAGE_ACCOUNT_NAME }}
+      ARM_CLIENT_ID: ${{ inputs.azure-client-id }}
+      ARM_TENANT_ID: ${{ inputs.azure-tenant-id }}
+      ARM_SUBSCRIPTION_ID: ${{ inputs.azure-subscription-id }}
+      BACKEND_RESOURCE_GROUP_NAME: ${{ inputs.backend-resource-group-name }}
+      BACKEND_STORAGE_ACCOUNT_NAME: ${{ inputs.backend-storage-account-name }}
       ARM_USE_OIDC: "true"
       ARM_USE_AZUREAD: "true"
       TF_INPUT: "0"
@@ -1012,11 +1029,11 @@ jobs:
         environment: ${{ fromJson(inputs.environments) }}
     environment: ${{ inputs.github-environment-prefix }}-apply
     env:
-      ARM_CLIENT_ID: ${{ inputs.azure-apply-client-id != '' && inputs.azure-apply-client-id || vars.ALZ_AZURE_CLIENT_ID }}
-      ARM_TENANT_ID: ${{ vars.ALZ_AZURE_TENANT_ID }}
-      ARM_SUBSCRIPTION_ID: ${{ vars.ALZ_AZURE_SUBSCRIPTION_ID }}
-      BACKEND_RESOURCE_GROUP_NAME: ${{ vars.ALZ_BACKEND_RESOURCE_GROUP_NAME }}
-      BACKEND_STORAGE_ACCOUNT_NAME: ${{ vars.ALZ_BACKEND_STORAGE_ACCOUNT_NAME }}
+      ARM_CLIENT_ID: ${{ inputs.azure-apply-client-id != '' && inputs.azure-apply-client-id || inputs.azure-client-id }}
+      ARM_TENANT_ID: ${{ inputs.azure-tenant-id }}
+      ARM_SUBSCRIPTION_ID: ${{ inputs.azure-subscription-id }}
+      BACKEND_RESOURCE_GROUP_NAME: ${{ inputs.backend-resource-group-name }}
+      BACKEND_STORAGE_ACCOUNT_NAME: ${{ inputs.backend-storage-account-name }}
       ARM_USE_OIDC: "true"
       ARM_USE_AZUREAD: "true"
       TF_INPUT: "0"
