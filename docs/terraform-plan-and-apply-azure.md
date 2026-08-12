@@ -24,11 +24,11 @@ The workflow runs one `validate-and-plan` job per environment, then a `comment` 
 14. **Infracost** (optional) — cost estimate (requires `infracost-api-key`).
 15. **Post PR comment** — one comment per environment with a status table and per-section, character-budgeted detail blocks (65k-safe), linking the HTML report artifact.
 16. **Final result** — blocks merge if the plan job did not succeed.
-17. **Apply** — on push to the default branch only (`enable-apply`, default `true`). Logs in with the **read-write** service principal (`azure-apply-client-id`, falling back to `azure-client-id` for single-SP setups), re-initialises the backend, and runs `terraform apply` (re-plan + apply model — the PR plan binary is intentionally not persisted).
+17. **Apply** — on push to the default branch only (`enable-apply`, default `true`). Logs in with the **read-write** service principal (the `ALZ_AZURE_CLIENT_ID` variable on the `<prefix>-apply` environment, or the `azure-apply-client-id` input when set), re-initialises the backend, and runs `terraform apply` (re-plan + apply model — the PR plan binary is intentionally not persisted).
 
 ## Usage
 
-Create a new workflow file in your Azure Terraform repository (e.g. `.github/workflows/terraform-plan.yml`). The matrix drives one plan per environment (`dev`/`tst`/`stg`/`prd`):
+Create a new workflow file in your Azure Terraform repository (e.g. `.github/workflows/terraform-plan.yml`). The `environments` array drives one plan per environment (`dev`/`tst`/`stg`/`prd`):
 
 ```yml
 name: Terraform Plan
@@ -44,24 +44,13 @@ permissions:
 
 jobs:
   plan:
-    strategy:
-      fail-fast: false
-      matrix:
-        environment: [dev, tst, stg, prd]
-    name: Plan (${{ matrix.environment }})
     uses: appvia/appvia-cicd-workflows/.github/workflows/terraform-plan-and-apply-azure.yml@main
     with:
-      # Read-only plan identity (federated per environment during vending)
-      azure-client-id: <PLAN_CLIENT_ID>
-      azure-tenant-id: <TENANT_ID>
-      azure-subscription-id: <SUBSCRIPTION_ID>
       # Remote state backend (from lz-azure-bootstrap)
-      backend-resource-group-name: <STATE_RESOURCE_GROUP>
-      backend-storage-account-name: <STATE_STORAGE_ACCOUNT>
       backend-container-name: tfstate
-      terraform-state-key: <REPO>-${{ matrix.environment }}.tfstate
       # Terraform
-      environment: ${{ matrix.environment }}
+      environments: '["dev", "tst", "stg", "prd"]'
+      github-environment-prefix: prod
       working-directory: terraform
       enable-checkov: true
       enable-opa: true
@@ -76,18 +65,17 @@ jobs:
 
 ## Inputs
 
+The Azure identity and the state backend are **not** inputs. They are read from Actions variables on the GitHub Environment each job enters — see [Environment configuration](#environment-configuration) below.
+
 ### Required Inputs
 
-- `azure-client-id` - Client ID of the plan (read-only) Entra service principal
-- `azure-tenant-id` - Entra tenant ID
-- `azure-subscription-id` - Target subscription ID
-- `backend-resource-group-name` - Resource group of the Terraform state storage account
-- `backend-storage-account-name` - Terraform state storage account name
-- `environment` - The environment being planned (dev/tst/stg/prd)
+- `environments` - JSON array of environments to plan/apply, e.g. `'["dev", "tst", "stg", "prd"]'`. One matrix leg runs per entry
+- `backend-container-name` - Blob container for state; one container per repository
 
 ### Optional Inputs
 
-- `backend-container-name` - Default: "tfstate". Blob container for state
+- `github-environment-prefix` - Default: "prod". Prefix of the GitHub Environments the jobs run in — the plan job runs in `<prefix>-plan`, the apply job in `<prefix>-apply`
+- `azure-apply-client-id` - Client ID of the apply (read-write) Entra service principal. Overrides `ALZ_AZURE_CLIENT_ID` on the apply environment
 - `terraform-state-key` - Default: "<environment>.tfstate". State blob key
 - `working-directory` - Default: "terraform". Directory holding the root module
 - `terraform-version` - Default: "1.14.0". Terraform version (`latest` resolves newest)
@@ -114,6 +102,22 @@ jobs:
 - `github-app-private-key` - Private key for the GitHub App (required if `github-app-id` is set)
 
 **Note:** This template may change over time, so it is recommended that you point to a tagged version rather than the main branch.
+
+## Environment configuration
+
+The plan job runs in the `<prefix>-plan` GitHub Environment and the apply job in `<prefix>-apply`, where `<prefix>` is `github-environment-prefix` (default `prod`). Both environments must already exist in the calling repository — entering an environment is what makes its Actions variables readable and what puts the `environment` claim in the OIDC token that the federated credential subjects are scoped to. The apply environment is also where required-reviewer rules belong, since entering it is what gates the apply.
+
+Set the following **Actions variables** (Settings → Environments → *environment* → Variables) on each environment:
+
+| Variable | Purpose |
+| --- | --- |
+| `ALZ_AZURE_CLIENT_ID` | Entra service principal client ID — the read-only SP on `<prefix>-plan`, the read-write SP on `<prefix>-apply` |
+| `ALZ_AZURE_TENANT_ID` | Entra tenant ID |
+| `ALZ_AZURE_SUBSCRIPTION_ID` | Target subscription ID |
+| `ALZ_BACKEND_RESOURCE_GROUP_NAME` | Resource group of the Terraform state storage account |
+| `ALZ_BACKEND_STORAGE_ACCOUNT_NAME` | Terraform state storage account name |
+
+These cannot be passed as workflow inputs: a caller job that invokes a reusable workflow may not declare an `environment:`, so environment-scoped variables are only readable inside this workflow, where the plan and apply jobs declare theirs.
 
 ## Related Flows
 
