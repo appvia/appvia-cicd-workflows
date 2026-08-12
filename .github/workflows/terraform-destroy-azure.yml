@@ -131,10 +131,17 @@ jobs:
     runs-on: ${{ inputs.runs-on }}
     timeout-minutes: ${{ inputs.job-timeout-minutes }}
     environment: ${{ inputs.github-environment-prefix }}-apply
+    # This block is the ONLY place identity and backend inputs are read. Steps below reference
+    # `${{ env.ARM_* }}` in `with:` and plain `${VAR}` in `run:` — never `${{ inputs.* }}` again.
+    # The ARM_* names are not ours to choose: the azurerm provider reads them for OIDC auth. The
+    # BACKEND_* ones exist so `run:` blocks never interpolate a caller-supplied string into shell.
     env:
       ARM_CLIENT_ID: ${{ inputs.azure-client-id }}
       ARM_TENANT_ID: ${{ inputs.azure-tenant-id }}
       ARM_SUBSCRIPTION_ID: ${{ inputs.azure-subscription-id }}
+      BACKEND_RESOURCE_GROUP_NAME: ${{ inputs.backend-resource-group-name }}
+      BACKEND_STORAGE_ACCOUNT_NAME: ${{ inputs.backend-storage-account-name }}
+      BACKEND_CONTAINER_NAME: ${{ inputs.backend-container-name }}
       ARM_USE_OIDC: "true"
       ARM_USE_AZUREAD: "true"
       TF_INPUT: "0"
@@ -194,9 +201,9 @@ jobs:
       - name: Azure login (OIDC — read-write SP)
         uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
         with:
-          client-id: ${{ inputs.azure-client-id }}
-          tenant-id: ${{ inputs.azure-tenant-id }}
-          subscription-id: ${{ inputs.azure-subscription-id }}
+          client-id: ${{ env.ARM_CLIENT_ID }}
+          tenant-id: ${{ env.ARM_TENANT_ID }}
+          subscription-id: ${{ env.ARM_SUBSCRIPTION_ID }}
 
       # NOTE: do not use the `[ -z "$X" ] && X=...` one-liner form here — it
       # returns 1 when the variable is already set, which `set -e` treats as a
@@ -230,9 +237,9 @@ jobs:
         run: |
           set -euo pipefail
           terraform -chdir="$WORKING_DIR" init -input=false -reconfigure \
-            -backend-config="resource_group_name=${{ inputs.backend-resource-group-name }}" \
-            -backend-config="storage_account_name=${{ inputs.backend-storage-account-name }}" \
-            -backend-config="container_name=${{ inputs.backend-container-name }}" \
+            -backend-config="resource_group_name=${BACKEND_RESOURCE_GROUP_NAME}" \
+            -backend-config="storage_account_name=${BACKEND_STORAGE_ACCOUNT_NAME}" \
+            -backend-config="container_name=${BACKEND_CONTAINER_NAME}" \
             -backend-config="key=${TF_STATE_KEY}"
 
       - name: Terraform destroy
