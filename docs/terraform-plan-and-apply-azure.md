@@ -56,9 +56,9 @@ jobs:
       backend-resource-group-name: <STATE_RESOURCE_GROUP>
       backend-storage-account-name: <STATE_STORAGE_ACCOUNT>
       backend-container-name: tfstate
-      # Terraform
+      # Terraform environments — each also names its GitHub Environments,
+      # e.g. "dev" plans in dev-plan and applies in dev-apply
       environments: '["dev", "tst", "stg", "prd"]'
-      github-environment-prefix: prod
       working-directory: terraform
       enable-checkov: true
       enable-opa: true
@@ -83,8 +83,7 @@ Every value arrives as an input. The GitHub Environments the jobs enter carry no
 - `backend-resource-group-name` - Resource group of the Terraform state storage account
 - `backend-storage-account-name` - Terraform state storage account name
 - `backend-container-name` - Blob container for state; one container per repository
-- `environments` - JSON array of environments to plan/apply, e.g. `'["dev", "tst", "stg", "prd"]'`. One matrix leg runs per entry
-- `github-environment-prefix` - Prefix of the GitHub Environments the jobs run in — the plan job runs in `<prefix>-plan`, the apply job in `<prefix>-apply`. Both must already exist
+- `environments` - JSON array of environments to plan/apply, e.g. `'["dev", "tst", "stg", "prd"]'`. One matrix leg runs per entry. Each entry also names that leg's two GitHub Environments, `<entry>-plan` and `<entry>-apply`
 
 ### Optional Inputs
 
@@ -118,12 +117,21 @@ Every value arrives as an input. The GitHub Environments the jobs enter carry no
 
 ## Environment configuration
 
-The plan job runs in the `<prefix>-plan` GitHub Environment and the apply job in `<prefix>-apply`, where `<prefix>` is the required `github-environment-prefix` input. Both must already exist in the calling repository — the workflow does not create them.
+**The GitHub Environment is named after the Terraform environment.** Each entry in `environments` produces two of them — one per phase — so a matrix of `["dev", "tst", "stg", "prd"]` needs eight:
+
+| Terraform environment | Plan job enters | Apply job enters |
+| --- | --- | --- |
+| `dev` | `dev-plan` | `dev-apply` |
+| `tst` | `tst-plan` | `tst-apply` |
+| `stg` | `stg-plan` | `stg-apply` |
+| `prd` | `prd-plan` | `prd-apply` |
+
+All of them must already exist in the calling repository — the workflow does not create them, and a job naming an environment that does not exist fails.
 
 They hold no configuration. Entering them does two things:
 
-1. **Scopes the OIDC token.** The environment name becomes the `environment` claim, which is what the Entra federated credential subjects are scoped to. Plan and apply therefore present different claims and can be federated to different service principals.
-2. **Gates the apply.** Required-reviewer and wait-timer rules on `<prefix>-apply` are what hold the apply until someone approves it. Leave `<prefix>-plan` unprotected so PR plans run unattended.
+1. **Scopes the OIDC token.** The environment name becomes the `environment` claim, which is what the Entra federated credential subjects are scoped to. Because the claim differs per environment *and* per phase, the service principal needs a federated credential registered for **every** name in the table above that it is expected to serve — e.g. subjects for `dev-plan` through `prd-plan` on the read-only SP.
+2. **Gates each apply independently.** Required-reviewer and wait-timer rules live on the individual `<env>-apply` environments, so `prd-apply` can require approval while `dev-apply` runs unattended. Leave every `<env>-plan` unprotected so PR plans are never blocked.
 
 ## Related Flows
 

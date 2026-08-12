@@ -6,7 +6,7 @@ This GitHub Actions workflow template ([terraform-destroy-azure.yml](../.github/
 
 The workflow only proceeds when the `confirmation` input **exactly equals the calling repository** (`<owner>/<repo>`). This makes accidental destruction effectively impossible — the caller must deliberately pass the repository slug. Destroy uses the **read-write** service principal.
 
-The job also enters the `<prefix>-apply` GitHub Environment, so any **required reviewers** configured on it hold the teardown until someone approves — a second, human check alongside the confirmation string.
+The job also enters the `<environment>-apply` GitHub Environment, so any **required reviewers** configured on it hold the teardown until someone approves — a second, human check alongside the confirmation string.
 
 ## Workflow steps
 
@@ -44,9 +44,8 @@ jobs:
       backend-resource-group-name: ${{ vars.AZURE_TFSTATE_RESOURCE_GROUP }}
       backend-storage-account-name: ${{ vars.AZURE_TFSTATE_STORAGE_ACCOUNT }}
       backend-container-name: tfstate
-      # GitHub Environment the job enters: prod-apply
-      github-environment-prefix: prod
-      # Terraform environment being torn down
+      # Terraform environment being torn down; also names the
+      # GitHub Environment the job enters, prd-apply
       environment: prd
     secrets:
       github-app-private-key: ${{ secrets.ORG_LZ_ACTION_SECRET }}
@@ -54,8 +53,10 @@ jobs:
 
 ## GitHub Environment
 
-The job runs in the `<prefix>-apply` GitHub Environment, where `<prefix>` is the required `github-environment-prefix` input — the same environment the [plan & apply](./terraform-plan-and-apply-azure.md) workflow uses for its apply. It must already exist; the workflow does not create it.
+**The GitHub Environment is named after the Terraform environment.** The `environment` input does both jobs: it selects the var-file and state key, and it names the environment the job enters — destroying `prd` enters `prd-apply`, the same environment the [plan & apply](./terraform-plan-and-apply-azure.md) workflow applies `prd` in. It must already exist; the workflow does not create it.
 
 It holds no configuration. Entering it puts the `environment` claim in the OIDC token, which is what the Entra federated credential subject for the read-write service principal is scoped to, and it applies that environment's protection rules to the teardown.
 
-**Note the two senses of "environment" in the inputs.** `github-environment-prefix` names the GitHub Environment (identity claim and approval gate). `environment` names the *Terraform* environment being destroyed — `dev`/`tst`/`stg`/`prd` — which selects the var-file and the state key. They are unrelated, and unlike the plan/apply engine this one is deliberately **singular**: a teardown is one explicit environment per dispatch, never a matrix.
+That reuse is deliberate: whatever approval you require to *change* `prd` is the approval required to *destroy* it, without a second set of rules to keep in step.
+
+Unlike the plan/apply engine, this input is deliberately **singular** — a teardown is one explicit environment per dispatch, never a matrix.

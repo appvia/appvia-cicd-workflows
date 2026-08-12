@@ -54,13 +54,8 @@ on:
         required: false
         default: ""
         type: string
-      # --- Terraform inputs ---
-      github-environment-prefix:
-        description: "Prefix of the GitHub Environment the job runs in. Destroy writes, so it enters '<prefix>-apply' — the same environment apply uses. It must already exist. It carries no configuration: the environment name becomes the OIDC environment claim the Entra federated credential is scoped to, and any required-reviewer rule on it gates the teardown."
-        required: true
-        type: string
       environment:
-        description: "The Terraform environment being destroyed (dev/tst/stg/prd). Unrelated to github-environment-prefix — this one selects the var-file and state key."
+        description: "The Terraform environment being destroyed (dev/tst/stg/prd). Also names the GitHub Environment the job enters, '<environment>-apply', which must already exist."
         required: true
         type: string
       working-directory:
@@ -130,7 +125,7 @@ jobs:
     if: inputs.confirmation == github.repository
     runs-on: ${{ inputs.runs-on }}
     timeout-minutes: ${{ inputs.job-timeout-minutes }}
-    environment: ${{ inputs.github-environment-prefix }}-apply
+    environment: ${{ inputs.environment }}-apply
     # This block is the ONLY place identity and backend inputs are read. Steps below reference
     # `${{ env.ARM_* }}` in `with:` and plain `${VAR}` in `run:` — never `${{ inputs.* }}` again.
     # The ARM_* names are not ours to choose: the azurerm provider reads them for OIDC auth. The

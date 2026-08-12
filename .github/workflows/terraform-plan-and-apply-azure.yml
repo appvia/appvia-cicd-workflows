@@ -79,13 +79,8 @@ on:
         required: false
         default: ""
         type: string
-      # --- Terraform inputs ---
-      github-environment-prefix:
-        description: "Prefix of the GitHub Environments the jobs run in: the plan job runs in '<prefix>-plan' and the apply job in '<prefix>-apply'. Both must already exist. They carry no configuration — the environment name becomes the OIDC environment claim the Entra federated credentials are scoped to, and required-reviewer rules on '<prefix>-apply' gate the apply."
-        required: true
-        type: string
       environments:
-        description: 'JSON array of environments to plan/apply, e.g. ["dev","tst","stg","prd"]. One matrix leg runs per entry; pass a shorter array to run a subset (e.g. ["dev"]).'
+        description: 'JSON array of environments to plan/apply, e.g. ["dev","tst","stg","prd"]. One matrix leg runs per entry; pass a shorter array to run a subset (e.g. ["dev"]). Each entry names both the Terraform environment and its two GitHub Environments, "<entry>-plan" and "<entry>-apply", which must already exist.'
         required: true
         type: string
       working-directory:
@@ -237,7 +232,7 @@ jobs:
       fail-fast: false
       matrix:
         environment: ${{ fromJson(inputs.environments) }}
-    environment: ${{ inputs.github-environment-prefix }}-plan
+    environment: ${{ matrix.environment }}-plan
     # This block is the ONLY place identity and backend inputs are read. Steps below reference
     # `${{ env.ARM_* }}` in `with:` and plain `${VAR}` in `run:` — never `${{ inputs.* }}` again.
     # The ARM_* names are not ours to choose: the azurerm provider reads them for OIDC auth. The
@@ -1029,7 +1024,7 @@ jobs:
       fail-fast: false
       matrix:
         environment: ${{ fromJson(inputs.environments) }}
-    environment: ${{ inputs.github-environment-prefix }}-apply
+    environment: ${{ matrix.environment }}-apply
     # As in the plan job, the only place identity and backend inputs are read — and the reason
     # ARM_CLIENT_ID is resolved here rather than at the login step: the read-write fallback is
     # expressed once, instead of repeating the ternary everywhere the client ID is needed.
