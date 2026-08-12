@@ -22,6 +22,7 @@ on:
         required: false
         default: ""
         type: string
+      # --- Terraform inputs ---
       environments:
         description: 'JSON array of environments to drift-check, e.g. ["dev","tst","stg","prd"]. One matrix leg runs per entry; pass a shorter array to check a subset (e.g. ["dev"]). Each entry names both the Terraform environment and its GitHub Environment, "<entry>-plan", which must already exist.'
         required: true

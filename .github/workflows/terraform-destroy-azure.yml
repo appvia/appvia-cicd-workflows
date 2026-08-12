@@ -32,6 +32,7 @@ on:
         required: false
         default: ""
         type: string
+      # --- Terraform inputs ---
       environment:
         description: "The Terraform environment being destroyed (dev/tst/stg/prd). Also names the GitHub Environment the job enters, '<environment>-apply', which must already exist."
         required: true

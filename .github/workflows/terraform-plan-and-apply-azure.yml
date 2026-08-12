@@ -51,6 +51,7 @@ on:
         required: false
         default: ""
         type: string
+      # --- Terraform inputs ---
       environments:
         description: 'JSON array of environments to plan/apply, e.g. ["dev","tst","stg","prd"]. One matrix leg runs per entry; pass a shorter array to run a subset (e.g. ["dev"]). Each entry names both the Terraform environment and its two GitHub Environments, "<entry>-plan" and "<entry>-apply", which must already exist.'
         required: true
