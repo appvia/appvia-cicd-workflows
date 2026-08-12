@@ -10,7 +10,7 @@ The **caller** schedules the check (cron). The workflow logs in with the **read-
 - exit `2` — **drift detected**
 - exit `1` — plan error (the job fails)
 
-On drift it **opens or updates a GitHub issue** (deduplicated per environment via a hidden marker, labelled `drift`) and, when a `slack-webhook-url` secret is supplied, posts a Slack alert.
+One matrix leg runs per entry in `environments`, so a single scheduled call covers every Terraform environment. On drift it **opens or updates a GitHub issue** (deduplicated per environment via a hidden marker, labelled `drift`) and, when a `slack-webhook-url` secret is supplied, posts a Slack alert.
 
 ## Workflow steps
 
@@ -46,7 +46,21 @@ jobs:
       azure-subscription-id: "<CUSTOMER_MANAGEMENT_SUBSCRIPTION_ID>"
       backend-resource-group-name: ${{ vars.AZURE_TFSTATE_RESOURCE_GROUP }}
       backend-storage-account-name: ${{ vars.AZURE_TFSTATE_STORAGE_ACCOUNT }}
-      environment: prd
+      backend-container-name: tfstate
+      # GitHub Environment the job enters: prod-plan
+      github-environment-prefix: prod
+      # Terraform environments to check — one matrix leg each
+      environments: '["dev", "tst", "stg", "prd"]'
     secrets:
       slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 ```
+
+## GitHub Environment
+
+The job runs in the `<prefix>-plan` GitHub Environment, where `<prefix>` is the required `github-environment-prefix` input — the same environment the [plan & apply](./terraform-plan-and-apply-azure.md) workflow uses for its PR plans. It must already exist; the workflow does not create it.
+
+It holds no configuration. Entering it puts the `environment` claim in the OIDC token, which is what the Entra federated credential subject for the read-only service principal is scoped to.
+
+**Leave `<prefix>-plan` free of protection rules.** Drift runs on a schedule with no one watching; a required reviewer on that environment would leave the run queued awaiting approval instead of reporting drift.
+
+**Note the two senses of "environment" in the inputs.** `github-environment-prefix` names the GitHub Environment (the identity claim). `environments` is the JSON array of *Terraform* environments to check — `dev`/`tst`/`stg`/`prd` — one matrix leg each, selecting a var-file and a state key. They are unrelated.

@@ -84,11 +84,11 @@ Every value arrives as an input. The GitHub Environments the jobs enter carry no
 - `backend-storage-account-name` - Terraform state storage account name
 - `backend-container-name` - Blob container for state; one container per repository
 - `environments` - JSON array of environments to plan/apply, e.g. `'["dev", "tst", "stg", "prd"]'`. One matrix leg runs per entry
+- `github-environment-prefix` - Prefix of the GitHub Environments the jobs run in — the plan job runs in `<prefix>-plan`, the apply job in `<prefix>-apply`. Both must already exist
 
 ### Optional Inputs
 
 - `azure-apply-client-id` - Client ID of the apply (read-write) Entra service principal. Falls back to `azure-client-id` for single-SP setups
-- `github-environment-prefix` - Default: "prod". Prefix of the GitHub Environments the jobs run in — the plan job runs in `<prefix>-plan`, the apply job in `<prefix>-apply`
 - `terraform-state-key` - Default: "<environment>.tfstate". State blob key
 - `working-directory` - Default: "terraform". Directory holding the root module
 - `terraform-version` - Default: "1.14.0". Terraform version (`latest` resolves newest)
@@ -118,7 +118,7 @@ Every value arrives as an input. The GitHub Environments the jobs enter carry no
 
 ## Environment configuration
 
-The plan job runs in the `<prefix>-plan` GitHub Environment and the apply job in `<prefix>-apply`, where `<prefix>` is `github-environment-prefix` (default `prod`). Both must already exist in the calling repository — the workflow does not create them.
+The plan job runs in the `<prefix>-plan` GitHub Environment and the apply job in `<prefix>-apply`, where `<prefix>` is the required `github-environment-prefix` input. Both must already exist in the calling repository — the workflow does not create them.
 
 They hold no configuration. Entering them does two things:
 
