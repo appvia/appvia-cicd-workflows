@@ -1,0 +1,47 @@
+---
+name: "Pre-commit Check"
+description: >-
+  Run the repository's own pre-commit hooks, caching the hook environments between runs. Fails
+  when the repository has no pre-commit configuration.
+
+inputs:
+  config-file:
+    description: "Path to the pre-commit configuration"
+    required: false
+    default: ".pre-commit-config.yaml"
+  output-file:
+    description: "Where to tee the output, relative to GITHUB_WORKSPACE"
+    required: true
+
+outputs:
+  outcome:
+    description: "'success', 'failure' or 'skipped'"
+    value: ${{ steps.run.outputs.outcome }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Restore pre-commit cache
+      id: cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/.cache/pre-commit
+        key: pre-commit-${{ runner.os }}-${{ hashFiles(inputs.config-file) }}
+        restore-keys: |
+          pre-commit-${{ runner.os }}-
+
+    - name: Run pre-commit
+      id: run
+      shell: bash
+      env:
+        CONFIG_FILE: ${{ inputs.config-file }}
+        OUTPUT_FILE: ${{ inputs.output-file }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/run-pre-commit.sh"
+
+    - name: Save pre-commit cache
+      if: steps.cache.outputs.cache-hit != 'true' && steps.run.outputs.outcome != 'skipped'
+      continue-on-error: true
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/.cache/pre-commit
+        key: ${{ steps.cache.outputs.cache-primary-key }}

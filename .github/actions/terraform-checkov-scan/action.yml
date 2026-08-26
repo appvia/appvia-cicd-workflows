@@ -1,0 +1,95 @@
+---
+name: "Terraform Checkov Scan"
+description: >-
+  Run Checkov over a Terraform directory, capture its human-readable output for the pull-request
+  comment, and upload the SARIF to the GitHub Security tab.
+
+inputs:
+  environment:
+    description: "Environment name; scopes the output filenames and the SARIF category"
+    required: true
+  working-directory:
+    description: "Directory to scan"
+    required: false
+    default: "terraform"
+  var-file:
+    description: "Environment var-file, relative to working-directory. Skipped when absent."
+    required: false
+  common-var-file:
+    description: "Shared var-file, relative to working-directory. Skipped when absent."
+    required: false
+  config-file:
+    description: "Checkov config file. The action fails when this file does not exist."
+    required: false
+    default: ".checkov.yml"
+  upload-sarif:
+    description: "Upload the SARIF result to the GitHub Security tab"
+    required: false
+    default: "true"
+
+outputs:
+  outcome:
+    description: "Outcome of the scan step: 'success' or 'failure'"
+    value: ${{ steps.scan.outcome }}
+  sarif-present:
+    description: "'true' when a SARIF file was produced"
+    value: ${{ steps.capture.outputs.sarif-present }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Validate Checkov configuration
+      shell: bash
+      env:
+        CONFIG_FILE: ${{ inputs.config-file }}
+      run: |
+        set -euo pipefail
+        if [[ ! -f "$CONFIG_FILE" ]]; then
+          echo "::error file=$CONFIG_FILE::Checkov configuration file does not exist. Set config-file to a valid file."
+          exit 1
+        fi
+
+    - name: Resolve Checkov var-files
+      id: var_files
+      shell: bash
+      env:
+        WORKING_DIR: ${{ inputs.working-directory }}
+        VAR_FILE: ${{ inputs.var-file }}
+        COMMON_VAR_FILE: ${{ inputs.common-var-file }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/resolve-var-files.sh"
+
+    # soft_fail is false so findings exit non-zero. The caller sets continue-on-error, which keeps
+    # the SARIF upload and outcome collection running while the merge gate blocks on the outcome.
+    - name: Checkov security scan
+      id: scan
+      continue-on-error: true
+      uses: bridgecrewio/checkov-action@9b70310bcd306d11740313070b940167d6b23085 # v12
+      with:
+        config_file: ${{ inputs.config-file }}
+        directory: ${{ inputs.working-directory }}
+        download_external_modules: true
+        output_format: cli,sarif
+        # Each entry is a DIRECTORY; checkov writes its text and SARIF result files inside it.
+        output_file_path: "checkov_text_${{ inputs.environment }},checkov_sarif_${{ inputs.environment }}"
+        soft_fail: false
+        var_file: ${{ steps.var_files.outputs.var-file }}
+
+    - name: Capture Checkov output
+      id: capture
+      if: always()
+      continue-on-error: true
+      shell: bash
+      env:
+        TEXT_DIR: checkov_text_${{ inputs.environment }}
+        SARIF_DIR: checkov_sarif_${{ inputs.environment }}
+        TEXT_OUTPUT: checkov_output_${{ inputs.environment }}.txt
+        SARIF_OUTPUT: checkov_${{ inputs.environment }}.sarif
+      run: bash "$GITHUB_ACTION_PATH/scripts/capture-output.sh"
+
+    - name: Upload Checkov SARIF
+      if: always() && inputs.upload-sarif == 'true' && steps.capture.outputs.sarif-present == 'true'
+      continue-on-error: true
+      uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
+      with:
+        sarif_file: checkov_${{ inputs.environment }}.sarif
+        category: checkov-${{ inputs.environment }}

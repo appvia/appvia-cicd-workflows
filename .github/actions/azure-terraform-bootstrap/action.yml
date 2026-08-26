@@ -1,0 +1,174 @@
+---
+name: "Azure Terraform Bootstrap"
+description: >-
+  Common preamble for every Azure Terraform workflow: validates TF_LOG, checks out the repository,
+  sets up the toolchain (install everything, or verify a bring-your-own-runner image), exports the
+  invariant Terraform/Azure environment, authenticates git to a GitHub App for private modules, and
+  logs in to Azure via OIDC.
+
+inputs:
+  terraform-log-level:
+    description: "Value for TF_LOG: TRACE, DEBUG, INFO, WARN, ERROR or OFF. Blank (default) disables Terraform debug logging."
+    required: false
+    default: ""
+  fetch-depth:
+    description: "Depth passed to actions/checkout (0 = full history, needed by commitlint)"
+    required: false
+    default: "1"
+  install-tools:
+    description: >-
+      All or nothing. 'true' installs the complete checksum-verified toolchain; 'false' installs
+      nothing and instead verifies that every tool named in required-tools is already on PATH.
+    required: false
+    default: "true"
+  required-tools:
+    description: "Space-separated tools that must exist on PATH when install-tools is 'false'"
+    required: false
+    default: "terraform node"
+  node-version:
+    description: "Pinned Node.js version. 'latest' is not supported."
+    required: false
+    default: "22"
+  terraform-version:
+    description: "Pinned Terraform version. Required when install-tools is 'true'; ignored when it is 'false'."
+    required: false
+    default: ""
+  tflint-version:
+    description: "Pinned TFLint version. Required when install-tools is 'true'; ignored when it is 'false'."
+    required: false
+    default: ""
+  conftest-version:
+    description: "Pinned Conftest version. Required when install-tools is 'true'; ignored when it is 'false'."
+    required: false
+    default: ""
+  infracost-version:
+    description: "Pinned Infracost version. Required when install-tools is 'true'; ignored when it is 'false'."
+    required: false
+    default: ""
+  commitlint-version:
+    description: "Pinned @commitlint/cli npm version. Required when install-tools is 'true'; ignored when it is 'false'."
+    required: false
+    default: ""
+  pre-commit-version:
+    description: "Pinned pre-commit version. Required when install-tools is 'true'; ignored when it is 'false'."
+    required: false
+    default: ""
+  github-app-id:
+    description: "GitHub App ID used to pull private modules (blank disables)"
+    required: false
+    default: ""
+  github-app-owner:
+    description: "Owner the GitHub App token is scoped to"
+    required: false
+    default: ""
+  github-app-private-key:
+    description: "Private key for the GitHub App (required if github-app-id is set)"
+    required: false
+    default: ""
+  azure-client-id:
+    description: "Azure client ID for the OIDC service principal"
+    required: true
+  azure-tenant-id:
+    description: "Azure tenant ID for the OIDC service principal"
+    required: true
+  azure-subscription-id:
+    description: "Azure subscription ID for the OIDC service principal"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Validate Terraform log level
+      if: inputs.terraform-log-level != ''
+      shell: bash
+      env:
+        LOG_LEVEL: ${{ inputs.terraform-log-level }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/validate-log-level.sh"
+
+    - name: Checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      with:
+        fetch-depth: ${{ inputs.fetch-depth }}
+
+    - name: Resolve tool versions
+      id: versions
+      shell: bash
+      env:
+        INSTALL_TOOLS: ${{ inputs.install-tools }}
+        INPUT_NODE_VERSION: ${{ inputs.node-version }}
+        INPUT_TERRAFORM_VERSION: ${{ inputs.terraform-version }}
+        INPUT_TFLINT_VERSION: ${{ inputs.tflint-version }}
+        INPUT_CONFTEST_VERSION: ${{ inputs.conftest-version }}
+        INPUT_INFRACOST_VERSION: ${{ inputs.infracost-version }}
+        INPUT_COMMITLINT_VERSION: ${{ inputs.commitlint-version }}
+        INPUT_PRE_COMMIT_VERSION: ${{ inputs.pre-commit-version }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/resolve-versions.sh"
+
+    - name: Setup Node.js
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Restore tool binary cache
+      id: tools_cache
+      if: inputs.install-tools == 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/.local
+        key: tools-${{ runner.os }}-${{ steps.versions.outputs.versions-hash }}
+
+    - name: Install tool binaries
+      if: inputs.install-tools == 'true' && steps.tools_cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        TERRAFORM_VERSION: ${{ steps.versions.outputs.terraform }}
+        TFLINT_VERSION: ${{ steps.versions.outputs.tflint }}
+        CONFTEST_VERSION: ${{ steps.versions.outputs.conftest }}
+        INFRACOST_VERSION: ${{ steps.versions.outputs.infracost }}
+        COMMITLINT_VERSION: ${{ steps.versions.outputs.commitlint }}
+        PRE_COMMIT_VERSION: ${{ steps.versions.outputs.pre-commit }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/install-tools.sh"
+
+    - name: Save tool binary cache
+      if: inputs.install-tools == 'true' && steps.tools_cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/.local
+        key: ${{ steps.tools_cache.outputs.cache-primary-key }}
+
+    - name: Configure environment
+      shell: bash
+      env:
+        TERRAFORM_LOG_LEVEL: ${{ inputs.terraform-log-level }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/configure-env.sh"
+
+    - name: Verify required tools
+      if: inputs.install-tools != 'true'
+      shell: bash
+      env:
+        REQUIRED_TOOLS: ${{ inputs.required-tools }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/verify-tools.sh"
+
+    - name: Generate GitHub App token
+      id: app_token
+      if: inputs.github-app-id != ''
+      uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+      with:
+        app-id: ${{ inputs.github-app-id }}
+        private-key: ${{ inputs.github-app-private-key }}
+        owner: ${{ inputs.github-app-owner }}
+
+    - name: Configure git to use GitHub App token
+      if: inputs.github-app-id != ''
+      shell: bash
+      env:
+        APP_TOKEN: ${{ steps.app_token.outputs.token }}
+      run: |
+        git config --global url."https://x-access-token:${APP_TOKEN}@github.com/".insteadOf "https://github.com/"
+
+    - name: Azure login (OIDC)
+      uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
+      with:
+        client-id: ${{ inputs.azure-client-id }}
+        tenant-id: ${{ inputs.azure-tenant-id }}
+        subscription-id: ${{ inputs.azure-subscription-id }}

@@ -1,0 +1,25 @@
+---
+name: "Terraform Plan Report"
+description: "Render a Terraform plan JSON document as a self-contained HTML report"
+
+inputs:
+  plan-json:
+    description: "Path to the plan JSON, relative to GITHUB_WORKSPACE"
+    required: true
+  output-file:
+    description: "Destination HTML file, relative to GITHUB_WORKSPACE"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Generate plan HTML report
+      shell: bash
+      env:
+        PLAN_JSON: ${{ inputs.plan-json }}
+        OUTPUT_FILE: ${{ inputs.output-file }}
+      run: |
+        set -euo pipefail
+        node "$GITHUB_ACTION_PATH/scripts/plan-report.js" \
+          "$GITHUB_WORKSPACE/$PLAN_JSON" \
+          "$GITHUB_WORKSPACE/$OUTPUT_FILE"

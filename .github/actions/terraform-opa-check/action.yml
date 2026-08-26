@@ -1,0 +1,37 @@
+---
+name: "Terraform OPA Check"
+description: >-
+  Verify a Rego policy directory with `conftest verify`, then test a Terraform plan JSON against it
+  with `conftest test`. Skips cleanly when the directory holds no policies.
+
+inputs:
+  policies-directory:
+    description: "Directory holding the .rego policies"
+    required: true
+  plan-json:
+    description: "Terraform plan JSON to test, relative to GITHUB_WORKSPACE"
+    required: true
+  verify-output-file:
+    description: "Where to tee the verify output, relative to GITHUB_WORKSPACE"
+    required: true
+  test-output-file:
+    description: "Where to write the JSON test results, relative to GITHUB_WORKSPACE"
+    required: true
+
+outputs:
+  outcome:
+    description: "'success', 'failure' or 'skipped'"
+    value: ${{ steps.check.outputs.outcome }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Verify and test policies
+      id: check
+      shell: bash
+      env:
+        POLICIES_DIR: ${{ inputs.policies-directory }}
+        PLAN_JSON: ${{ inputs.plan-json }}
+        VERIFY_OUTPUT: ${{ inputs.verify-output-file }}
+        TEST_OUTPUT: ${{ inputs.test-output-file }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/opa-test.sh"

@@ -1,0 +1,130 @@
+workflow: Terraform Plan & Apply (Azure)
+file:     .github/workflows/terraform-plan-and-apply-azure.yml
+
+job: validate-and-plan
+  name:        Validate and Plan (${{ inputs.environment }})
+  if:          !(inputs.enable-apply && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
+  needs:       -
+  environment: ${{ inputs.environment }}-plan
+  matrix:      -
+  outputs:     -
+  steps:
+    1. Bootstrap
+       id:                -
+       uses:              appvia/appvia-cicd-workflows/.github/actions/azure-terraform-bootstrap@66dd7b475f38f66babc1af0fbc49efd301e06a17
+       if:                -
+       continue-on-error: -
+    2. Retrieve commitlint config
+       id:                -
+       uses:              -
+       if:                github.event_name == 'pull_request' && inputs.enable-commitlint
+       continue-on-error: -
+    3. Commitlint
+       id:                commitlint
+       uses:              -
+       if:                github.event_name == 'pull_request' && inputs.enable-commitlint
+       continue-on-error: true
+    4. Pre-commit
+       id:                pre_commit
+       uses:              appvia/appvia-cicd-workflows/.github/actions/pre-commit-check@66dd7b475f38f66babc1af0fbc49efd301e06a17
+       if:                -
+       continue-on-error: true
+    5. Terraform format check
+       id:                fmt_check
+       uses:              -
+       if:                -
+       continue-on-error: true
+    6. Prepare local TFLint config
+       id:                -
+       uses:              -
+       if:                -
+       continue-on-error: -
+    7. Run TFLint
+       id:                tflint
+       uses:              -
+       if:                -
+       continue-on-error: true
+    8. Terraform init
+       id:                init
+       uses:              appvia/appvia-cicd-workflows/.github/actions/azure-terraform-init@66dd7b475f38f66babc1af0fbc49efd301e06a17
+       if:                -
+       continue-on-error: true
+    9. Checkov security scan
+       id:                checkov
+       uses:              appvia/appvia-cicd-workflows/.github/actions/terraform-checkov-scan@66dd7b475f38f66babc1af0fbc49efd301e06a17
+       if:                -
+       continue-on-error: true
+   10. Terraform validate
+       id:                validate
+       uses:              -
+       if:                -
+       continue-on-error: true
+   11. Terraform plan
+       id:                plan
+       uses:              appvia/appvia-cicd-workflows/.github/actions/terraform-exec@66dd7b475f38f66babc1af0fbc49efd301e06a17
+       if:                steps.init.outcome == 'success'
+       continue-on-error: true
+   12. Terraform plan summary
+       id:                -
+       uses:              appvia/appvia-cicd-workflows/.github/actions/terraform-plan-summary@66dd7b475f38f66babc1af0fbc49efd301e06a17
+       if:                steps.plan.outputs.json-outcome == 'success'
+       continue-on-error: -
+   13. Generate plan HTML report
+       id:                plan_html
+       uses:              appvia/appvia-cicd-workflows/.github/actions/terraform-plan-report@66dd7b475f38f66babc1af0fbc49efd301e06a17
+       if:                steps.plan.outputs.json-outcome == 'success'
+       continue-on-error: true
+   14. OPA local policy check
+       id:                opa_local
+       uses:              appvia/appvia-cicd-workflows/.github/actions/terraform-opa-check@66dd7b475f38f66babc1af0fbc49efd301e06a17
+       if:                steps.plan.outputs.json-outcome == 'success'
+       continue-on-error: true
+   15. Infracost
+       id:                infracost
+       uses:              -
+       if:                inputs.enable-infracost && steps.plan.outputs.json-outcome == 'success' && env.INFRACOST_API_KEY != ''
+       continue-on-error: true
+   16. Collect step outcomes
+       id:                -
+       uses:              -
+       if:                always()
+       continue-on-error: -
+   17. Upload plan outputs
+       id:                -
+       uses:              actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+       if:                always()
+       continue-on-error: -
+   18. Post / update comment
+       id:                -
+       uses:              appvia/appvia-cicd-workflows/.github/actions/terraform-plan-comment@66dd7b475f38f66babc1af0fbc49efd301e06a17
+       if:                always() && github.event_name == 'pull_request'
+       continue-on-error: true
+   19. Final result
+       id:                -
+       uses:              -
+       if:                always()
+       continue-on-error: -
+
+job: apply
+  name:        Apply (${{ inputs.environment }})
+  if:          inputs.enable-apply && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+  needs:       -
+  environment: ${{ inputs.environment }}-apply
+  matrix:      -
+  outputs:     -
+  steps:
+    1. Bootstrap
+       id:                -
+       uses:              appvia/appvia-cicd-workflows/.github/actions/azure-terraform-bootstrap@66dd7b475f38f66babc1af0fbc49efd301e06a17
+       if:                -
+       continue-on-error: -
+    2. Terraform init
+       id:                init
+       uses:              appvia/appvia-cicd-workflows/.github/actions/azure-terraform-init@66dd7b475f38f66babc1af0fbc49efd301e06a17
+       if:                -
+       continue-on-error: -
+    3. Terraform apply
+       id:                -
+       uses:              appvia/appvia-cicd-workflows/.github/actions/terraform-exec@66dd7b475f38f66babc1af0fbc49efd301e06a17
+       if:                -
+       continue-on-error: -
