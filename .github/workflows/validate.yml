@@ -47,8 +47,83 @@ jobs:
         uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2
         with:
           fail-on-error: true
+          # SC2086 stays ignored for INLINE `run:` blocks only. Shell extracted
+          # into .github/actions/**/scripts is linted without ignores by the
+          # shellcheck job below; drop this once the inline blocks are gone.
           flags: "-ignore SC2086"
           shellcheck: true
+
+  shellcheck:
+    name: "Linting Shell Scripts"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Run ShellCheck
+        run: |
+          set -euo pipefail
+          mapfile -t scripts < <(find .github/actions -type f -name '*.sh' | sort)
+          if [ "${#scripts[@]}" -eq 0 ]; then
+            echo "No composite-action shell scripts to lint."
+            exit 0
+          fi
+          printf 'Linting:\n%s\n' "$(printf '  %s\n' "${scripts[@]}")"
+          shellcheck --external-sources "${scripts[@]}"
+
+  jscheck:
+    name: "Linting JavaScript"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Setup node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 20
+      - name: Check syntax
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find .github/actions -type f -name '*.js' | sort)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No composite-action JavaScript to check."
+            exit 0
+          fi
+          for file in "${files[@]}"; do
+            echo "Checking ${file}"
+            node --check "${file}"
+          done
+      - name: Run unit tests
+        run: node tests/azure/run-tests.js
+
+  workflow-baseline:
+    name: "Workflow Step Baseline"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Regenerate baseline
+        run: |
+          set -euo pipefail
+          python3 -c "import yaml" 2>/dev/null \
+            || python3 -m pip install --quiet pyyaml \
+            || python3 -m pip install --quiet --break-system-packages pyyaml
+          python3 scripts/render-workflow-steps.py \
+            --output-dir tests/azure/baseline \
+            .github/workflows/terraform-plan-and-apply-azure.yml \
+            .github/workflows/terraform-drift-azure.yml \
+            .github/workflows/terraform-destroy-azure.yml
+      - name: Fail if the baseline is stale
+        run: |
+          set -euo pipefail
+          # --porcelain rather than `git diff`, so a baseline for a newly added
+          # workflow (untracked) is caught as well as an edited one.
+          drift="$(git status --porcelain -- tests/azure/baseline)"
+          if [ -n "${drift}" ]; then
+            echo "${drift}"
+            git diff -- tests/azure/baseline || true
+            echo "::error::The Azure workflow step baseline is out of date. Run scripts/render-workflow-steps.py and commit tests/azure/baseline."
+            exit 1
+          fi
 
   yamllint:
     name: "Linting YAML"
@@ -63,5 +138,5 @@ jobs:
         with:
           yamllint_comment: false
           yamllint_config_filepath: .yamllint.yaml
-          yamllint_file_or_dir: .github/workflows
+          yamllint_file_or_dir: .github
           yamllint_strict: false

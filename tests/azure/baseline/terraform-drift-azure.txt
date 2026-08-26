@@ -1,0 +1,41 @@
+workflow: Terraform Drift Detection (Azure)
+file:     .github/workflows/terraform-drift-azure.yml
+
+job: drift
+  name:        Drift (${{ inputs.environment }})
+  if:          -
+  needs:       -
+  environment: ${{ inputs.environment }}-plan
+  matrix:      -
+  outputs:     -
+  steps:
+    1. Bootstrap
+       id:                -
+       uses:              appvia/appvia-cicd-workflows/.github/actions/azure-terraform-bootstrap@66dd7b475f38f66babc1af0fbc49efd301e06a17
+       if:                -
+       continue-on-error: -
+    2. Terraform init
+       id:                init
+       uses:              appvia/appvia-cicd-workflows/.github/actions/azure-terraform-init@66dd7b475f38f66babc1af0fbc49efd301e06a17
+       if:                -
+       continue-on-error: -
+    3. Terraform plan (drift check)
+       id:                plan
+       uses:              appvia/appvia-cicd-workflows/.github/actions/terraform-exec@66dd7b475f38f66babc1af0fbc49efd301e06a17
+       if:                -
+       continue-on-error: -
+    4. Terraform drift summary
+       id:                -
+       uses:              appvia/appvia-cicd-workflows/.github/actions/terraform-plan-summary@66dd7b475f38f66babc1af0fbc49efd301e06a17
+       if:                steps.plan.outputs.json-outcome == 'success'
+       continue-on-error: -
+    5. Open or update drift issue
+       id:                -
+       uses:              appvia/appvia-cicd-workflows/.github/actions/terraform-drift-issue@66dd7b475f38f66babc1af0fbc49efd301e06a17
+       if:                steps.plan.outputs.exit-code == '2'
+       continue-on-error: -
+    6. Send Slack notification if drift is detected
+       id:                -
+       uses:              slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a
+       if:                steps.plan.outputs.exit-code == '2' && env.SLACK_WEBHOOK != ''
+       continue-on-error: -

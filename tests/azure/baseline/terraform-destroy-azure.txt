@@ -1,0 +1,31 @@
+workflow: Terraform Destroy (Azure)
+file:     .github/workflows/terraform-destroy-azure.yml
+
+job: destroy
+  name:        Destroy (${{ inputs.environment }})
+  if:          inputs.confirmation == github.repository
+  needs:       -
+  environment: ${{ inputs.environment }}-apply
+  matrix:      -
+  outputs:     -
+  steps:
+    1. Fail if confirmation does not match
+       id:                -
+       uses:              -
+       if:                inputs.confirmation != github.repository
+       continue-on-error: -
+    2. Bootstrap
+       id:                -
+       uses:              appvia/appvia-cicd-workflows/.github/actions/azure-terraform-bootstrap@66dd7b475f38f66babc1af0fbc49efd301e06a17
+       if:                -
+       continue-on-error: -
+    3. Terraform init
+       id:                init
+       uses:              appvia/appvia-cicd-workflows/.github/actions/azure-terraform-init@66dd7b475f38f66babc1af0fbc49efd301e06a17
+       if:                -
+       continue-on-error: -
+    4. Terraform destroy
+       id:                -
+       uses:              appvia/appvia-cicd-workflows/.github/actions/terraform-exec@66dd7b475f38f66babc1af0fbc49efd301e06a17
+       if:                -
+       continue-on-error: -
