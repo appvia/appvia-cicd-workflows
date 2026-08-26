@@ -11,14 +11,18 @@ Licensed under Apache 2.0.
 ```
 .github/
   workflows/       # Reusable workflow files (workflow_call triggers)
-  actions/         # Composite actions (used by workflows)
+  actions/         # Composite actions (used by workflows), each owning its own scripts/ dir
   dependabot.yml   # Weekly GitHub Actions dependency updates
 config/
   .tflint.hcl      # TFLint config (AWS plugin, required tags: Product, Environment, Owner)
+  .pre-commit-config.yaml  # Reference config for consumer repositories to copy
   commitlint.config.js
 scripts/
-  render-diff.sh          # Terragrunt input diff between branches
+  audit_sha_pinning.sh    # Developer utility
+  render-diff.sh          # Terragrunt input diff between branches (curl-fetched by terragrunt-diff)
+  render-workflow-steps.py # Renders tests/azure/baseline snapshots
   update-documetation.sh  # Batch terraform-docs PR creation (note: filename has typo, preserved intentionally)
+  validate-promotion.sh   # Semver promotion gate (curl-fetched by kubernetes-platform-promotion)
 docs/              # Markdown docs for each workflow
 ```
 
@@ -167,5 +171,6 @@ Conventional commits enforced via commitlint:
 
 ## Scripts
 
-- `scripts/render-diff.sh`: Requires `terragrunt`, `jq`, `git`. Compares Terragrunt rendered inputs between two branches. Supports `NO_COLOR=true` for CI. Used by the `terragrunt-diff` action.
+- `scripts/render-diff.sh`: Requires `terragrunt`, `jq`, `git`. Compares Terragrunt rendered inputs between two branches. Supports `NO_COLOR=true` for CI. `curl`-fetched at runtime by the `terragrunt-diff` action.
+- `scripts/validate-promotion.sh`: Semver promotion gate. `curl`-fetched at runtime by the `kubernetes-platform-promotion` action; exercised by `tests/promotion/run-tests.sh`.
 - `scripts/update-documetation.sh`: Batch utility to regenerate and PR terraform-docs across multiple module repos.
