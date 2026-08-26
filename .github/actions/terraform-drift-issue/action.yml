@@ -1,0 +1,38 @@
+---
+name: "Terraform Drift Issue"
+description: >-
+  Open or update the GitHub issue tracking Terraform drift for one environment. The issue is
+  matched by a hidden marker comment, so repeated runs update a single issue rather than filing a
+  new one each time.
+
+inputs:
+  environment:
+    description: "Environment the drift was detected in; scopes the issue marker"
+    required: true
+  plan-output-file:
+    description: "File holding the drift plan output, relative to GITHUB_WORKSPACE"
+    required: false
+    default: "drift_output.txt"
+  labels:
+    description: "Comma-separated labels applied when the issue is first created"
+    required: false
+    default: "drift"
+
+runs:
+  using: "composite"
+  steps:
+    # github-script resolves $GITHUB_ACTION_PATH to its own directory, so capture ours first.
+    - name: Export action path
+      shell: bash
+      run: echo "COMPOSITE_ACTION_PATH=$GITHUB_ACTION_PATH" >>"$GITHUB_ENV"
+
+    - name: Open or update drift issue
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      env:
+        ENVIRONMENT: ${{ inputs.environment }}
+        PLAN_OUTPUT_FILE: ${{ inputs.plan-output-file }}
+        ISSUE_LABELS: ${{ inputs.labels }}
+      with:
+        script: |
+          const run = require(`${process.env.COMPOSITE_ACTION_PATH}/scripts/drift-issue.js`);
+          await run({ github, context, core });

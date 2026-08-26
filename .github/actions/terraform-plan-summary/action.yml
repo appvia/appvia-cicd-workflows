@@ -1,0 +1,22 @@
+---
+name: "Terraform Plan Summary"
+description: "Write a concise Terraform plan summary to the GitHub Actions job summary"
+
+inputs:
+  plan-json:
+    description: "Path to the plan JSON, relative to GITHUB_WORKSPACE"
+    required: true
+  title:
+    description: "Heading written to the GitHub Actions job summary"
+    required: false
+    default: "Terraform Plan Summary"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Write Terraform plan summary
+      shell: bash
+      env:
+        PLAN_JSON: ${{ inputs.plan-json }}
+        TITLE: ${{ inputs.title }}
+      run: node "$GITHUB_ACTION_PATH/scripts/write-summary.js" "$GITHUB_WORKSPACE/$PLAN_JSON" "$GITHUB_STEP_SUMMARY" "$TITLE"

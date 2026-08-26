@@ -1,0 +1,93 @@
+---
+name: "Terraform Exec"
+description: >-
+  Run terraform plan, apply or destroy with consistent argument assembly, exit-code capture through
+  the tee pipeline, and optional conversion of the plan to JSON followed by deletion of the binary
+  plan. Cloud-agnostic: the backend is configured by whichever init ran beforehand.
+
+inputs:
+  command:
+    description: "One of plan, apply or destroy"
+    required: true
+  working-directory:
+    description: "Directory holding the root module"
+    required: false
+    default: "terraform"
+  var-file:
+    description: "Environment var-file, relative to working-directory"
+    required: false
+    default: ""
+  common-var-file:
+    description: "Shared var-file, relative to working-directory. Omitted when blank."
+    required: false
+    default: ""
+  parallelism:
+    description: "Value for -parallelism. Omitted when blank."
+    required: false
+    default: ""
+  extra-args:
+    description: "Additional arguments appended verbatim. Word-split on whitespace."
+    required: false
+    default: ""
+  out-file:
+    description: "Plan file for -out, relative to working-directory. Blank means no -out (plan only)."
+    required: false
+    default: ""
+  detailed-exitcode:
+    description: "Pass -detailed-exitcode, so 0 = no changes, 2 = changes, 1 = error (plan only)"
+    required: false
+    default: "false"
+  convert-to-json:
+    description: "After a successful plan, run `terraform show -json` and delete the binary plan"
+    required: false
+    default: "false"
+  json-file:
+    description: "Destination for the plan JSON, relative to working-directory"
+    required: false
+    default: ""
+  output-file:
+    description: "Optional path, relative to GITHUB_WORKSPACE, to tee the command output to"
+    required: false
+    default: ""
+  fail-on-error:
+    description: >-
+      Fail the step when the command fails. A detailed plan exit code of 2 means changes were found
+      and does not fail the step. Set to 'false' when the caller inspects the outputs itself and
+      reports a failure later, e.g. in a PR comment.
+    required: false
+    default: "true"
+
+outputs:
+  exit-code:
+    description: "Raw terraform exit code"
+    value: ${{ steps.exec.outputs.exit-code }}
+  failed:
+    description: "'true' when the command errored. Exit code 2 under -detailed-exitcode is not an error."
+    value: ${{ steps.exec.outputs.failed }}
+  json-outcome:
+    description: "'success', 'failure' or 'skipped' for the plan-to-JSON conversion"
+    value: ${{ steps.exec.outputs.json-outcome }}
+  json-path:
+    description: "Path to the generated plan JSON, relative to GITHUB_WORKSPACE (blank when not produced)"
+    value: ${{ steps.exec.outputs.json-path }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Terraform ${{ inputs.command }}
+      id: exec
+      shell: bash
+      env:
+        COMMAND: ${{ inputs.command }}
+        WORKING_DIR: ${{ inputs.working-directory }}
+        VAR_FILE: ${{ inputs.var-file }}
+        COMMON_VAR_FILE: ${{ inputs.common-var-file }}
+        PARALLELISM: ${{ inputs.parallelism }}
+        EXTRA_ARGS: ${{ inputs.extra-args }}
+        OUT_FILE: ${{ inputs.out-file }}
+        DETAILED_EXITCODE: ${{ inputs.detailed-exitcode }}
+        CONVERT_TO_JSON: ${{ inputs.convert-to-json }}
+        JSON_FILE: ${{ inputs.json-file }}
+        OUTPUT_FILE: ${{ inputs.output-file }}
+        FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/terraform-exec.sh"

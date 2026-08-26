@@ -1,0 +1,96 @@
+---
+name: "Azure Terraform Init"
+description: >-
+  Resolve the state key and var-files for an environment, restore the provider plugin cache, and
+  run terraform init against the azurerm backend. Resolution and init live together because init
+  cannot run without the resolved state key.
+
+inputs:
+  working-directory:
+    description: "Directory holding the root module"
+    required: false
+  environment:
+    description: "Environment name (e.g. dev/tst/stg/prd) used to derive the defaults below"
+    required: true
+  terraform-state-key:
+    description: "State blob key (default: <environment>.tfstate)"
+    required: false
+  terraform-var-file:
+    description: "Env var-file (default: environments/<environment>.tfvars). Must exist."
+    required: false
+  terraform-common-var-file:
+    description: "Shared var-file applied to every environment. Optional: ignored when absent."
+    required: false
+  backend-resource-group-name:
+    description: "Resource group containing the state storage account"
+    required: true
+  backend-storage-account-name:
+    description: "Storage account holding Terraform state"
+    required: true
+  backend-container-name:
+    description: "Blob container for state; one container per repository"
+    required: true
+  terraform-init-extra-args:
+    description: "Additional arguments passed to terraform init"
+    required: false
+  output-file:
+    description: "Optional path (relative to GITHUB_WORKSPACE) to tee init output to, for later capture as an artifact"
+    required: false
+  enable-provider-cache:
+    description: "Restore and save the Terraform provider plugin cache around init"
+    required: false
+
+outputs:
+  tf-state-key:
+    description: "Resolved state blob key"
+    value: ${{ steps.resolve.outputs.tf-state-key }}
+  tf-var-file:
+    description: "Resolved environment var-file"
+    value: ${{ steps.resolve.outputs.tf-var-file }}
+  tf-common-var-file:
+    description: "Resolved common var-file (blank when not present)"
+    value: ${{ steps.resolve.outputs.tf-common-var-file }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Resolve state key and var-files
+      id: resolve
+      shell: bash
+      env:
+        ENVIRONMENT: ${{ inputs.environment }}
+        WORKING_DIR: ${{ inputs.working-directory }}
+        STATE_KEY_INPUT: ${{ inputs.terraform-state-key }}
+        VAR_FILE_INPUT: ${{ inputs.terraform-var-file }}
+        COMMON_VAR_FILE_INPUT: ${{ inputs.terraform-common-var-file }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/resolve-config.sh"
+
+    - name: Restore Terraform provider cache
+      id: provider_cache
+      if: inputs.enable-provider-cache == 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/.terraform.d/plugin-cache
+        key: tf-providers-${{ runner.os }}-${{ hashFiles(format('{0}/.terraform.lock.hcl', inputs.working-directory)) }}
+        restore-keys: |
+          tf-providers-${{ runner.os }}-
+
+    - name: Terraform init
+      shell: bash
+      env:
+        WORKING_DIR: ${{ inputs.working-directory }}
+        BACKEND_RESOURCE_GROUP_NAME: ${{ inputs.backend-resource-group-name }}
+        BACKEND_STORAGE_ACCOUNT_NAME: ${{ inputs.backend-storage-account-name }}
+        BACKEND_CONTAINER_NAME: ${{ inputs.backend-container-name }}
+        TF_STATE_KEY: ${{ steps.resolve.outputs.tf-state-key }}
+        EXTRA_ARGS: ${{ inputs.terraform-init-extra-args }}
+        OUTPUT_FILE: ${{ inputs.output-file }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/terraform-init.sh"
+
+    - name: Save Terraform provider cache
+      if: inputs.enable-provider-cache == 'true' && steps.provider_cache.outputs.cache-hit != 'true'
+      continue-on-error: true
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/.terraform.d/plugin-cache
+        key: ${{ steps.provider_cache.outputs.cache-primary-key }}
