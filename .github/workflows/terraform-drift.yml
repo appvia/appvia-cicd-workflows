@@ -139,7 +139,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Terraform Bootstrap
         id: bootstrap
-        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap@c80bf314a4afac263cabe7dff37da8d26b416db3 # main
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap@135dbad9eebddc8555381d340324b1b48f762c21 # main
         with:
           actions-id: ${{ secrets.actions-id }}
           actions-secret: ${{ secrets.actions-secret }}
