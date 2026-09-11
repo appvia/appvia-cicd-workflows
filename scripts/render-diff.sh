@@ -110,8 +110,8 @@ render_terragrunt_inputs() {
   local unit_file="$1"
   local branch="$2"
   local output_file="$3"
-
-  print_color "$BLUE" "Rendering inputs for unit: ${unit_file} on $branch..."
+  local unit_dir
+  unit_dir="$(dirname "$unit_file")"
 
   # Checkout the specified branch
   git checkout "$branch" > /dev/null 2>&1 || {
@@ -126,9 +126,11 @@ render_terragrunt_inputs() {
     return 0
   fi
 
-  # Render the Terragrunt configuration and extract inputs
-  if terragrunt render --config "$unit_file" --all -json 2> /dev/null | jq -r '.inputs // {}' > "$output_file" 2> /dev/null; then
-    print_color "$GREEN" "✓ Successfully rendered inputs for $(basename "$(dirname "$unit_file")")"
+  # Render the Terragrunt configuration and extract inputs.
+  # Must run from the unit's own directory: --config combined with --all (or
+  # with a cwd other than the unit dir) renders every unit in the stack, not
+  # just this one, which would leak every other account's inputs into this file.
+  if (cd "$unit_dir" && terragrunt render -json) 2> /dev/null | jq -r '.inputs // {}' > "$output_file" 2> /dev/null; then
     return 0
   else
     print_color "$YELLOW" "⚠ Warning: Could not render inputs for $(basename "$(dirname "$unit_file")") on $branch"
@@ -324,12 +326,10 @@ main() {
     main_file="$TEMP_DIR/main_$(basename "$(dirname "$unit")")_$(basename "$(dirname "$(dirname "$unit")")").json"
 
     # Render PR branch inputs
-    render_terragrunt_inputs "$unit" "$PR_BRANCH" "$pr_file"
+    render_terragrunt_inputs "$unit" "$PR_BRANCH" "$pr_file" || echo
 
     # Render main branch inputs
-    render_terragrunt_inputs "$unit" "$MAIN_BRANCH" "$main_file"
-
-    echo
+    render_terragrunt_inputs "$unit" "$MAIN_BRANCH" "$main_file" || echo
   done
 
   # Compare inputs for each unit
