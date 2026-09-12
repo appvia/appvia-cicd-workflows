@@ -23,28 +23,6 @@ on:
         description: "Must equal <owner>/<repo> of the calling repository to proceed"
         required: true
         type: string
-      # --- Azure identity (destroy uses the READ-WRITE service principal) ---
-      azure-client-id:
-        description: "Client ID of the read-write Entra service principal"
-        required: true
-        type: string
-      azure-tenant-id:
-        description: "Entra tenant ID"
-        required: true
-        type: string
-      azure-subscription-id:
-        description: "Target subscription ID"
-        required: true
-        type: string
-      # --- Remote state backend (azurerm) ---
-      backend-resource-group-name:
-        description: "Resource group of the Terraform state storage account"
-        required: true
-        type: string
-      backend-storage-account-name:
-        description: "Terraform state storage account name"
-        required: true
-        type: string
       backend-container-name:
         description: "Blob container for state; one container per repository"
         required: true
@@ -56,7 +34,7 @@ on:
         type: string
       # --- Terraform inputs ---
       environment:
-        description: "The environment being destroyed (dev/tst/stg/prd)"
+        description: "The Terraform environment being destroyed (dev/tst/stg/prd). Also names the GitHub Environment the job enters, '<environment>-apply', which must already exist."
         required: true
         type: string
       working-directory:
@@ -126,10 +104,14 @@ jobs:
     if: inputs.confirmation == github.repository
     runs-on: ${{ inputs.runs-on }}
     timeout-minutes: ${{ inputs.job-timeout-minutes }}
+    environment: ${{ inputs.environment }}-apply
     env:
-      ARM_CLIENT_ID: ${{ inputs.azure-client-id }}
-      ARM_TENANT_ID: ${{ inputs.azure-tenant-id }}
-      ARM_SUBSCRIPTION_ID: ${{ inputs.azure-subscription-id }}
+      ARM_CLIENT_ID: ${{ vars.ALZ_AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.ALZ_AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.ALZ_AZURE_SUBSCRIPTION_ID }}
+      BACKEND_RESOURCE_GROUP_NAME: ${{ vars.ALZ_BACKEND_RESOURCE_GROUP_NAME }}
+      BACKEND_STORAGE_ACCOUNT_NAME: ${{ vars.ALZ_BACKEND_STORAGE_ACCOUNT_NAME }}
+      BACKEND_CONTAINER_NAME: ${{ inputs.backend-container-name }}
       ARM_USE_OIDC: "true"
       ARM_USE_AZUREAD: "true"
       TF_INPUT: "0"
@@ -189,9 +171,9 @@ jobs:
       - name: Azure login (OIDC — read-write SP)
         uses: azure/login@7ddb5af1ef8758cf1353cf3b42f940aee27ba21c # v3
         with:
-          client-id: ${{ inputs.azure-client-id }}
-          tenant-id: ${{ inputs.azure-tenant-id }}
-          subscription-id: ${{ inputs.azure-subscription-id }}
+          client-id: ${{ env.ARM_CLIENT_ID }}
+          tenant-id: ${{ env.ARM_TENANT_ID }}
+          subscription-id: ${{ env.ARM_SUBSCRIPTION_ID }}
 
       # NOTE: do not use the `[ -z "$X" ] && X=...` one-liner form here — it
       # returns 1 when the variable is already set, which `set -e` treats as a
@@ -225,9 +207,9 @@ jobs:
         run: |
           set -euo pipefail
           terraform -chdir="$WORKING_DIR" init -input=false -reconfigure \
-            -backend-config="resource_group_name=${{ inputs.backend-resource-group-name }}" \
-            -backend-config="storage_account_name=${{ inputs.backend-storage-account-name }}" \
-            -backend-config="container_name=${{ inputs.backend-container-name }}" \
+            -backend-config="resource_group_name=${BACKEND_RESOURCE_GROUP_NAME}" \
+            -backend-config="storage_account_name=${BACKEND_STORAGE_ACCOUNT_NAME}" \
+            -backend-config="container_name=${BACKEND_CONTAINER_NAME}" \
             -backend-config="key=${TF_STATE_KEY}"
 
       - name: Terraform destroy
