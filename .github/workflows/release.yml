@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   release:
-    uses: appvia/appvia-cicd-workflows/.github/workflows/terraform-module-release.yml@c80bf314a4afac263cabe7dff37da8d26b416db3 # main
+    uses: appvia/appvia-cicd-workflows/.github/workflows/terraform-module-release.yml@0ef7f561e899508b7425574ce3d9e9f57ced6154 # main
     name: GitHub Release
     with:
       enable-cliff: true
