@@ -253,7 +253,7 @@ jobs:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Terraform Format
         id: format
-        uses: dflook/terraform-fmt-check@5702d43749973bd5b54e2380f090c1ad8054ecd4 # v3
+        uses: dflook/terraform-fmt-check@e3f43c85d3e0a6bb3adb7be8c423c22c42d572bd # v3
 
   terraform-lint:
     name: "Terraform Lint"
