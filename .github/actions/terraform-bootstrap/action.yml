@@ -26,6 +26,10 @@ inputs:
   aws-region:
     description: "The AWS region to deploy to"
     required: true
+  enable-opentofu:
+    description: "Use OpenTofu instead of Terraform"
+    type: boolean
+    default: false
   enable-private-access:
     description: Optional flag to state if terraform requires pulling private modules
     required: true
@@ -37,7 +41,7 @@ inputs:
     required: false
     default: "22"
   organization-name:
-    description: "The name of the Github organization"
+    description: "The name of the Github organization; defaults to the owner of the calling repository"
     required: false
   terraform-dir:
     description: "The directory to validate"
@@ -72,18 +76,21 @@ runs:
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
       with:
         node-version: ${{ inputs.node-version }}
-
+    - name: Setup OpenTofu
+      if: ${{ inputs.enable-opentofu == 'true' }}
+      uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+      with:
+        tofu_version: ${{ inputs.terraform-version }}
     - name: Setup Terraform
+      if: ${{ inputs.enable-opentofu == 'false' }}
       uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
       with:
         terraform_version: ${{ inputs.terraform-version }}
-
     - name: Retrieve Web Identity Token for AWS Authentication
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       run: |
         curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" | jq -r '.value' > "${{ inputs.aws-web-identity-token-file }}"
-
     - name: Determine AWS Role
       id: role
       shell: bash
@@ -94,7 +101,11 @@ runs:
         if [ "${{ inputs.use-env-as-suffix }}" == "true" ]; then
           role_suffix="-${{ inputs.environment }}"
         fi
-        if [[ "${GITHUB_REF##*/}" == "main" ]]; then
+        ## The read-write role is used for the default branch and for tag refs (tag pushes
+        ## are how a promotion to a protected environment is triggered); everything else
+        ## gets the read-only role. Note this compares the full ref, so a branch such as
+        ## 'feature/main' no longer resolves to the read-write role.
+        if [[ "${GITHUB_REF}" == "refs/heads/main" || "${GITHUB_REF}" == refs/tags/* ]]; then
           echo "name=${aws_write_role_name:-${{ inputs.aws-role }}${role_suffix}}" >> "${GITHUB_OUTPUT}"
         else
           echo "name=${aws_read_role_name:-${{ inputs.aws-role }}${role_suffix}-ro}" >> "${GITHUB_OUTPUT}"
@@ -130,7 +141,7 @@ runs:
       with:
         client-id: ${{ inputs.actions-id }}
         private-key: ${{ inputs.actions-secret }}
-        owner: ${{ inputs.organization-name }}
+        owner: ${{ inputs.organization-name || github.repository_owner }}
 
     - name: Setup Credentials
       if: ${{ inputs.enable-private-access == 'true' }}
@@ -142,8 +153,10 @@ runs:
       id: init
       shell: bash
       working-directory: ${{ inputs.working-directory }}
+      env:
+        TOOL_NAME: ${{ inputs.enable-opentofu == 'true' && 'tofu' || 'terraform' }}
       run: |
-        terraform -chdir=${{ inputs.terraform-dir }} init \
+        "${TOOL_NAME}" -chdir=${{ inputs.terraform-dir }} init \
           -backend-config="bucket=${{ inputs.aws-account-id }}-${{ inputs.aws-region }}-tfstate" \
           -backend-config="key=${{ steps.state-key.outputs.name }}" \
           -backend-config="encrypt=true" \

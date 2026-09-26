@@ -39,13 +39,13 @@ Teams are not required to use all five environments. The validation walks **back
 
 ## Inputs
 
-| Input             | Description                                  | Required | Default                      |
-| ----------------- | -------------------------------------------- | -------- | ---------------------------- |
-| `cicd-repository` | The repository for the cicd workflows        | No       | appvia/appvia-cicd-workflows |
-| `cicd-branch`     | The branch for the cicd workflows            | No       | main                         |
-| `workloads-dir`   | Path to the workloads applications directory | No       | `workloads/applications`     |
-| `promotion-order` | Comma-separated promotion order              | No       | `dev,qa,staging,uat,prod`    |
-| `github-token`    | GitHub token for PR comments                 | No       | `${{ github.token }}`        |
+| Input             | Description                                  | Required | Default                   |
+| ----------------- | -------------------------------------------- | -------- | ------------------------- |
+| `workloads-dir`   | Path to the workloads applications directory | No       | `workloads/applications`  |
+| `promotion-order` | Comma-separated promotion order              | No       | `dev,qa,staging,uat,prod` |
+| `github-token`    | GitHub token for PR comments                 | No       | `${{ github.token }}`     |
+
+The validation script is bundled with the action, so no configuration is fetched over the network and the action works when this repository is private. The former `cicd-repository` and `cicd-branch` inputs have been removed — the script is always taken from the ref the action is pinned to.
 
 ## Outputs
 

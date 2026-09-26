@@ -14,18 +14,6 @@ on:
         required: false
 
     inputs:
-      cicd-repository:
-        default: "appvia/appvia-cicd-workflows"
-        description: "The repository to pull the CI/CD workflows from"
-        required: false
-        type: string
-
-      cicd-branch:
-        default: "main"
-        description: "The branch to pull the CI/CD workflows from"
-        required: false
-        type: string
-
       enable-infracost:
         default: false
         description: "Whether to run infracost on the Terraform Plan (secrets.infracost-api-key must be set if enabled)"
@@ -43,6 +31,11 @@ on:
         description: "Whether to run checkov security scanning"
         required: false
         type: boolean
+
+      enable-opentofu:
+        description: "Use OpenTofu instead of Terraform"
+        type: boolean
+        default: false
 
       enable-private-access:
         description: Optional flag to state if terraform requires pulling private modules
@@ -63,8 +56,7 @@ on:
         type: number
 
       organization-name:
-        default: "appvia"
-        description: "The name of the GitHub organization"
+        description: "The name of the GitHub organization; defaults to the owner of the calling repository"
         required: false
         type: string
 
@@ -130,8 +122,11 @@ jobs:
       - name: Install Dependencies
         run: npm install @commitlint/config-conventional @commitlint/cli
       - name: Retrieve Commit Configuration
-        run: |
-          wget https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/config/commitlint.config.js -O commitlint.config.js
+        uses: appvia/appvia-cicd-workflows/.github/actions/cicd-config@main # main
+        with:
+          source: config/commitlint.config.js
+          destination: commitlint.config.js
+          working-directory: ${{ inputs.working-directory }}
       - name: Run Commitlint
         id: commitlint
         run: npx commitlint --config commitlint.config.js --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
@@ -142,18 +137,26 @@ jobs:
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
+    env:
+      TOOL_NAME: ${{ inputs.enable-opentofu && 'tofu' || 'terraform' }}
     outputs:
       result: ${{ steps.format.outcome }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Setup OpenTofu
+        if: ${{ inputs.enable-opentofu }}
+        uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+        with:
+          tofu_version: ${{ inputs.terraform-version }}
       - name: Setup Terraform
+        if: ${{ !inputs.enable-opentofu }}
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
         with:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Terraform Format
         id: format
-        run: terraform -chdir=${{ inputs.terraform-dir }} fmt -check -recursive
+        run: ${{ env.TOOL_NAME }} -chdir=${{ inputs.terraform-dir }} fmt -check -recursive
 
   terraform-lint:
     name: "Terraform Lint"
@@ -168,10 +171,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Terraform Bootstrap
         id: bootstrap
-        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@c80bf314a4afac263cabe7dff37da8d26b416db3 # main
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main # main
         with:
           actions-id: ${{ secrets.actions-id }}
           actions-secret: ${{ secrets.actions-secret }}
+          enable-opentofu: ${{ inputs.enable-opentofu }}
           enable-private-access: ${{ inputs.enable-private-access }}
           organization-name: ${{ inputs.organization-name }}
           terraform-dir: ${{ inputs.terraform-dir }}
@@ -190,6 +194,8 @@ jobs:
     name: "Terraform Unit Tests"
     runs-on: ubuntu-latest
     if: inputs.enable-terraform-tests
+    env:
+      TOOL_NAME: ${{ inputs.enable-opentofu && 'tofu' || 'terraform' }}
     defaults:
       run:
         working-directory: .
@@ -200,10 +206,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Terraform Bootstrap
         id: bootstrap
-        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@c80bf314a4afac263cabe7dff37da8d26b416db3 # main
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main # main
         with:
           actions-id: ${{ secrets.actions-id }}
           actions-secret: ${{ secrets.actions-secret }}
+          enable-opentofu: ${{ inputs.enable-opentofu }}
           enable-private-access: ${{ inputs.enable-private-access }}
           organization-name: ${{ inputs.organization-name }}
           terraform-dir: .
@@ -212,7 +219,7 @@ jobs:
           working-directory: .
       - name: Run Tests
         id: tests
-        run: terraform -chdir=${{ inputs.terraform-tests-dir }} test
+        run: ${{ env.TOOL_NAME }} -chdir=${{ inputs.terraform-tests-dir }} test
 
   terraform-init:
     name: "Terraform Init"
@@ -231,10 +238,11 @@ jobs:
           node-version: ${{ inputs.node-version }}
       - name: Terraform Bootstrap
         id: bootstrap
-        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@c80bf314a4afac263cabe7dff37da8d26b416db3 # main
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main # main
         with:
           actions-id: ${{ secrets.actions-id }}
           actions-secret: ${{ secrets.actions-secret }}
+          enable-opentofu: ${{ inputs.enable-opentofu }}
           enable-private-access: ${{ inputs.enable-private-access }}
           organization-name: ${{ inputs.organization-name }}
           terraform-dir: ${{ inputs.terraform-dir }}
@@ -245,6 +253,8 @@ jobs:
   terraform-validate:
     name: "Terraform Validate"
     runs-on: ubuntu-latest
+    env:
+      TOOL_NAME: ${{ inputs.enable-opentofu && 'tofu' || 'terraform' }}
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
@@ -259,10 +269,11 @@ jobs:
           node-version: ${{ inputs.node-version }}
       - name: Terraform Bootstrap
         id: bootstrap
-        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@c80bf314a4afac263cabe7dff37da8d26b416db3 # main
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main # main
         with:
           actions-id: ${{ secrets.actions-id }}
           actions-secret: ${{ secrets.actions-secret }}
+          enable-opentofu: ${{ inputs.enable-opentofu }}
           enable-private-access: ${{ inputs.enable-private-access }}
           organization-name: ${{ inputs.organization-name }}
           terraform-dir: ${{ inputs.terraform-dir }}
@@ -271,7 +282,7 @@ jobs:
           working-directory: ${{ inputs.working-directory }}
       - name: Terraform Validate
         id: validate
-        run: terraform -chdir=${{ inputs.terraform-dir }} validate -no-color
+        run: ${{ env.TOOL_NAME }} -chdir=${{ inputs.terraform-dir }} validate -no-color
 
   terraform-security:
     name: "Static Security Analysis"
@@ -292,10 +303,11 @@ jobs:
           fi
       - name: Terraform Bootstrap
         id: bootstrap
-        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@c80bf314a4afac263cabe7dff37da8d26b416db3 # main
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main # main
         with:
           actions-id: ${{ secrets.actions-id }}
           actions-secret: ${{ secrets.actions-secret }}
+          enable-opentofu: ${{ inputs.enable-opentofu }}
           enable-private-access: ${{ inputs.enable-private-access }}
           organization-name: ${{ inputs.organization-name }}
           terraform-dir: ${{ inputs.terraform-dir }}
@@ -329,10 +341,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Terraform Bootstrap
         id: bootstrap
-        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@c80bf314a4afac263cabe7dff37da8d26b416db3 # main
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main # main
         with:
           actions-id: ${{ secrets.actions-id }}
           actions-secret: ${{ secrets.actions-secret }}
+          enable-opentofu: ${{ inputs.enable-opentofu }}
           enable-private-access: ${{ inputs.enable-private-access }}
           organization-name: ${{ inputs.organization-name }}
           terraform-dir: ${{ inputs.terraform-dir }}
@@ -356,6 +369,8 @@ jobs:
   terraform-validate-examples:
     name: "Terraform Validate Examples"
     runs-on: ubuntu-latest
+    env:
+      TOOL_NAME: ${{ inputs.enable-opentofu && 'tofu' || 'terraform' }}
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
@@ -370,10 +385,11 @@ jobs:
           node-version: ${{ inputs.node-version }}
       - name: Terraform Bootstrap
         id: bootstrap
-        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@c80bf314a4afac263cabe7dff37da8d26b416db3 # main
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-bootstrap-noauth@main # main
         with:
           actions-id: ${{ secrets.actions-id }}
           actions-secret: ${{ secrets.actions-secret }}
+          enable-opentofu: ${{ inputs.enable-opentofu }}
           enable-private-access: ${{ inputs.enable-private-access }}
           organization-name: ${{ inputs.organization-name }}
           terraform-dir: ${{ inputs.terraform-dir }}
@@ -386,8 +402,8 @@ jobs:
           for dir in examples/*; do
             if [ -d "$dir" ]; then
               echo "--> Validating $dir"
-              terraform -chdir="${dir}" init -backend=false
-              terraform -chdir="${dir}" validate -no-color
+              ${{ env.TOOL_NAME }} -chdir="${dir}" init -backend=false
+              ${{ env.TOOL_NAME }} -chdir="${dir}" validate -no-color
             fi
           done
 

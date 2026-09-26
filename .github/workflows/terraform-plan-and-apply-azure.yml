@@ -194,17 +194,6 @@ on:
         required: false
         default: "main"
         type: string
-      # --- Centralised config source ---
-      cicd-repository:
-        description: "Repo hosting centralised config (tflint, commitlint)"
-        required: false
-        default: "appvia/appvia-cicd-workflows"
-        type: string
-      cicd-branch:
-        description: "Ref of the centralised config repo"
-        required: false
-        default: "main"
-        type: string
     secrets:
       infracost-api-key:
         description: "Infracost API key (required if enable-infracost)"
@@ -403,8 +392,10 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Retrieve commitlint config
         if: github.event_name == 'pull_request' && inputs.enable-commitlint
-        run: |
-          curl -fsSL "https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/config/commitlint.config.js" -o commitlint.config.js
+        uses: appvia/appvia-cicd-workflows/.github/actions/cicd-config@main # main
+        with:
+          source: config/commitlint.config.js
+          destination: commitlint.config.js
 
       - name: Commitlint
         id: commitlint
@@ -425,8 +416,10 @@ jobs:
           terraform -chdir="$WORKING_DIR" fmt -check -recursive 2>&1 | tee "$GITHUB_WORKSPACE/fmt_check_output_${ENV}.txt"
 
       - name: Retrieve centralised tflint config
-        run: |
-          curl -fsSL "https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/config/.tflint.hcl" -o .tflint.hcl || echo "no centralised config; using repo .tflint.hcl"
+        uses: appvia/appvia-cicd-workflows/.github/actions/cicd-config@main # main
+        with:
+          source: config/.tflint.hcl
+          destination: .tflint.hcl
 
       - name: Run TFLint
         id: tflint

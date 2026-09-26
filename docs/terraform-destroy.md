@@ -2,6 +2,15 @@
 
 This workflow is used to manually run terraform destroy on AWS infrastructure. In order to trigger the workflow, firstly the workflow must be referenced from the calling workflow flow, see below. The user can then issue a workflow_dispatch event from the Actions tab in the repository, confirming the repository name within a `confirmation` field to ensure no accidental deletion occurs.
 
+## OpenTofu Support
+
+This workflow supports both Terraform and OpenTofu. Use the `enable-opentofu` input to switch between tools:
+
+```yaml
+with:
+  enable-opentofu: true  # Use OpenTofu instead of Terraform
+```
+
 ## Usage
 
 Create a new workflow file in your Terraform repository (e.g. `.github/workflows/terraform.yml`) with the below contents:
@@ -61,8 +70,9 @@ OPTIONAL INPUTS:
 - `working-directory` - Default: "."
 - `use-env-as-suffix` - Default: false
 - `runs-on` - Default: "ubuntu-latest"
+- `enable-opentofu` - Default: false
 - `enable-private-access` - Default: false
-- `organization-name` - Default: "appvia"
+- `organization-name` - Default: the owner of the calling repository. The name of the GitHub organization
 - `aws-read-role-name` - Custom role name for read-only access
 - `aws-write-role-name` - Custom role name for read-write access
 - `additional-dir` - Upload additional directory as artifact
@@ -72,8 +82,6 @@ OPTIONAL INPUTS:
 - `terraform-apply-extra-args` - Extra arguments to pass to terraform apply
 - `terraform-state-key` - Default: "<repo-name>.tfstate"
 - `terraform-log-level` - The log level of terraform
-- `cicd-repository` - Default: "appvia/appvia-cicd-workflows"
-- `cicd-branch` - Default: "main"
 
 OPTIONAL SECRETS:
 - `actions-id` - The GitHub App ID for the Actions App

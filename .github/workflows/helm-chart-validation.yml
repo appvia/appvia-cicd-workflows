@@ -1,0 +1,396 @@
+---
+name: Helm Chart Validation
+on:
+  workflow_call:
+    inputs:
+      charts-dir:
+        default: "charts"
+        description: "The directory containing the Helm charts, one chart per sub-directory"
+        required: false
+        type: string
+
+      enable-checkov:
+        default: true
+        description: "Whether to run checkov security scanning"
+        required: false
+        type: boolean
+
+      enable-commitlint:
+        default: true
+        description: "Whether to run commitlint on the commit message"
+        required: false
+        type: boolean
+
+      enable-helm-docs:
+        default: true
+        description: "Whether to check the helm-docs generated documentation is up to date"
+        required: false
+        type: boolean
+
+      enable-kubeconform:
+        default: true
+        description: "Whether to validate the rendered manifests against the Kubernetes schemas"
+        required: false
+        type: boolean
+
+      helm-docs-version:
+        default: "v1.14.2"
+        description: "The version of helm-docs to use"
+        required: false
+        type: string
+
+      helm-version:
+        default: "v4.3.0"
+        description: "The version of helm to use"
+        required: false
+        type: string
+
+      kubeconform-version:
+        default: "v0.8.0"
+        description: "The version of kubeconform to use"
+        required: false
+        type: string
+
+      kubernetes-version:
+        default: "1.36.0"
+        description: "The Kubernetes version to validate the rendered manifests against"
+        required: false
+        type: string
+
+      node-version:
+        default: 22
+        description: "The version of node to use"
+        required: false
+        type: number
+
+      trivy-version:
+        default: "v0.69.3"
+        description: "The version of trivy to use"
+        required: false
+        type: string
+
+      working-directory:
+        default: "."
+        description: "Working directory"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  detect-charts:
+    name: "Detect Charts"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    outputs:
+      charts: ${{ steps.detect.outputs.charts }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Detect Charts
+        id: detect
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          CHARTS_DIR: ${{ inputs.charts-dir }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          charts_dir="${CHARTS_DIR%/}"
+          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            # Only validate the charts changed within the pull request
+            candidates=$(git diff --name-only --relative "${BASE_SHA}...${HEAD_SHA}" -- "${charts_dir}" | sed "s|^${charts_dir}/||" | cut -d/ -f1 | sort -u)
+          else
+            candidates=$(find "${charts_dir}" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort)
+          fi
+
+          charts=()
+          for chart in ${candidates}; do
+            # Skip anything which is not a chart, e.g. deleted charts or files in the charts directory
+            if [[ -f "${charts_dir}/${chart}/Chart.yaml" ]]; then
+              charts+=("${chart}")
+            fi
+          done
+
+          echo "Charts to validate: ${charts[*]:-none}"
+          echo "charts=$(printf '%s\n' "${charts[@]}" | jq -R . | jq -cs 'map(select(. != ""))')" >> "${GITHUB_OUTPUT}"
+
+  commitlint:
+    name: "Commitlint"
+    if: github.event_name == 'pull_request' && inputs.enable-commitlint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Setup node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: ${{ inputs.node-version }}
+      - name: Install Dependencies
+        run: npm install @commitlint/config-conventional @commitlint/cli
+      - name: Retrieve Commit Configuration
+        uses: appvia/appvia-cicd-workflows/.github/actions/cicd-config@main # main
+        with:
+          source: config/commitlint.config.js
+          destination: commitlint.config.js
+          working-directory: ${{ inputs.working-directory }}
+      - name: Run Commitlint
+        run: npx commitlint --config commitlint.config.js --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
+
+  helm-lint:
+    name: "Helm Lint (${{ matrix.chart }})"
+    needs: detect-charts
+    if: needs.detect-charts.outputs.charts != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        chart: ${{ fromJSON(needs.detect-charts.outputs.charts) }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    env:
+      CHART_DIR: ${{ inputs.charts-dir }}/${{ matrix.chart }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Setup Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: ${{ inputs.helm-version }}
+      - name: Build Dependencies
+        run: helm dependency build "${CHART_DIR}"
+      - name: Lint and Template Chart
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          chart_type=$(yq '.type // "application"' "${CHART_DIR}/Chart.yaml")
+
+          # Validate using the chart-testing style ci/*-values.yaml files, as ct lint does, since a chart may
+          # require values it has no default for; a chart without any is validated with its default values
+          values_files=("${CHART_DIR}"/ci/*-values.yaml)
+          if [[ ${#values_files[@]} -eq 0 ]]; then
+            values_files=("")
+          fi
+          for values in "${values_files[@]}"; do
+            args=()
+            if [[ -n "${values}" ]]; then
+              args=(--values "${values}")
+            fi
+            echo "--> Linting ${CHART_DIR} ${values:+with ${values}}"
+            helm lint --strict "${CHART_DIR}" "${args[@]}"
+            # Library charts cannot be rendered on their own
+            if [[ "${chart_type}" != "library" ]]; then
+              echo "--> Templating ${CHART_DIR} ${values:+with ${values}}"
+              helm template ci "${CHART_DIR}" "${args[@]}" >/dev/null
+            fi
+          done
+
+  kubeconform:
+    name: "Kubeconform (${{ matrix.chart }})"
+    needs: detect-charts
+    if: inputs.enable-kubeconform && needs.detect-charts.outputs.charts != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        chart: ${{ fromJSON(needs.detect-charts.outputs.charts) }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    env:
+      CHART_DIR: ${{ inputs.charts-dir }}/${{ matrix.chart }}
+      KUBECONFORM_VERSION: ${{ inputs.kubeconform-version }}
+      KUBERNETES_VERSION: ${{ inputs.kubernetes-version }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Setup Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: ${{ inputs.helm-version }}
+      - name: Setup Kubeconform
+        run: |
+          set -euo pipefail
+          curl -sSfL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" | \
+            sudo tar -xz -C /usr/local/bin kubeconform
+      - name: Build Dependencies
+        run: helm dependency build "${CHART_DIR}"
+      - name: Validate Manifests
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          if [[ "$(yq '.type // "application"' "${CHART_DIR}/Chart.yaml")" == "library" ]]; then
+            echo "Skipping library chart ${CHART_DIR}, it cannot be rendered on its own"
+            exit 0
+          fi
+
+          # Render with the ci/*-values.yaml files when the chart has any, else its default values, as the lint job does.
+          # CRDs are validated using the community CRDs catalog; resources without a schema are skipped
+          values_files=("${CHART_DIR}"/ci/*-values.yaml)
+          if [[ ${#values_files[@]} -eq 0 ]]; then
+            values_files=("")
+          fi
+          for values in "${values_files[@]}"; do
+            args=()
+            if [[ -n "${values}" ]]; then
+              args=(--values "${values}")
+            fi
+            echo "--> Validating ${CHART_DIR} ${values:+with ${values}}"
+            helm template ci "${CHART_DIR}" "${args[@]}" | kubeconform \
+              -ignore-missing-schemas \
+              -kubernetes-version "${KUBERNETES_VERSION}" \
+              -schema-location default \
+              -schema-location "https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json" \
+              -strict \
+              -summary
+          done
+
+  helm-security:
+    name: "Static Security Analysis"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Check If Trivy Ignore File Exists
+        id: security-exceptions
+        run: |
+          if [ -e ".trivyignore" ]; then
+            echo filename=".trivyignore" >> "${GITHUB_OUTPUT}"
+          fi
+      - name: Run Trivy vulnerability
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          exit-code: "1"
+          format: "table"
+          ignore-unfixed: true
+          scan-type: "config"
+          scan-ref: ${{ inputs.working-directory }}/${{ inputs.charts-dir }}
+          severity: "CRITICAL,HIGH"
+          trivyignores: ${{ steps.security-exceptions.outputs.filename }}
+          version: ${{ inputs.trivy-version }}
+
+  helm-checkov:
+    name: "Static Security Analysis - Checkov"
+    runs-on: ubuntu-latest
+    if: inputs.enable-checkov
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Ensure Checkov Configuration
+        run: |
+          [ -f ".checkov.yml" ] || echo "{}" > .checkov.yml
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@f967808197a8d784d3e72919f38c3ff0cda7884e # v12
+        with:
+          config_file: ${{ inputs.working-directory }}/.checkov.yml
+          directory: ${{ inputs.working-directory }}/${{ inputs.charts-dir }}
+          framework: helm
+          output_format: cli,sarif
+          soft_fail: true
+
+  helm-docs:
+    name: "Helm Docs"
+    runs-on: ubuntu-latest
+    if: inputs.enable-helm-docs && github.actor != 'dependabot[bot]'
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    env:
+      CHARTS_DIR: ${{ inputs.charts-dir }}
+      HELM_DOCS_VERSION: ${{ inputs.helm-docs-version }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Setup Helm Docs
+        run: |
+          set -euo pipefail
+          curl -sSfL "https://github.com/norwoodj/helm-docs/releases/download/${HELM_DOCS_VERSION}/helm-docs_${HELM_DOCS_VERSION#v}_Linux_x86_64.tar.gz" | \
+            sudo tar -xz -C /usr/local/bin helm-docs
+      - name: Check Documentation
+        run: |
+          set -euo pipefail
+          helm-docs --chart-search-root "${CHARTS_DIR}"
+          if [[ -n "$(git status --porcelain -- "${CHARTS_DIR}")" ]]; then
+            echo "::error::Chart documentation is out of date, please run helm-docs and commit the changes"
+            git status --porcelain -- "${CHARTS_DIR}"
+            git diff -- "${CHARTS_DIR}"
+            exit 1
+          fi
+
+  update-pr:
+    name: "Update PR"
+    if: github.event_name == 'pull_request' && (success() || failure())
+    runs-on: ubuntu-latest
+    needs:
+      - commitlint
+      - detect-charts
+      - helm-checkov
+      - helm-docs
+      - helm-lint
+      - helm-security
+      - kubeconform
+    steps:
+      - name: Add PR Comment
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          CHARTS: ${{ needs.detect-charts.outputs.charts }}
+        with:
+          script: |
+            // 1. Retrieve existing bot comments for the PR
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            })
+            const botComment = comments.find(comment => {
+              return comment.user.type === 'Bot' && comment.body.includes('Helm Chart Review Status') && comment.body.includes('<b>Working Directory:</b> \`${{ inputs.working-directory }}\`')
+            })
+
+            // 2. Prepare format of the comment
+            const charts = JSON.parse(process.env.CHARTS || '[]').map(chart => `\`${chart}\``).join(', ') || 'none'
+            const output = `### Helm Chart Review Status
+            * 📦 <b>Charts Validated:</b>               ${charts}
+            * 🔍 <b>Helm Lint & Template:</b>           \`${{ needs.helm-lint.result }}\`
+            * 📐 <b>Kubernetes Schema Validation:</b>   \`${{ needs.kubeconform.result }}\`
+            * 👮 <b>Helm Security Check:</b>            \`${{ needs.helm-security.result }}\`
+            * 👮 <b>Helm Security Checkov:</b>          \`${{ needs.helm-checkov.result }}\`
+            * 📖 <b>Helm Documentation:</b>             \`${{ needs.helm-docs.result }}\`
+            * 🔖 <b>Commitlint:</b>                     \`${{ needs.commitlint.result }}\`
+
+            *<b>Working Directory:</b> \`${{ inputs.working-directory }}\`*
+            *<b>Pusher:</b> @${{ github.actor }}, <b>Action:</b> \`${{ github.event_name }}\`*
+            *<b>Workflow Run Link:</b> ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}*`;
+
+            // 3. If we have a comment, update it, otherwise create a new one
+            if (botComment) {
+              github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: output
+              })
+            } else {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: output
+              })
+            }
