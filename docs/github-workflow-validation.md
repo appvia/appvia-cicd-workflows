@@ -12,6 +12,7 @@ The workflow validation template helps maintain high-quality GitHub Actions work
 2. **Install Go:** Sets up the Go programming language environment (required for actionlint)
 3. **Install Actionlint:** Downloads and installs the actionlint tool
 4. **Run Actionlint:** Validates all workflow files in the specified directory
+5. **Check Reusable Workflow SHA Pinning:** When `enable-sha-validation` is true, fails if any `appvia/appvia-cicd-workflows` reference is not pinned to a full commit SHA
 
 ## Usage
 
@@ -42,6 +43,7 @@ jobs:
 ### Optional Inputs
 
 - `workflows-path` - Default: ".github/workflows". The path to the GitHub workflows directory to validate
+- `enable-sha-validation` - Default: false. Fail if any reusable workflow reference to `appvia/appvia-cicd-workflows` is not pinned to a full commit SHA
 
 ## Examples
 

@@ -2,12 +2,6 @@
 name: "Terragrunt Inputs Diff"
 description: "Diffing Terragrunt inputs between pull request and main branch"
 inputs:
-  cicd-repository:
-    description: "The repository for the cicd workflows"
-    required: true
-  cicd-branch:
-    description: "The branch for the cicd workflows"
-    required: true
   terraform-version:
     description: "The version of terraform or opentofu to use"
     required: true
@@ -41,11 +35,13 @@ runs:
         tg_version: ${{ inputs.terragrunt-version }}
         tf_path: /bin/terraform
 
-    - name: Download Diff Script
+    # The runner checks out the whole of this repository alongside the action,
+    # so the script ships with the action rather than being fetched over HTTP.
+    - name: Copy Diff Script
       shell: bash
       run: |
         mkdir -p ci-scripts
-        curl -s https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/scripts/render-diff.sh -o ./ci-scripts/render-diff.sh
+        cp "${GITHUB_ACTION_PATH}/../../../scripts/render-diff.sh" ./ci-scripts/render-diff.sh
         chmod +x ./ci-scripts/render-diff.sh
 
     - name: Run Terragrunt Inputs Diff

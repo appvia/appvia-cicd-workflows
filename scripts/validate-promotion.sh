@@ -239,7 +239,7 @@ validate_file() {
   local relative_path
   if [[ "$changed_file" == /* ]]; then
     # Absolute path - extract relative to WORKLOADS_DIR
-    relative_path="${changed_file#${WORKLOADS_DIR}/}"
+    relative_path="${changed_file#"${WORKLOADS_DIR}"/}"
   else
     relative_path="${changed_file#workloads/applications/}"
   fi

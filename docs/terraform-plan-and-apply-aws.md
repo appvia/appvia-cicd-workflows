@@ -2,11 +2,20 @@
 
 This GitHub Actions workflow template ([terraform-plan-and-apply-aws.yml](../.github/workflows/terraform-plan-and-apply-aws.yml)) can be used with Terraform repositories to automate the deployment and management of AWS infrastructure. The workflow performs various steps such as authentication with AWS, Terraform formatting, initialization, validation, planning, and applying changes. It also adds the Terraform plan output as a comment to the associated pull request and triggers an apply action for pushes to the main branch.
 
+## OpenTofu Support
+
+This workflow supports both Terraform and OpenTofu. Use the `enable-opentofu` input to switch between tools:
+
+```yaml
+with:
+  enable-opentofu: true  # Use OpenTofu instead of Terraform
+```
+
 ## Workflow Steps
 
 1. **Setup Terraform:** Terraform is fetched at the specified version (overridable via inputs).
 2. **Terraform Format:** This step runs the terraform fmt command to check that all Terraform files are formatted correctly.
-3. **Terraform Lint:** This step runs terraform lint to check for deprecated syntax, unused declarations, invalid types, and enforcing best practices.
+3. **Terraform Lint:** This step runs terraform lint to check for deprecated syntax, unused declarations, invalid types, and enforcing best practices. The repository's own `.tflint.hcl` is used first, followed by the centralised configuration held in [config/.tflint.hcl](../config/.tflint.hcl). The centralised configuration is copied into the workspace by the [cicd-config](../.github/actions/cicd-config/action.yml) action rather than downloaded, so it works when this repository is private — see [Private repository access](#private-repository-access).
 4. **AWS Authentication:** The workflow uses Web Identity Federation to authenticate with AWS. The required AWS Role ARN must be provided as an input for successful authentication.
    - A Web Identity Token File is also generated and stored in `/tmp/web_identity_token_file`, which can be referenced in Terraform Provider configuration blocks if required.
 5. **Terraform Init:** The Terraform backend is initialised and any necessary provider plugins are downloaded. The required inputs for AWS S3 bucket name and DynamoDB table name must be provided for storing the Terraform state.
@@ -15,7 +24,50 @@ This GitHub Actions workflow template ([terraform-plan-and-apply-aws.yml](../.gi
 8. **Terraform Plan:** A Terraform plan is generated with a specified values file (overridable via inputs) using the terraform plan command.
 9. **Get Cost Estimate:** The infracost utility is run to get a cost estimate on the Terraform Plan output. A comment will be added to the pull request with the cost estimate.
 10. **Add PR Comment:** If the workflow is triggered via a Pull Request, a comment will be added to the ticket containing the results of the previous steps.
-11. **Apply Changes:** If the workflow is triggered by a push to the main branch, it automatically applies the changes using the terraform apply command. This step should be used with caution as AWS infrastructure is modified at this point. The automatic apply can be skipped by setting `enable-terraform-apply` to `false`.
+11. **Apply Changes:** If the workflow is triggered by a push to the main branch or by a tag push, it automatically applies the changes using the terraform apply command. This step should be used with caution as AWS infrastructure is modified at this point. The automatic apply can be skipped by setting `enable-terraform-apply` to `false`.
+
+## Tag-triggered deployments
+
+Plan and apply run for pushes to `main` and for tag refs. Tag support exists so a repository can
+gate a promotion behind a manual approval: the apply job declares
+`environment: <inputs.environment>`, so adding required reviewers to that GitHub Environment
+turns the run into plan → approve → apply, with the approved plan applied verbatim after a
+checksum check.
+
+Two things to be aware of when adding a tag trigger to a calling repository:
+
+- **Do not put a `paths` or `paths-ignore` filter on the tag trigger.** A tag push carries no
+  changed files, so a path filter matches nothing and the workflow silently never runs. Give the
+  tag trigger its own workflow file if the branch triggers need path filtering.
+- **The IAM role must trust the tag.** `terraform-bootstrap` selects the read-write role for tag
+  refs. The plan job has no `environment:`, so its OIDC subject is `repo:<org>/<repo>:ref:refs/tags/<tag>`,
+  while the apply job's is `repo:<org>/<repo>:environment:<environment>`. Both must be permitted by
+  the role's trust policy.
+- **Check the environment's deployment branch policy.** If the GitHub Environment is restricted to
+  protected branches only, a tag deployment is rejected at the gate.
+
+## Private repository access
+
+The centralised configuration (`config/.tflint.hcl` and `config/commitlint.config.js`) is no longer
+fetched from `raw.githubusercontent.com`. That endpoint is unauthenticated-only, so it returns a
+404 for a private repository and every lint job fails. Instead the files ship with the composite
+actions in this repository: when the runner resolves an action such as
+`appvia/appvia-cicd-workflows/.github/actions/cicd-config@main` it checks out the whole
+repository next to the action, and the action copies the file it needs out of that checkout.
+
+This requires no token, but it does require that calling repositories are allowed to resolve
+actions and workflows from this repository:
+
+1. Go to this repository's **Settings → Actions → General**
+2. Under **Access**, select **Accessible from repositories in the `appvia` organization**
+
+Without that setting, a private repository can neither call the reusable workflows nor resolve the
+actions, and every caller fails at the point it tries to load the workflow.
+
+The `cicd-repository` and `cicd-branch` inputs have been removed; callers still passing them must drop them. They could not be honoured any
+more: `uses:` cannot be templated with expressions, so the configuration is always taken from the
+same ref the workflow itself is called at. Pin the workflow to a tag and the configuration is
+pinned with it.
 
 ## Usage
 
@@ -58,15 +110,14 @@ jobs:
 - `aws-read-role-name` - Overrides the default behavior, and uses a custom role name for read-only access
 - `aws-write-role-name` - Overrides the default behavior, and uses a custom role name for read-write access
 - `aws-region` - Default: "eu-west-2". The AWS region to deploy to
-- `cicd-repository` - Default: "appvia/appvia-cicd-workflows". The repository to pull the CI/CD workflows from
-- `cicd-branch` - Default: "main". The branch to pull the CI/CD workflows from
 - `enable-infracost` - Default: false. Whether to run infracost on the Terraform Plan (requires `infracost-api-key` secret)
 - `enable-checkov` - Default: true. Whether to run Checkov security scanning
 - `enable-commitlint` - Default: true. Whether to run commitlint on the commit message
 - `enable-plan-encryption` - Default: true. Whether to encrypt Terraform plan artifacts at rest. When enabled, the binary plan (`tfplan`) and JSON plan (`tfplan.json`) are encrypted using AES-256-CBC before being uploaded as artifacts. Requires the `encryption-key` secret to be set
 - `enable-terraform-apply` - Default: true. Whether to run terraform apply on merge to main
+- `enable-opentofu` - Default: false. Use OpenTofu instead of Terraform
 - `enable-private-access` - Default: false. Flag to state if terraform requires pulling private modules
-- `organization-name` - Default: "appvia". The name of the GitHub organization
+- `organization-name` - Default: the owner of the calling repository. The name of the GitHub organization
 - `environment` - Default: "production". The environment to deploy to
 - `runs-on` - Default: "ubuntu-latest". Single label value for the GitHub runner to use
 - `terraform-apply-extra-args` - Extra arguments to pass to terraform apply
@@ -79,7 +130,7 @@ jobs:
 - `terraform-values-file` - Default: "values/<environment>.tfvars". The values file to use
 - `terraform-parallelism` - Default: 20. The number of parallel operations to run
 - `terraform-version` - Default: "1.11.2". The version of terraform to use
-- `trivy-version` - Default: "v0.60.0". The version of trivy to use
+- `trivy-version` - Default: "v0.74.0". The version of trivy to use
 - `working-directory` - Default: ".". The working directory to run terraform commands in
 - `use-env-as-suffix` - Default: false. Whether to use the environment as a suffix for the state file and iam roles
 

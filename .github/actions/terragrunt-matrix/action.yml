@@ -19,7 +19,7 @@ inputs:
     required: false
     default: "true"
   include-path:
-    description: "Include the full path in the matrix output"
+    description: "Include the unit directory (relative to terragrunt-dir) as 'path' in the matrix output"
     required: false
     default: "true"
   include-region:
@@ -86,9 +86,13 @@ runs:
         # Build find command with exclude patterns
         FIND_CMD="find \"$TERRAGRUNT_DIR\" -type f"
 
-        # Add file name patterns
-        for file in "${FILES_ARRAY[@]}"; do
-          FIND_CMD="$FIND_CMD \\( -name \"$file\""
+        # Add file name patterns, OR'd together i.e. \( -name a -o -name b \)
+        FIND_CMD="$FIND_CMD \\("
+        for i in "${!FILES_ARRAY[@]}"; do
+          if [[ $i -gt 0 ]]; then
+            FIND_CMD="$FIND_CMD -o"
+          fi
+          FIND_CMD="$FIND_CMD -name \"${FILES_ARRAY[$i]}\""
         done
         FIND_CMD="$FIND_CMD \\)"
 
@@ -107,7 +111,7 @@ runs:
         UNITS_JSON="[]"
         UNIT_NAMES=""
         COUNT=0
-        
+
         # Collect all files first
         declare -a ALL_FILES
         while IFS= read -r -d '' unit_file; do
@@ -124,15 +128,15 @@ runs:
           declare -A PARENTS
           declare -A CHILDREN
           declare -a PARENT_CANDIDATES
-          
+
           # Step 1: Find all parent candidates that match the pattern
-          # A parent must be EXACTLY at the pattern depth and have a terragrunt.hcl file
+          # A parent must be EXACTLY at the pattern depth and have one of the account-files
           for unit_file in "${ALL_FILES[@]}"; do
             RELATIVE_PATH="${unit_file#$TERRAGRUNT_DIR/}"
             RELATIVE_PATH="${RELATIVE_PATH#./}"
-            
+
             # Check if this file matches the parent pattern exactly
-            if [[ "$RELATIVE_PATH" =~ ^($PARENT_PATTERN)/terragrunt\.hcl$ ]]; then
+            if [[ "$RELATIVE_PATH" =~ ^($PARENT_PATTERN)/[^/]+$ ]]; then
               PARENT_DIR="${BASH_REMATCH[1]}"
               # Only add if not already added (avoid duplicates)
               if [[ ! " ${PARENT_CANDIDATES[@]} " =~ " ${PARENT_DIR} " ]]; then
@@ -142,17 +146,17 @@ runs:
               fi
             fi
           done
-          
+
           # Step 2: Classify remaining files as children of the identified parents
           for unit_file in "${ALL_FILES[@]}"; do
             RELATIVE_PATH="${unit_file#$TERRAGRUNT_DIR/}"
             RELATIVE_PATH="${RELATIVE_PATH#./}"
-            
+
             # Skip if this is already a parent file
-            if [[ "$RELATIVE_PATH" =~ ^($PARENT_PATTERN)/terragrunt\.hcl$ ]]; then
+            if [[ "$RELATIVE_PATH" =~ ^($PARENT_PATTERN)/[^/]+$ ]]; then
               continue
             fi
-            
+
             # Try to find which parent this file belongs to
             FOUND_PARENT=false
             for PARENT_DIR in "${PARENT_CANDIDATES[@]}"; do
@@ -161,7 +165,7 @@ runs:
                 # Extract module name (relative to parent)
                 MODULE_RELATIVE="${RELATIVE_PATH#$PARENT_DIR/}"
                 MODULE_NAME=$(dirname "$MODULE_RELATIVE")
-                
+
                 # Add to children list (avoid duplicates)
                 if [[ -z "${CHILDREN[$PARENT_DIR]}" ]]; then
                   CHILDREN["$PARENT_DIR"]="$MODULE_NAME"
@@ -175,91 +179,109 @@ runs:
                 break
               fi
             done
-            
-            # If no parent found, skip this file (orphaned)
+
+            # No parent found: if the file sits beneath a directory matching the parent
+            # pattern (e.g. accounts/<region>/<account>/oam/terragrunt.hcl, with no account
+            # level terragrunt.hcl), promote that directory to a parent so the nested units
+            # are still included; otherwise skip the file (orphaned)
             if [[ "$FOUND_PARENT" == false ]]; then
-              continue
-            fi
-          done
-          
-          # Step 2: Build matrix entries for each parent
-          for PARENT_DIR in "${!PARENTS[@]}"; do
-            unit_file="${PARENTS[$PARENT_DIR]}"
-            RELATIVE_PATH="${unit_file#$TERRAGRUNT_DIR/}"
-            RELATIVE_PATH="${RELATIVE_PATH#./}"
-            
-            # Extract unit name (directory containing the parent)
-            UNIT_NAME=$(dirname "$RELATIVE_PATH")
-            UNIT_NAME=$(basename "$UNIT_NAME")
-            
-            # Extract region and account
-            REGION=""
-            ACCOUNT=""
-            if [[ "$INCLUDE_REGION" == "true" ]] || [[ "$INCLUDE_ACCOUNT" == "true" ]]; then
-              if [[ "$RELATIVE_PATH" =~ ^accounts/([^/]+)/([^/]+)/ ]]; then
-                REGION="${BASH_REMATCH[1]}"
-                ACCOUNT="${BASH_REMATCH[2]}"
+              if [[ "$RELATIVE_PATH" =~ ^($PARENT_PATTERN)/ ]]; then
+                PARENT_DIR="${BASH_REMATCH[1]}"
+                MODULE_NAME=$(dirname "${RELATIVE_PATH#$PARENT_DIR/}")
+                PARENT_CANDIDATES+=("$PARENT_DIR")
+                PARENTS["$PARENT_DIR"]="$TERRAGRUNT_DIR/$PARENT_DIR/terragrunt.hcl"
+                CHILDREN["$PARENT_DIR"]="$MODULE_NAME"
+                echo "Promoted $PARENT_DIR to parent unit (no terragrunt.hcl at this level)"
+              else
+                echo "::warning::Skipping orphaned unit, no parent matching '$PARENT_PATTERN': $RELATIVE_PATH"
               fi
             fi
-            
-            # Build unit object
-            UNIT_OBJ="{"
-            UNIT_OBJ="$UNIT_OBJ\"file\":\"$unit_file\""
-            
+          done
+
+          # Build a matrix entry for a single unit directory; modules are the nested
+          # directories excluded from the unit's run --all (they have their own entries)
+          add_unit() {
+            local unit_dir="$1" unit_file="$2" unit_name="$3" modules_list="$4"
+            local relative_path region="" account="" unit_obj module_array=()
+
+            relative_path="${unit_file#$TERRAGRUNT_DIR/}"
+            relative_path="${relative_path#./}"
+
+            if [[ "$INCLUDE_REGION" == "true" ]] || [[ "$INCLUDE_ACCOUNT" == "true" ]]; then
+              if [[ "$relative_path" =~ ^accounts/([^/]+)/([^/]+)/ ]]; then
+                region="${BASH_REMATCH[1]}"
+                account="${BASH_REMATCH[2]}"
+              fi
+            fi
+
+            unit_obj="{\"file\":\"$unit_file\""
+            if [[ "$INCLUDE_PATH" == "true" ]]; then
+              unit_obj="$unit_obj,\"path\":\"$unit_dir\""
+            fi
             if [[ "$INCLUDE_RELATIVE_PATH" == "true" ]]; then
-              UNIT_OBJ="$UNIT_OBJ,\"relative_path\":\"$RELATIVE_PATH\""
+              unit_obj="$unit_obj,\"relative_path\":\"$relative_path\""
             fi
-            
             if [[ "$INCLUDE_UNIT_NAME" == "true" ]]; then
-              UNIT_OBJ="$UNIT_OBJ,\"unit_name\":\"$UNIT_NAME\""
+              unit_obj="$unit_obj,\"unit_name\":\"$unit_name\""
             fi
-            
-            if [[ "$INCLUDE_REGION" == "true" ]] && [[ -n "$REGION" ]]; then
-              UNIT_OBJ="$UNIT_OBJ,\"region\":\"$REGION\""
+            if [[ "$INCLUDE_REGION" == "true" ]] && [[ -n "$region" ]]; then
+              unit_obj="$unit_obj,\"region\":\"$region\""
             fi
-            
-            if [[ "$INCLUDE_ACCOUNT" == "true" ]] && [[ -n "$ACCOUNT" ]]; then
-              UNIT_OBJ="$UNIT_OBJ,\"account\":\"$ACCOUNT\""
+            if [[ "$INCLUDE_ACCOUNT" == "true" ]] && [[ -n "$account" ]]; then
+              unit_obj="$unit_obj,\"account\":\"$account\""
             fi
-            
-            # Add modules array and count
-            MODULES_LIST="${CHILDREN[$PARENT_DIR]:-}"
-            UNIT_OBJ="$UNIT_OBJ,\"modules\":["
-            
-            if [[ -n "$MODULES_LIST" ]]; then
-              IFS=',' read -ra MODULE_ARRAY <<< "$MODULES_LIST"
-              for i in "${!MODULE_ARRAY[@]}"; do
+
+            unit_obj="$unit_obj,\"modules\":["
+            if [[ -n "$modules_list" ]]; then
+              IFS=',' read -ra module_array <<< "$modules_list"
+              for i in "${!module_array[@]}"; do
                 if [[ $i -gt 0 ]]; then
-                  UNIT_OBJ="$UNIT_OBJ,"
+                  unit_obj="$unit_obj,"
                 fi
-                UNIT_OBJ="$UNIT_OBJ\"${MODULE_ARRAY[$i]}\""
+                unit_obj="$unit_obj\"${module_array[$i]}\""
               done
             fi
-            
-            UNIT_OBJ="$UNIT_OBJ]"
-            UNIT_OBJ="$UNIT_OBJ,\"module_count\":${#MODULE_ARRAY[@]}"
-            
-            UNIT_OBJ="$UNIT_OBJ}"
-            
-            # Add to JSON array
+            unit_obj="$unit_obj],\"module_count\":${#module_array[@]}}"
+
             if [[ "$UNITS_JSON" == "[]" ]]; then
-              UNITS_JSON="[$UNIT_OBJ"
+              UNITS_JSON="[$unit_obj"
             else
-              UNITS_JSON="$UNITS_JSON,$UNIT_OBJ"
+              UNITS_JSON="$UNITS_JSON,$unit_obj"
             fi
-            
-            # Add to unit names list
             if [[ -z "$UNIT_NAMES" ]]; then
-              UNIT_NAMES="$UNIT_NAME"
+              UNIT_NAMES="$unit_name"
             else
-              UNIT_NAMES="$UNIT_NAMES,$UNIT_NAME"
+              UNIT_NAMES="$UNIT_NAMES,$unit_name"
             fi
-            
             COUNT=$((COUNT + 1))
-            MODULE_COUNT=${#MODULE_ARRAY[@]}
-            echo "Found parent unit: $UNIT_NAME ($RELATIVE_PATH) with $MODULE_COUNT module(s)"
+            echo "Found unit: $unit_name ($relative_path)"
+          }
+
+          # Step 3: Build matrix entries, one for the parent (when it has its own
+          # terragrunt file) and one per nested module, e.g. <account>/oam
+          for PARENT_DIR in "${!PARENTS[@]}"; do
+            unit_file="${PARENTS[$PARENT_DIR]}"
+            PARENT_NAME=$(basename "$PARENT_DIR")
+            MODULES_LIST="${CHILDREN[$PARENT_DIR]:-}"
+
+            # Promoted parents have no terragrunt file of their own, so only the modules run
+            if [[ -f "$unit_file" ]]; then
+              add_unit "$PARENT_DIR" "$unit_file" "$PARENT_NAME" "$MODULES_LIST"
+            fi
+
             if [[ -n "$MODULES_LIST" ]]; then
-              echo "  Modules: $MODULES_LIST"
+              IFS=',' read -ra MODULE_ARRAY <<< "$MODULES_LIST"
+              for MODULE_NAME in "${MODULE_ARRAY[@]}"; do
+                MODULE_DIR="$PARENT_DIR/$MODULE_NAME"
+                MODULE_FILE=""
+                for name in "${FILES_ARRAY[@]}"; do
+                  if [[ -f "$TERRAGRUNT_DIR/$MODULE_DIR/$name" ]]; then
+                    MODULE_FILE="$TERRAGRUNT_DIR/$MODULE_DIR/$name"
+                    break
+                  fi
+                done
+                add_unit "$MODULE_DIR" "$MODULE_FILE" "$PARENT_NAME/$MODULE_NAME" ""
+              done
             fi
           done
         else
@@ -267,11 +289,11 @@ runs:
           for unit_file in "${ALL_FILES[@]}"; do
             RELATIVE_PATH="${unit_file#$TERRAGRUNT_DIR/}"
             RELATIVE_PATH="${RELATIVE_PATH#./}"
-            
+
             # Extract unit name (directory containing the file)
             UNIT_NAME=$(dirname "$RELATIVE_PATH")
             UNIT_NAME=$(basename "$UNIT_NAME")
-            
+
             # Extract region and account (assumes accounts/REGION/ACCOUNT structure)
             REGION=""
             ACCOUNT=""
@@ -281,43 +303,47 @@ runs:
                 ACCOUNT="${BASH_REMATCH[2]}"
               fi
             fi
-            
+
             # Build unit object
             UNIT_OBJ="{"
             UNIT_OBJ="$UNIT_OBJ\"file\":\"$unit_file\""
-            
+
+            if [[ "$INCLUDE_PATH" == "true" ]]; then
+              UNIT_OBJ="$UNIT_OBJ,\"path\":\"$(dirname "$RELATIVE_PATH")\""
+            fi
+
             if [[ "$INCLUDE_RELATIVE_PATH" == "true" ]]; then
               UNIT_OBJ="$UNIT_OBJ,\"relative_path\":\"$RELATIVE_PATH\""
             fi
-            
+
             if [[ "$INCLUDE_UNIT_NAME" == "true" ]]; then
               UNIT_OBJ="$UNIT_OBJ,\"unit_name\":\"$UNIT_NAME\""
             fi
-            
+
             if [[ "$INCLUDE_REGION" == "true" ]] && [[ -n "$REGION" ]]; then
               UNIT_OBJ="$UNIT_OBJ,\"region\":\"$REGION\""
             fi
-            
+
             if [[ "$INCLUDE_ACCOUNT" == "true" ]] && [[ -n "$ACCOUNT" ]]; then
               UNIT_OBJ="$UNIT_OBJ,\"account\":\"$ACCOUNT\""
             fi
-            
+
             UNIT_OBJ="$UNIT_OBJ}"
-            
+
             # Add to JSON array
             if [[ "$UNITS_JSON" == "[]" ]]; then
               UNITS_JSON="[$UNIT_OBJ"
             else
               UNITS_JSON="$UNITS_JSON,$UNIT_OBJ"
             fi
-            
+
             # Add to unit names list
             if [[ -z "$UNIT_NAMES" ]]; then
               UNIT_NAMES="$UNIT_NAME"
             else
               UNIT_NAMES="$UNIT_NAMES,$UNIT_NAME"
             fi
-            
+
             COUNT=$((COUNT + 1))
             echo "Found unit: $UNIT_NAME ($RELATIVE_PATH)"
           done

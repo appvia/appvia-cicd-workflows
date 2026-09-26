@@ -18,8 +18,10 @@ config/
   commitlint.config.js
 scripts/
   render-diff.sh          # Terragrunt input diff between branches
+  validate-promotion.sh   # Helm workload version promotion checks
   update-documetation.sh  # Batch terraform-docs PR creation (note: filename has typo, preserved intentionally)
 docs/              # Markdown docs for each workflow
+Makefile           # Local lint/validate targets (make validate)
 ```
 
 ## Workflows
@@ -40,6 +42,13 @@ docs/              # Markdown docs for each workflow
 |---|---|
 | `terragrunt-plan-and-apply-aws.yml` | Full plan/apply with matrix execution across units |
 | `terragrunt-dispatch.yml` | Manual trigger wrapper for terragrunt-plan-and-apply-aws |
+
+### Helm
+
+| Workflow | Purpose |
+|---|---|
+| `helm-chart-validation.yml` | Lint, template, schema and security validation of Helm charts |
+| `helm-chart-release.yml` | Package and release Helm charts on merge to main |
 
 ### Docker
 
@@ -69,6 +78,7 @@ docs/              # Markdown docs for each workflow
 | `terragrunt-matrix` | Discover Terragrunt units, build job matrix for parallel execution |
 | `terragrunt-pr` | Aggregate and post workflow status as PR comment |
 | `template-update` | Pull files from template repos, create update PRs |
+| `cicd-config` | Copy centralised config (`config/`) from this repo's action checkout into the caller's workspace |
 
 ## Key Patterns and Conventions
 
@@ -83,10 +93,21 @@ docs/              # Markdown docs for each workflow
 
 - Uses GitHub OIDC tokens written to `/tmp/web_identity_token_file`
 - Role determination by branch:
-  - `main` branch: write role — `{aws-role}` or `{aws-role}-{env}`
+  - `refs/heads/main` or any tag ref: write role — `{aws-role}` or `{aws-role}-{env}`
   - PR branches: read-only role — `{aws-role}-ro` or `{aws-role}-{env}-ro`
 - Custom role names via `aws-read-role-name` and `aws-write-role-name` inputs override default behavior
 - `use-env-as-suffix` appends environment name to role and state key
+
+### Terraform / OpenTofu
+
+- `enable-opentofu` (default false) switches the bootstrap actions to `opentofu/setup-opentofu`
+- Workflows set `TOOL_NAME` (`tofu` or `terraform`) at job level and invoke `${{ env.TOOL_NAME }}`
+
+### Bundled Config and Scripts
+
+- Never fetch from `raw.githubusercontent.com`: it fails when this repo is private
+- When an action from this repo runs, the whole repo is checked out at `${GITHUB_ACTION_PATH}/../../..`;
+  copy scripts/config from there (see `cicd-config`, `terragrunt-diff`, `kubernetes-platform-promotion`)
 
 ### Terraform State
 
@@ -98,6 +119,7 @@ docs/              # Markdown docs for each workflow
 
 - Controlled by `enable-private-access` input
 - Uses GitHub App token (`actions-id` + `actions-secret`) via `actions/create-github-app-token`
+- `organization-name` defaults to `github.repository_owner`
 - Rewrites git URLs: `https://github.com/` → `https://x-access-token:{token}@github.com/`
 
 ### PR Comments
@@ -158,12 +180,14 @@ Conventional commits enforced via commitlint:
 ## Adding or Modifying Workflows
 
 1. All workflows use `workflow_call` trigger — they are invoked from other repositories
-2. Keep the common input interface: `aws-account-id`, `aws-region`, `aws-role`, `cicd-repository`, `cicd-branch`, `enable-*` flags, `runs-on`, `working-directory`
+2. Keep the common input interface: `aws-account-id`, `aws-region`, `aws-role`, `enable-*` flags, `runs-on`, `working-directory`
 3. Pin all third-party actions to full SHA with a `# vN` comment
 4. Use composite actions from `.github/actions/` for bootstrap/setup logic
 5. Update corresponding docs in `docs/` when changing workflow inputs or behavior
 6. Sensitive values go through `secrets:` block, not `inputs:`
 7. Shell steps must set `shell: bash` explicitly in composite actions
+
+8. Run `make validate` (yamllint, actionlint, shellcheck, commitlint) before raising a PR
 
 ## Scripts
 
