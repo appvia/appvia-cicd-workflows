@@ -105,8 +105,6 @@ jobs:
 - `github-app-owner` - Default: "appvia". Owner the GitHub App token is scoped to
 - `opa-policies-repo-and-path` - Conftest pull source for central OPA policies (e.g. `github.com/appvia/policies//policies/terraform`). Blank skips central checks
 - `opa-policies-version` - Default: "main". Git ref for the central OPA policies
-- `cicd-repository` - Default: "appvia/appvia-cicd-workflows". Repo hosting centralised config (tflint, commitlint)
-- `cicd-branch` - Default: "main". Ref of the centralised config repo
 
 ### Optional Secrets
 

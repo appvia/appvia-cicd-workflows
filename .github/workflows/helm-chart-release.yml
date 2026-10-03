@@ -1,0 +1,243 @@
+---
+name: Helm Chart Release
+on:
+  workflow_call:
+    inputs:
+      aws-account-id:
+        description: "The AWS account ID hosting the ECR registry (required if enable-ecr-publish is true)"
+        required: false
+        type: string
+
+      aws-region:
+        default: "eu-west-2"
+        description: "The AWS region hosting the ECR registry"
+        required: false
+        type: string
+
+      aws-role:
+        description: "The name of the IAM role to assume via OIDC, must be permitted to push to ECR (required if enable-ecr-publish is true)"
+        required: false
+        type: string
+
+      charts-dir:
+        default: "charts"
+        description: "The directory containing the Helm charts, one chart per sub-directory"
+        required: false
+        type: string
+
+      ecr-repository-prefix:
+        default: "charts"
+        description: "The ECR repository prefix; charts are pushed to <prefix>/<chart-name>"
+        required: false
+        type: string
+
+      enable-create-repository:
+        default: false
+        description: "Whether to create the ECR repository if it does not already exist"
+        required: false
+        type: boolean
+
+      enable-ecr-publish:
+        default: false
+        description: "Whether to publish the packaged charts to the ECR (OCI) registry"
+        required: false
+        type: boolean
+
+      enable-github-release:
+        default: true
+        description: "Whether to create a GitHub release, with the packaged chart attached, for the release tag"
+        required: false
+        type: boolean
+
+      helm-version:
+        default: "v4.3.0"
+        description: "The version of helm to use"
+        required: false
+        type: string
+
+      working-directory:
+        default: "."
+        description: "Working directory"
+        required: false
+        type: string
+
+jobs:
+  detect-releases:
+    name: "Detect Releases"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    outputs:
+      charts: ${{ steps.detect.outputs.charts }}
+    steps:
+      - name: Verify Inputs
+        if: inputs.enable-ecr-publish && (inputs.aws-account-id == '' || inputs.aws-role == '')
+        run: |
+          echo "::error::aws-account-id and aws-role are required when enable-ecr-publish is true"
+          exit 1
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Detect Unreleased Charts
+        id: detect
+        env:
+          CHARTS_DIR: ${{ inputs.charts-dir }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          # A chart is released when no <name>-v<version> tag exists for the version in its Chart.yaml
+          charts=()
+          for chart_file in "${CHARTS_DIR%/}"/*/Chart.yaml; do
+            name=$(yq '.name' "${chart_file}")
+            version=$(yq '.version' "${chart_file}")
+            if git rev-parse -q --verify "refs/tags/${name}-v${version}" >/dev/null; then
+              echo "--> ${name} ${version} has already been released"
+            else
+              echo "--> ${name} ${version} will be released"
+              charts+=("$(basename "$(dirname "${chart_file}")")")
+            fi
+          done
+
+          echo "charts=$(printf '%s\n' "${charts[@]}" | jq -R . | jq -cs 'map(select(. != ""))')" >> "${GITHUB_OUTPUT}"
+
+  release:
+    name: "Release (${{ matrix.chart }})"
+    needs: detect-releases
+    if: needs.detect-releases.outputs.charts != '[]'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: helm-chart-release-${{ github.repository }}-${{ matrix.chart }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix:
+        chart: ${{ fromJSON(needs.detect-releases.outputs.charts) }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    env:
+      AWS_REGION: ${{ inputs.aws-region }}
+      CHART_DIR: ${{ inputs.charts-dir }}/${{ matrix.chart }}
+      ECR_REPOSITORY_PREFIX: ${{ inputs.ecr-repository-prefix }}
+      REGISTRY: ${{ inputs.aws-account-id }}.dkr.ecr.${{ inputs.aws-region }}.amazonaws.com
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Chart Metadata
+        id: chart
+        run: |
+          set -euo pipefail
+          name=$(yq '.name' "${CHART_DIR}/Chart.yaml")
+          version=$(yq '.version' "${CHART_DIR}/Chart.yaml")
+          tag="${name}-v${version}"
+
+          # Guard against a concurrent run having released the chart since it was detected
+          released=false
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null; then
+            echo "::notice::${tag} has already been released, skipping"
+            released=true
+          fi
+
+          {
+            echo "name=${name}"
+            echo "released=${released}"
+            echo "repository=${ECR_REPOSITORY_PREFIX:+${ECR_REPOSITORY_PREFIX}/}${name}"
+            echo "tag=${tag}"
+            echo "version=${version}"
+          } >> "${GITHUB_OUTPUT}"
+      - name: Setup Helm
+        if: steps.chart.outputs.released == 'false'
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: ${{ inputs.helm-version }}
+      - name: Package Chart
+        if: steps.chart.outputs.released == 'false'
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          helm dependency build "${CHART_DIR}"
+
+          # Lint using the chart-testing style ci/*-values.yaml files, as the validation workflow does, since a
+          # chart may require values it has no default for; a chart without any is linted with its default values
+          values_files=("${CHART_DIR}"/ci/*-values.yaml)
+          if [[ ${#values_files[@]} -eq 0 ]]; then
+            values_files=("")
+          fi
+          for values in "${values_files[@]}"; do
+            args=()
+            if [[ -n "${values}" ]]; then
+              args=(--values "${values}")
+            fi
+            echo "--> Linting ${CHART_DIR} ${values:+with ${values}}"
+            helm lint --strict "${CHART_DIR}" "${args[@]}"
+          done
+
+          helm package "${CHART_DIR}" --destination "${RUNNER_TEMP}/charts"
+      - name: Login to AWS via OIDC
+        if: steps.chart.outputs.released == 'false' && inputs.enable-ecr-publish
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6
+        with:
+          aws-region: ${{ inputs.aws-region }}
+          mask-aws-account-id: "true"
+          role-session-name: ${{ github.event.repository.name }}-helm-release
+          role-to-assume: arn:aws:iam::${{ inputs.aws-account-id }}:role/${{ inputs.aws-role }}
+      - name: Publish to ECR
+        if: steps.chart.outputs.released == 'false' && inputs.enable-ecr-publish
+        env:
+          ENABLE_CREATE_REPOSITORY: ${{ inputs.enable-create-repository }}
+          NAME: ${{ steps.chart.outputs.name }}
+          REPOSITORY: ${{ steps.chart.outputs.repository }}
+          VERSION: ${{ steps.chart.outputs.version }}
+        run: |
+          set -euo pipefail
+          aws ecr get-login-password --region "${AWS_REGION}" | \
+            helm registry login --username AWS --password-stdin "${REGISTRY}"
+
+          if [[ "${ENABLE_CREATE_REPOSITORY}" == "true" ]] && \
+            ! aws ecr describe-repositories --repository-names "${REPOSITORY}" >/dev/null 2>&1; then
+            echo "--> Creating ECR repository ${REPOSITORY}"
+            aws ecr create-repository --repository-name "${REPOSITORY}" --image-tag-mutability IMMUTABLE >/dev/null
+          fi
+
+          # A previous run may have pushed the chart, but failed before creating the release tag
+          if helm show chart "oci://${REGISTRY}/${REPOSITORY}" --version "${VERSION}" >/dev/null 2>&1; then
+            echo "::warning::${REPOSITORY}:${VERSION} already exists in ECR, skipping push"
+          else
+            helm push "${RUNNER_TEMP}/charts/${NAME}-${VERSION}.tgz" "oci://${REGISTRY}${ECR_REPOSITORY_PREFIX:+/${ECR_REPOSITORY_PREFIX}}"
+          fi
+
+          {
+            echo "### 📦 Helm Chart Published"
+            echo "\`oci://${REGISTRY}/${REPOSITORY}:${VERSION}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+      - name: Create Release
+        if: steps.chart.outputs.released == 'false'
+        env:
+          ENABLE_GITHUB_RELEASE: ${{ inputs.enable-github-release }}
+          GH_TOKEN: ${{ github.token }}
+          NAME: ${{ steps.chart.outputs.name }}
+          TAG: ${{ steps.chart.outputs.tag }}
+          VERSION: ${{ steps.chart.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ "${ENABLE_GITHUB_RELEASE}" == "true" ]]; then
+            # Generate the release notes from the previous release of this chart
+            notes_args=(--generate-notes)
+            previous=$(git tag --list "${NAME}-v*" --sort=-version:refname | sed -n 1p)
+            if [[ -n "${previous}" ]]; then
+              notes_args+=(--notes-start-tag "${previous}")
+            fi
+            gh release create "${TAG}" "${RUNNER_TEMP}/charts/${NAME}-${VERSION}.tgz" \
+              --target "${GITHUB_SHA}" \
+              --title "${NAME} ${VERSION}" \
+              "${notes_args[@]}"
+          else
+            git tag "${TAG}" "${GITHUB_SHA}"
+            git push origin "refs/tags/${TAG}"
+          fi
+          echo "### 🔖 Released \`${TAG}\`" >> "${GITHUB_STEP_SUMMARY}"

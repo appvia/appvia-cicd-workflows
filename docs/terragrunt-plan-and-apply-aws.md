@@ -23,7 +23,7 @@ Terragrunt is a thin wrapper for Terraform that provides extra tools for keeping
 6. **Terragrunt Lint:** Runs TFLint to check for deprecated syntax, unused declarations, and best practices
 7. **AWS Authentication:** Uses Web Identity Federation to authenticate with AWS via OIDC
 8. **Static Security Analysis:** Runs Trivy to scan for security misconfigurations (placeholder implementation)
-9. **Terragrunt Inputs Diff:** Detects which Terragrunt units have changed inputs
+9. **Terragrunt Inputs Diff:** Detects which Terragrunt units have changed inputs (pull requests only)
 10. **Terragrunt Matrix:** Generates a matrix of Terragrunt units for parallel execution (optional)
 11. **Terragrunt Plan:** Runs `terragrunt plan` for all or specific units, either in parallel (matrix mode, one job per unit) or sequentially in a single job
 12. **Get Cost Estimate:** Runs Infracost to estimate infrastructure costs (PR only, optional)
@@ -77,11 +77,6 @@ jobs:
 - `aws-region` - Default: "eu-west-2". The AWS region to deploy to
 - `aws-web-identity-token-file` - Default: "/tmp/web_identity_token_file". The file containing the AWS web identity token
 
-#### CI/CD Configuration
-
-- `cicd-repository` - Default: "appvia/appvia-cicd-workflows". The repository to pull the CI/CD workflows from
-- `cicd-branch` - Default: "main". The branch to pull the CI/CD workflows from
-
 #### Feature Flags
 
 - `enable-infracost` - Default: false. Whether to run Infracost on the Terragrunt Plan (requires `infracost-api-key` secret)
@@ -116,7 +111,7 @@ jobs:
 
 #### Security Configuration
 
-- `trivy-version` - Default: "v0.60.0". The version of Trivy to use
+- `trivy-version` - Default: "v0.74.0". The version of Trivy to use
 
 ### Optional Secrets
 
@@ -352,6 +347,8 @@ repository/
 │   └── staging/
 │       └── ...
 ```
+
+In matrix mode the `terragrunt-matrix` action treats each directory matching the parent pattern (e.g. `accounts/<region>/<account>`) as a unit. Nested units beneath it (e.g. `accounts/<region>/<account>/oam/terragrunt.hcl`) get their own matrix entry and are excluded from the parent's `run --all` via `--queue-exclude-dir`, so each unit is planned and applied exactly once. An account directory with no `terragrunt.hcl` of its own is still picked up: its nested units are included and only they run. Each matrix entry exposes the unit directory as `path`.
 
 ## Best Practices
 

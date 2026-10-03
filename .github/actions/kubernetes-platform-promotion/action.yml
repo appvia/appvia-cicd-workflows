@@ -2,14 +2,6 @@
 name: "Promotion Validation"
 description: "Validates environment promotions for Kubernetes platform workloads by ensuring semantic versions never regress"
 inputs:
-  cicd-branch:
-    description: "The branch for the cicd workflows"
-    required: true
-    default: main
-  cicd-repository:
-    description: "The repository for the cicd workflows"
-    required: true
-    default: appvia/appvia-cicd-workflows
   github-token:
     description: "GitHub token for PR comments"
     required: false
@@ -34,11 +26,13 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - name: Download Validation Script
+    # The runner checks out the whole of this repository alongside the action,
+    # so the script ships with the action rather than being fetched over HTTP.
+    - name: Copy Validation Script
       shell: bash
       run: |
         mkdir -p ci-scripts
-        curl -s https://raw.githubusercontent.com/${{ inputs.cicd-repository }}/${{ inputs.cicd-branch }}/scripts/validate-promotion.sh -o ./ci-scripts/validate-promotion.sh
+        cp "${GITHUB_ACTION_PATH}/../../../scripts/validate-promotion.sh" ./ci-scripts/validate-promotion.sh
         chmod +x ./ci-scripts/validate-promotion.sh
 
     - name: Get Changed Files

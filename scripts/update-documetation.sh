@@ -20,12 +20,12 @@ DIRECTORIES="${1:-"terraform-aws-*"}"
 BASE_DIR=$(pwd)
 
 for dir in ${DIRECTORIES}; do
-  print "%s %-20s" "Checking is documentation is up to date in:" $dir
-  cd $dir
+  print "%s %-20s" "Checking is documentation is up to date in:" "$dir"
+  cd "$dir" || exit
   # step: ensure the directory is not dirty
   if [[ $(git status --porcelain) ]]; then
     echo "[DIRTY]"
-    cd $BASE_DIR || {
+    cd "$BASE_DIR" || {
       echo "Failed to return to the base directory"
       exit 1
     }
@@ -34,7 +34,7 @@ for dir in ${DIRECTORIES}; do
   # step: ensure this is a git repository
   if [[ ! -d .git ]]; then
     echo "[NOT GIT]"
-    cd $BASE_DIR || {
+    cd "$BASE_DIR" || {
       echo "Failed to return to the base directory"
       exit 1
     }
@@ -49,7 +49,7 @@ for dir in ${DIRECTORIES}; do
   # step: check if there is a change in the documentation
   if [[ ! $(git status --porcelain) ]]; then
     echo "[NO CHANGE]"
-    cd $BASE_DIR || {
+    cd "$BASE_DIR" || {
       echo "Failed to return to the base directory"
       exit 1
     }
@@ -66,7 +66,7 @@ for dir in ${DIRECTORIES}; do
   # step: print the message
   echo "[UPDATED]"
   # step: return to the base directory
-  cd $BASE_DIR || {
+  cd "$BASE_DIR" || {
     echo "failed to return to the base directory"
     exit 1
   }

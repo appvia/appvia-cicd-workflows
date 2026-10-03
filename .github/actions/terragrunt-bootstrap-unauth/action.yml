@@ -16,7 +16,7 @@ inputs:
     required: false
     default: "22"
   organization-name:
-    description: "The name of the Github organization"
+    description: "The name of the Github organization; defaults to the owner of the calling repository"
     required: false
   terragrunt-dir:
     description: "The directory to validate"
@@ -62,7 +62,7 @@ runs:
       with:
         client-id: ${{ inputs.actions-id }}
         private-key: ${{ inputs.actions-secret }}
-        owner: ${{ inputs.organization-name }}
+        owner: ${{ inputs.organization-name || github.repository_owner }}
     - name: Setup Credentials
       if: ${{ inputs.enable-private-access == 'true' }}
       shell: bash

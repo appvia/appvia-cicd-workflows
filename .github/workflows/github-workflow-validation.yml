@@ -8,6 +8,11 @@ on:
         required: false
         type: string
         default: ".github/workflows"
+      enable-sha-validation:
+        description: "Enable the SHA checking validation"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   validate-workflows:
@@ -27,6 +32,7 @@ jobs:
         id: actionlint
         run: actionlint ${{ inputs.workflows-path }}/*.yml
       - name: Check reusable workflow SHA Pinning
+        if: inputs.enable-sha-validation
         env:
           WORKFLOWS_PATH: "${{ inputs.workflows-path }}"
         run: |

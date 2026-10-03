@@ -3,6 +3,15 @@
 This workflow is used to run an scheduled or manually triggered drift detection on AWS infrastructure and alert in Slack if a change is detected, using GitHub Actions workflow template ([terraform-drift.yml](../.github/workflows/terraform-drift.yml))
 In order to trigger the workflow, firstly the workflow must be referenced from the calling workflow flow, see below.
 
+## OpenTofu Support
+
+This workflow supports both Terraform and OpenTofu. Use the `enable-opentofu` input to switch between tools:
+
+```yaml
+with:
+  enable-opentofu: true  # Use OpenTofu instead of Terraform
+```
+
 ## Workflow Steps
 
 1. **Setup Terraform:** Terraform is fetched at the specified version (overridable via inputs).
@@ -57,8 +66,9 @@ OPTIONAL INPUTS:
 - `terraform-values-file` - Default: <environment>.tfvars
 - `terraform-version` - Default: "1.11.2"
 - `working-directory` - Default: "."
+- `enable-opentofu` - Default: false
 - `enable-private-access` - Default: false
-- `organization-name` - Default: "appvia"
+- `organization-name` - Default: the owner of the calling repository. The name of the GitHub organization
 
 OPTIONAL SECRETS:
 - `slack-webhook-url` - Slack Webhook to a channel/app, stored as a secret in your Github Actions Secrets

@@ -4,16 +4,6 @@ name: Validate Promotion Order
 on:
   workflow_call:
     inputs:
-      cicd-repository:
-        default: "appvia/appvia-cicd-workflows"
-        description: "The repository to pull the CI/CD workflows from"
-        required: false
-        type: string
-      cicd-branch:
-        default: "main"
-        description: "The branch to pull the CI/CD workflows from"
-        required: false
-        type: string
       promotion-order:
         default: "dev,qa,staging,uat,prod"
         description: "Comma-separated list defining the promotion order of environments"
@@ -46,10 +36,8 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Validate Promotion
-        uses: ./.github/actions/kubernetes-platform-promotion
+        uses: appvia/appvia-cicd-workflows/.github/actions/kubernetes-platform-promotion@main # main
         with:
-          cicd-branch: ${{ inputs.cicd-branch }}
-          cicd-repository: ${{ inputs.cicd-repository }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           promotion-order: ${{ inputs.promotion-order }}
           workloads-dir: ${{ inputs.workloads-dir }}
