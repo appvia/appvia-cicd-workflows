@@ -11,6 +11,7 @@ Terragrunt is a thin wrapper for Terraform that provides extra tools for keeping
 - Static security analysis
 - Cost estimation with Infracost
 - Automated PR comments with plan results
+- An aggregated plan summary across all units in matrix mode, focused on the changes rather than the refresh output
 - Conditional apply on merge to main
 
 ## Workflow Steps
@@ -26,9 +27,10 @@ Terragrunt is a thin wrapper for Terraform that provides extra tools for keeping
 9. **Terragrunt Inputs Diff:** Detects which Terragrunt units have changed inputs (pull requests only)
 10. **Terragrunt Matrix:** Generates a matrix of Terragrunt units for parallel execution (optional)
 11. **Terragrunt Plan:** Runs `terragrunt plan` for all or specific units, either in parallel (matrix mode, one job per unit) or sequentially in a single job
-12. **Get Cost Estimate:** Runs Infracost to estimate infrastructure costs (PR only, optional)
-13. **Add PR Comment:** Posts a comprehensive comment to the PR with all validation and plan results
-14. **Terragrunt Apply:** Automatically applies changes when merged to `main` (if enabled), using the same per-unit matrix as plan when `enable-matrix` is true, or a single `terragrunt run --all apply` job otherwise
+12. **Get Cost Estimate:** Runs Infracost to estimate infrastructure costs (PR only, optional, standard mode only)
+13. **Terragrunt Plan Summary:** In matrix mode, aggregates the per-unit plans into one report on the job summary, the job log and the PR (see [Plan Summary](#plan-summary-matrix-mode))
+14. **Add PR Comment:** Posts a comprehensive comment to the PR with all validation and plan results
+15. **Terragrunt Apply:** Automatically applies changes when merged to `main` (if enabled), using the same per-unit matrix as plan when `enable-matrix` is true, or a single `terragrunt run --all apply` job otherwise
 
 ## Usage
 
@@ -84,25 +86,28 @@ jobs:
 - `enable-terragrunt-apply` - Default: true. Whether to run terragrunt apply on merge to main
 - `enable-terragrunt-plan` - Default: false. Whether to run terragrunt plan on merge to main (useful for scheduled drift detection)
 - `enable-matrix` - Default: false. Whether to run terragrunt plan and apply in matrix mode (one parallel GitHub Actions job per Terragrunt unit)
+- `enable-plan-summary` - Default: true. In matrix mode, whether to aggregate the per-unit plans into a single summary on the job summary, job log and pull request (see [Plan Summary](#plan-summary-matrix-mode))
 - `enable-private-access` - Default: false. Flag to indicate if Terraform requires pulling private modules
+- `organization-name` - The GitHub organization for private module access; defaults to the owner of the calling repository
 
 #### Environment Configuration
 
 - `environment` - Default: "production". The environment to deploy to
 - `runs-on` - Default: "ubuntu-latest". Single label value for the GitHub runner to use
+- `node-version` - Default: 22. The version of Node.js to use (commitlint)
 - `use-env-as-suffix` - Default: false. Whether to use the environment as a suffix for the state file and IAM roles
 
 #### Terragrunt Configuration
 
 - `terragrunt-dir` - Default: ".". The directory to validate
-- `terragrunt-version` - Default: "0.99.4". The version of Terragrunt to use
+- `terragrunt-version` - Default: "1.0.5". The version of Terragrunt to use
 - `terragrunt-config-file` - Default: "terragrunt.hcl". The configuration file to use for Terragrunt
 - `terragrunt-apply-extra-args` - Default: "-parallelism=10". Extra arguments to pass to terragrunt apply
 - `terragrunt-plan-extra-args` - Default: "-parallelism=10". Extra arguments to pass to terragrunt plan
 
 #### Terraform Configuration
 
-- `terraform-version` - Default: "1.13.3". The version of Terraform to use
+- `terraform-version` - Default: "1.14.5". The version of Terraform to use
 - `terraform-apply-extra-args` - Extra arguments to pass to terraform apply
 - `terraform-plan-extra-args` - Extra arguments to pass to terraform plan
 - `terraform-lock-timeout` - Default: "30s". The time to wait for a state lock
@@ -111,14 +116,14 @@ jobs:
 
 #### Security Configuration
 
-- `trivy-version` - Default: "v0.74.0". The version of Trivy to use
+- `trivy-version` - Default: "v0.69.3". The version of Trivy to use
 
 ### Optional Secrets
 
 - `infracost-api-key` - The API key for Infracost (required if `enable-infracost` is true)
 - `actions-id` - The GitHub App ID for accessing private repositories
 - `actions-secret` - The GitHub App secret for accessing private repositories
-- `github-token` - The GitHub token to use for repository operations
+- `environment-variables` - A JSON object of environment variables made available to Terraform, e.g. `{"TF_VAR_name": "value"}`
 
 ## Examples
 
@@ -301,13 +306,59 @@ The workflow supports two execution modes:
 - Detects all Terragrunt units and executes **plan** in parallel: one GitHub Actions job per unit
 - On `main`, **apply** uses the same matrix (parallel per unit) instead of a single `terragrunt run --all apply` job
 - Significantly faster for large infrastructures
+- The per-unit plans are aggregated into a single [plan summary](#plan-summary-matrix-mode), so the change across every account can be reviewed in one place
 - Use when: You have many Terragrunt units and want faster feedback and deploys
 
 **Note:** Parallel applies run independently per unit. Ensure your stacks do not rely on a strict apply order across units unless dependencies are modeled in Terragrunt (or accept that GitHub will schedule matrix jobs concurrently).
 
+## Plan Summary (Matrix Mode)
+
+Matrix mode is fast, but it splits the plan across one job per unit, which makes it hard to see what a change does across many accounts. When `enable-matrix` is true, the workflow therefore aggregates the plans from every matrix job into a single report, controlled by `enable-plan-summary` (default: true).
+
+The report contains:
+
+- **Totals** of the resources to add, change, replace and destroy across all units
+- **A table** of the units with changes or failures, grouped by account and region; units with no changes are listed in a collapsed section
+- **Destructive changes**, always listed: every resource that will be destroyed or replaced, and the unit it belongs to
+- **A collapsible plan per unit**, showing only the proposed changes. The refresh output, the "Objects have changed outside of Terraform" section and the `Plan:` totals line are removed, and the plan is rendered as a diff so GitHub highlights it
+
+The report is published to three places:
+
+| Where | When |
+| ----- | ---- |
+| The workflow run's job summary | Every run that plans, including `schedule` and `workflow_dispatch` |
+| The `Terragrunt Plan Summary` job log | Every run that plans. Each unit's plan is a collapsible log group, coloured like Terraform's own output, and destroys or replacements are raised as warning annotations on the run |
+| A pull request comment | Pull requests only. A separate comment from the review status comment, updated in place on each push (one per `environment`) |
+
+### How it works
+
+1. Each matrix plan job passes `--out-dir` and `--json-out-dir` to `terragrunt run --all -- plan`, so a plan file is written for every unit
+2. The [terragrunt-plan-collect](../.github/actions/terragrunt-plan-collect/action.yml) action counts the changes from each unit's JSON plan, renders the human readable plan with `terragrunt show`, and uploads a compact `summary.json` as the artifact `plan-summary-<environment>--<unit-path>`. It runs even when the plan fails, so failures still appear in the report
+3. The `Terragrunt Plan Summary` job runs the [terragrunt-plan-summary](../.github/actions/terragrunt-plan-summary/action.yml) action, which downloads every summary, builds the report and publishes it
+
+Only the counts, the changed resource addresses and the trimmed plan text are uploaded; the raw JSON plan never leaves the matrix job. Sensitive values remain masked, as they are in `terraform show`.
+
+The summary job also works out the overall plan and authentication outcome across the matrix and passes them to the review status comment. Without it, that comment would show the outcome of whichever matrix job finished last. A matrix job that never reports a summary counts as a failure.
+
+### Size limits
+
+GitHub limits pull request comments to 65,536 characters. Each unit's plan is capped at 20,000 characters, and once the comment nears the limit the remaining unit plans are left out with a note. The job summary allows 1MB, so it keeps the full report.
+
+### Running a plan on demand
+
+The plan matrix runs for pull requests, and on `main` for `schedule` events or when `enable-terragrunt-plan` is true. A `workflow_dispatch` run therefore only produces a summary when it runs on `main` with `enable-terragrunt-plan: true`. With the defaults (`enable-terragrunt-plan: false`, `enable-terragrunt-apply: true`) a dispatch runs the apply instead. See the [manual dispatch workflow](./terragrunt-dispatch.md) for a caller that exposes both flags.
+
+To turn the summary off:
+
+```yml
+with:
+  enable-matrix: true
+  enable-plan-summary: false
+```
+
 ## Pull Request Comments
 
-When the workflow runs on a pull request, it posts a comprehensive comment containing:
+When the workflow runs on a pull request, it posts a review status comment containing:
 
 - **Commitlint Status:** Whether commit messages follow conventional format
 - **HCL Format Status:** Whether all `.hcl` files are properly formatted
@@ -319,6 +370,8 @@ When the workflow runs on a pull request, it posts a comprehensive comment conta
 - **Authentication Status:** Whether AWS authentication succeeded
 - **Plan Status:** Whether the plan succeeded
 - **Cost Estimate:** Infrastructure cost changes (if Infracost is enabled)
+
+In matrix mode a second comment, the [plan summary](#plan-summary-matrix-mode), shows the changes for every unit.
 
 ## AWS Authentication
 
@@ -350,6 +403,20 @@ repository/
 
 In matrix mode the `terragrunt-matrix` action treats each directory matching the parent pattern (e.g. `accounts/<region>/<account>`) as a unit. Nested units beneath it (e.g. `accounts/<region>/<account>/oam/terragrunt.hcl`) get their own matrix entry and are excluded from the parent's `run --all` via `--queue-exclude-dir`, so each unit is planned and applied exactly once. An account directory with no `terragrunt.hcl` of its own is still picked up: its nested units are included and only they run. Each matrix entry exposes the unit directory as `path`.
 
+## Composite Actions
+
+The workflow is assembled from the following composite actions, which can also be used on their own. See [Composite Actions](./actions.md) for their inputs, outputs and examples.
+
+| Action | Purpose |
+| ------ | ------- |
+| [terragrunt-bootstrap](./actions.md#terragrunt-bootstrap) | Installs Terraform and Terragrunt, authenticates with AWS and sets up private module access |
+| [terragrunt-bootstrap-unauth](./actions.md#terragrunt-bootstrap-unauth) | As above, without AWS authentication (lint and security jobs) |
+| [terragrunt-diff](./actions.md#terragrunt-diff) | Diffs the rendered Terragrunt inputs between the pull request and `main` |
+| [terragrunt-matrix](./actions.md#terragrunt-matrix) | Finds the Terragrunt units and returns the job matrix used by matrix mode |
+| [terragrunt-plan-collect](./actions.md#terragrunt-plan-collect) | Summarises the plan of a single matrix unit and uploads it as an artifact |
+| [terragrunt-plan-summary](./actions.md#terragrunt-plan-summary) | Aggregates the matrix summaries into one report for the job summary, job log and pull request |
+| [terragrunt-pr](./actions.md#terragrunt-pr) | Posts the review status comment on the pull request |
+
 ## Best Practices
 
 1. **Enable Matrix Mode for Large Repos:** Use `enable-matrix: true` for faster plans on pull requests and faster parallel applies on `main` when you have many Terragrunt units
@@ -359,7 +426,7 @@ In matrix mode the `terragrunt-matrix` action treats each directory matching the
 5. **Scheduled Drift Detection:** Run the workflow on a schedule to detect configuration drift
 6. **Commitlint:** Keep `enable-commitlint: true` to maintain clean commit history
 7. **Security Scanning:** The workflow includes Trivy for security scanning (currently placeholder - implement as needed)
-8. **Review PR Comments:** Always review the automated PR comments before merging
+8. **Review PR Comments:** Always review the automated PR comments before merging, paying particular attention to the destructive changes listed in the plan summary
 
 ## Troubleshooting
 
@@ -383,6 +450,13 @@ In matrix mode the `terragrunt-matrix` action treats each directory matching the
 - Review the matrix generation step output for debugging
 - For failures during matrix apply on `main`, inspect the per-unit job that failed; jobs run concurrently, so cross-unit ordering is not guaranteed unless modeled in Terragrunt
 
+### Plan Summary Issues
+
+- **No summary:** check that `enable-matrix` and `enable-plan-summary` are both true, and that the run actually planned (see [Running a plan on demand](#running-a-plan-on-demand))
+- **A unit shows as failed with no plan:** the matrix job failed before or during the plan; open that unit's job for the logs
+- **"matrix job(s) did not report a plan summary":** a matrix job failed before the collect step ran, e.g. during checkout or bootstrap
+- **Plans missing from the PR comment:** the comment hit GitHub's size limit; the full report is on the workflow run's job summary
+
 ### Formatting Failures
 
 - Run `terragrunt hclfmt` locally to fix HCL formatting
@@ -396,6 +470,7 @@ In matrix mode the `terragrunt-matrix` action treats each directory matching the
 | Tool             | Terragrunt + Terraform | Terraform only       |
 | DRY Config       | Yes (Terragrunt)       | No                   |
 | Matrix Execution | Yes (optional)         | No                   |
+| Plan Summary     | Yes (matrix mode)      | Plan in PR comment   |
 | HCL Formatting   | Yes                    | N/A                  |
 | Multi-module     | Native support         | Manual management    |
 | State Management | Terragrunt-managed     | Manual configuration |

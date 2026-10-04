@@ -68,9 +68,8 @@ jobs:
     uses: appvia/appvia-cicd-workflows/.github/workflows/terragrunt-plan-and-apply-aws.yml@main
     name: "Terragrunt (Plan: ${{ inputs.enable_plan }}, Apply: ${{ inputs.enable_apply }})"
     secrets:
-      actions-id: "${{ secrets.ACTION_ID }}"
-      actions-secret: "${{ secrets.ACTION_SECRET }}"
-      github-token: ${{ secrets.REPO_GITHUB_TOKEN }}
+      actions-id: "${{ secrets.ORG_ACTIONS_APP_ID }}"
+      actions-secret: "${{ secrets.ORG_ACTIONS_APP_SECRET }}"
       infracost-api-key: ${{ secrets.ORG_INFRACOST_API_KEY }}
     with:
       aws-account-id: ${{ inputs.aws-account-id }}
@@ -118,7 +117,9 @@ The safest way to use this workflow is to enable only the plan operation:
 3. Specify the AWS account and role
 4. Optionally specify a specific Terragrunt directory
 
-This will show you what changes would be made without actually applying them.
+This will show you what changes would be made without actually applying them. The dispatch must be run against `main`, as the plan only runs on `main` outside of pull requests.
+
+If the calling workflow sets `enable-matrix: true`, the plans for every unit are aggregated into a single [plan summary](./terragrunt-plan-and-apply-aws.md#plan-summary-matrix-mode), shown on the workflow run's job summary and in the `Terragrunt Plan Summary` job log.
 
 ### Plan and Apply (Dangerous Operation)
 
@@ -147,9 +148,8 @@ terragrunt-dir: environments/production/networking
 
 The workflow requires the following secrets to be configured in your repository:
 
-- `ACTION_ID` - GitHub App ID for accessing private modules
-- `ACTION_SECRET` - GitHub App secret for accessing private modules
-- `REPO_GITHUB_TOKEN` - GitHub token for repository operations
+- `ORG_ACTIONS_APP_ID` - GitHub App ID for accessing private modules
+- `ORG_ACTIONS_APP_SECRET` - GitHub App secret for accessing private modules
 - `ORG_INFRACOST_API_KEY` - API key for Infracost cost estimation (optional)
 
 ## Permissions
