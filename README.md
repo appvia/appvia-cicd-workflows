@@ -40,6 +40,22 @@ Please refer to the following documentation for more information on the workflow
 - [GitHub Workflow Validation](./docs/github-workflow-validation.md) - Validate GitHub Actions workflow files
 - [Template Update](./docs/template-update.md) - Keep repository files in sync with templates
 
+## Terragrunt Matrix and Plan Summary
+
+The Terragrunt workflow can run in matrix mode (`enable-matrix: true`), with one job per Terragrunt unit for plan and apply. That keeps large estates fast, but splits the plan across many jobs. To keep the change reviewable, the per-unit plans are aggregated into a single **plan summary**: totals, a table of changed units per account and region, a list of every resource to be destroyed or replaced, and the trimmed plan for each unit with the refresh output removed. The summary is posted to the pull request, the workflow run's job summary and the job log, so scheduled and manually dispatched plans get it too.
+
+The summary is built by two composite actions, [terragrunt-plan-collect](./docs/actions.md#terragrunt-plan-collect) (per unit) and [terragrunt-plan-summary](./docs/actions.md#terragrunt-plan-summary) (aggregation). See [Plan Summary](./docs/terragrunt-plan-and-apply-aws.md#plan-summary-matrix-mode) for details.
+
+## Composite Actions
+
+The workflows are built from composite actions in [.github/actions](./.github/actions), which can also be used directly in your own workflows (`uses: appvia/appvia-cicd-workflows/.github/actions/<action-name>@<ref>`). See [Composite Actions](./docs/actions.md) for the inputs, outputs and examples of each.
+
+- **Shared:** [cicd-config](./docs/actions.md#cicd-config) - Copies centralised configuration (e.g. `.tflint.hcl`) into the workspace
+- **Terraform:** [terraform-bootstrap](./docs/actions.md#terraform-bootstrap), [terraform-bootstrap-noauth](./docs/actions.md#terraform-bootstrap-noauth) - Install Terraform or OpenTofu, authenticate with AWS and run `init`; [terraform-plan-encrypt](./docs/actions.md#terraform-plan-encrypt), [terraform-plan-decrypt](./docs/actions.md#terraform-plan-decrypt) - Encrypt and decrypt plan artifacts
+- **Terragrunt:** [terragrunt-bootstrap](./docs/actions.md#terragrunt-bootstrap), [terragrunt-bootstrap-unauth](./docs/actions.md#terragrunt-bootstrap-unauth) - Install Terraform and Terragrunt and authenticate with AWS; [terragrunt-diff](./docs/actions.md#terragrunt-diff) - Diff rendered inputs against `main`; [terragrunt-matrix](./docs/actions.md#terragrunt-matrix) - Build the per-unit job matrix; [terragrunt-plan-collect](./docs/actions.md#terragrunt-plan-collect), [terragrunt-plan-summary](./docs/actions.md#terragrunt-plan-summary) - Aggregate matrix plans into one summary; [terragrunt-pr](./docs/actions.md#terragrunt-pr) - Post the review status comment
+- **Kubernetes:** [kubernetes-platform-promotion](./docs/actions.md#kubernetes-platform-promotion) - Validate that environment promotions never regress versions
+- **Template:** [template-update](./docs/actions.md#template-update) - Sync an allowlist of files from a template repository via pull request; [template-update-azure](./docs/actions.md#template-update-azure) - Sync a whole template repository except an exclusion list
+
 ## Local Development
 
 Before raising a pull request, run the same checks CI runs, locally:
