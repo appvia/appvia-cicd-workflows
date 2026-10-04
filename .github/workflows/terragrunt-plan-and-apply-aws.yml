@@ -80,6 +80,12 @@ on:
         required: false
         type: boolean
 
+      enable-plan-summary:
+        default: true
+        description: "Whether to aggregate the matrix plans into a single summary, posted to the job summary and pull request (requires enable-matrix)"
+        required: false
+        type: boolean
+
       enable-private-access:
         description: Optional flag to state if terraform requires pulling private modules
         required: false
@@ -537,6 +543,8 @@ jobs:
         id: plan
         working-directory: ${{ steps.extract-directory-name.outputs.directory_name }}
         env:
+          PLAN_DIR: ${{ runner.temp }}/tfplan
+          PLAN_JSON_DIR: ${{ runner.temp }}/tfplan-json
           # Nested modules have their own matrix entries, so exclude them here
           UNIT_MODULES: ${{ join(matrix.unit.modules, ' ') }}
         run: |
@@ -545,13 +553,53 @@ jobs:
           for module in ${UNIT_MODULES}; do
             EXCLUDE_ARGS+=(--queue-exclude-dir "${module}")
           done
-          terragrunt run --config ${{ inputs.terragrunt-config-file }} --all "${EXCLUDE_ARGS[@]}" ${{ inputs.terragrunt-plan-extra-args }} -- \
+          # Save the plans per unit, so the changes can be summarised without the refresh noise
+          rm -rf "${PLAN_DIR}" "${PLAN_JSON_DIR}"
+          terragrunt run --config ${{ inputs.terragrunt-config-file }} --all "${EXCLUDE_ARGS[@]}" \
+            --out-dir "${PLAN_DIR}" --json-out-dir "${PLAN_JSON_DIR}" \
+            ${{ inputs.terragrunt-plan-extra-args }} -- \
             plan \
             -no-color -input=false \
             -parallelism=${{ inputs.terraform-parallelism }} \
             -lock-timeout=${{ inputs.terraform-lock-timeout }} \
             ${{ inputs.terraform-plan-extra-args }} \
             2>&1 | tee tfplan.stdout
+      - name: Collect Plan Summary
+        if: always() && inputs.enable-plan-summary && steps.extract-directory-name.outcome == 'success'
+        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-plan-collect@main # main
+        with:
+          environment: ${{ inputs.environment }}
+          json-dir: ${{ runner.temp }}/tfplan-json
+          outcome-auth: ${{ steps.bootstrap.outputs.outcome-auth }}
+          outcome-plan: ${{ steps.plan.outcome }}
+          plan-dir: ${{ runner.temp }}/tfplan
+          terragrunt-config-file: ${{ inputs.terragrunt-config-file }}
+          unit-account: ${{ matrix.unit.account }}
+          unit-name: ${{ matrix.unit.unit_name }}
+          unit-path: ${{ matrix.unit.path }}
+          unit-region: ${{ matrix.unit.region }}
+          working-directory: ${{ steps.extract-directory-name.outputs.directory_name }}
+
+  terragrunt-plan-summary:
+    name: "Terragrunt Plan Summary"
+    # Matrix job outputs are last writer wins, so this job also aggregates the plan and auth outcomes
+    if: ${{ !cancelled() && inputs.enable-matrix == true && inputs.enable-plan-summary && needs.terragrunt-plan-matrix.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    needs:
+      - terragrunt-matrix
+      - terragrunt-plan-matrix
+    outputs:
+      changes: ${{ steps.summary.outputs.changes }}
+      result-auth: ${{ steps.summary.outputs.result-auth }}
+      result-plan: ${{ steps.summary.outputs.result-plan }}
+    steps:
+      - name: Terragrunt Plan Summary
+        id: summary
+        uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-plan-summary@main # main
+        with:
+          comment: ${{ github.event_name == 'pull_request' }}
+          environment: ${{ inputs.environment }}
+          expected: ${{ needs.terragrunt-matrix.outputs.count }}
 
   terragrunt-plan:
     name: "Terragrunt Plan"
@@ -783,6 +831,7 @@ jobs:
       - terragrunt-hclfmt
       - terragrunt-lint
       - terragrunt-plan-matrix
+      - terragrunt-plan-summary
       - terragrunt-render
       - terragrunt-security
     steps:
@@ -792,14 +841,14 @@ jobs:
         uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-pr@main # main
         with:
           environment: ${{ inputs.environment }}
-          status-auth: ${{ needs.terragrunt-plan-matrix.outputs.result-auth }}
+          status-auth: ${{ needs.terragrunt-plan-summary.outputs.result-auth || needs.terragrunt-plan-matrix.outputs.result-auth }}
           status-commitlint: ${{ needs.commitlint.outputs.result }}
           status-format: ${{ needs.terragrunt-format.outputs.result }}
           status-hcl-format: ${{ needs.terragrunt-hclfmt.outputs.result }}
           status-inputs-diff: ${{ needs.terragrunt-diff.outputs.result }}
           status-inputs-render: ${{ needs.terragrunt-render.outputs.result }}
           status-linting: ${{ needs.terragrunt-lint.outputs.result }}
-          status-plan: ${{ needs.terragrunt-plan-matrix.outputs.result-plan }}
+          status-plan: ${{ needs.terragrunt-plan-summary.outputs.result-plan || needs.terragrunt-plan-matrix.outputs.result-plan }}
           status-security: ${{ needs.terragrunt-security.outputs.result }}
           working-directory: ${{ inputs.terragrunt-dir }}
 

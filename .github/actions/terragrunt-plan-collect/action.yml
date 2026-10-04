@@ -1,0 +1,87 @@
+---
+name: Terragrunt Plan Collect
+description: "Summarises the terragrunt plan for a matrix unit and uploads it for aggregation by terragrunt-plan-summary"
+inputs:
+  environment:
+    description: "The environment being planned, used to scope the artifact name"
+    required: true
+  json-dir:
+    description: "The directory passed to terragrunt --json-out-dir"
+    required: true
+  outcome-auth:
+    description: "The outcome of the authentication step"
+    required: false
+    default: ""
+  outcome-plan:
+    description: "The outcome of the terragrunt plan step"
+    required: true
+  plan-dir:
+    description: "The directory passed to terragrunt --out-dir"
+    required: true
+  terragrunt-config-file:
+    description: "The configuration file to use for terragrunt"
+    required: false
+    default: "terragrunt.hcl"
+  unit-account:
+    description: "The account of the matrix unit"
+    required: false
+    default: ""
+  unit-name:
+    description: "The name of the matrix unit"
+    required: true
+  unit-path:
+    description: "The path of the matrix unit"
+    required: true
+  unit-region:
+    description: "The region of the matrix unit"
+    required: false
+    default: ""
+  working-directory:
+    description: "The directory terragrunt plan was run from"
+    required: true
+
+outputs:
+  artifact-name:
+    description: "The name of the uploaded summary artifact"
+    value: ${{ steps.name.outputs.artifact }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Artifact Name
+      id: name
+      shell: bash
+      env:
+        ENVIRONMENT: ${{ inputs.environment }}
+        UNIT_PATH: ${{ inputs.unit-path }}
+      run: |
+        # Artifact names cannot contain slashes, and must be unique across the matrix
+        key="$(printf '%s' "${UNIT_PATH}" | sed -e 's#^\./##' -e 's#[^A-Za-z0-9._-]#_#g')"
+        echo "artifact=plan-summary-${ENVIRONMENT}--${key}" >> "${GITHUB_OUTPUT}"
+        echo "output_dir=${RUNNER_TEMP}/plan-summary/${key}" >> "${GITHUB_OUTPUT}"
+
+    - name: Summarise Plan
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        JSON_DIR: ${{ inputs.json-dir }}
+        OUTCOME_AUTH: ${{ inputs.outcome-auth }}
+        OUTCOME_PLAN: ${{ inputs.outcome-plan }}
+        OUTPUT_DIR: ${{ steps.name.outputs.output_dir }}
+        PLAN_DIR: ${{ inputs.plan-dir }}
+        TERRAGRUNT_CONFIG_FILE: ${{ inputs.terragrunt-config-file }}
+        UNIT_ACCOUNT: ${{ inputs.unit-account }}
+        UNIT_DIR: "."
+        UNIT_NAME: ${{ inputs.unit-name }}
+        UNIT_PATH: ${{ inputs.unit-path }}
+        UNIT_REGION: ${{ inputs.unit-region }}
+      run: bash "${{ github.action_path }}/collect.sh"
+
+    - name: Upload Plan Summary
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ${{ steps.name.outputs.artifact }}
+        path: ${{ steps.name.outputs.output_dir }}/summary.json
+        if-no-files-found: error
+        overwrite: true
+        retention-days: 14
