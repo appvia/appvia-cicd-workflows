@@ -1,0 +1,37 @@
+---
+name: Schema Validate
+description: "Validates YAML or JSON files against a JSON Schema (Draft 2020-12)"
+inputs:
+  schema-file:
+    description: "The JSON Schema file, relative to working-directory"
+    required: true
+  files:
+    description: "Newline-separated file paths or globs to validate (.yml, .yaml or .json), relative to working-directory. A path or glob matching no files fails the step"
+    required: true
+  working-directory:
+    description: "The directory schema-file and files are relative to"
+    required: false
+    default: "."
+
+outputs:
+  errors:
+    description: "The number of schema violations found"
+    value: ${{ steps.validate.outputs.errors }}
+
+runs:
+  using: "composite"
+  steps:
+    # The script and its requirements ship with the action, so it works from any repository
+    - name: Validate Schema
+      id: validate
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        SCHEMA_FILE: ${{ inputs.schema-file }}
+        FILES: ${{ inputs.files }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        venv="$(mktemp -d)"
+        python3 -m venv "${venv}"
+        "${venv}/bin/pip" install --quiet --disable-pip-version-check -r "${ACTION_PATH}/requirements.txt"
+        "${venv}/bin/python" "${ACTION_PATH}/validate.py"

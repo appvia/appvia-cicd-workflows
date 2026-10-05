@@ -258,7 +258,7 @@ jobs:
         env:
           TOOL_NAME: ${{ inputs.enable-opentofu && 'tofu' || 'terraform' }}
         run: |
-          ${{ env.TOOL_NAME }} fmt -check=true ${{ inputs.working-directory }}
+          ${{ env.TOOL_NAME }} fmt -check -recursive ${{ inputs.terraform-dir }}
 
   terraform-lint:
     name: "Terraform Lint"

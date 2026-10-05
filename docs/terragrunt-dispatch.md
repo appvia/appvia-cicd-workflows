@@ -104,6 +104,7 @@ The workflow accepts the following inputs when manually triggered:
 - `aws-role` - The AWS IAM role to assume for deployment
 - `enable_apply` - Default: false. Whether to run the Terragrunt apply step (use with caution!)
 - `enable_plan` - Default: false. Whether to run the Terragrunt plan step
+- `runs-on` - Default: "ubuntu-latest". The runner to use for the plan and apply jobs
 - `terragrunt-dir` - Default: ".". The directory containing the Terragrunt configuration to execute
 
 ## Examples

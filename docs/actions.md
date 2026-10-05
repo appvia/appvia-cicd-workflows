@@ -12,6 +12,7 @@ When the runner resolves an action from this repository it checks out the whole 
 | Action | Purpose | Used by |
 | ------ | ------- | ------- |
 | [cicd-config](#cicd-config) | Copies a centralised configuration file (e.g. `config/.tflint.hcl`) into the workspace | [helm-chart-validation.yml](../.github/workflows/helm-chart-validation.yml), [terraform-module-validation.yml](../.github/workflows/terraform-module-validation.yml), [terraform-plan-and-apply-aws.yml](../.github/workflows/terraform-plan-and-apply-aws.yml), [terraform-plan-and-apply-azure.yml](../.github/workflows/terraform-plan-and-apply-azure.yml), [terragrunt-plan-and-apply-aws.yml](../.github/workflows/terragrunt-plan-and-apply-aws.yml) |
+| [schema-validate](#schema-validate) | Validates YAML or JSON files against a JSON Schema | Not used by a workflow in this repository; for use by other repositories |
 | [terraform-bootstrap](#terraform-bootstrap) | Installs Terraform or OpenTofu, authenticates with AWS and runs `init` against the S3 backend | [terraform-destroy.yml](../.github/workflows/terraform-destroy.yml), [terraform-drift.yml](../.github/workflows/terraform-drift.yml), [terraform-plan-and-apply-aws.yml](../.github/workflows/terraform-plan-and-apply-aws.yml) |
 | [terraform-bootstrap-noauth](#terraform-bootstrap-noauth) | Installs Terraform or OpenTofu and runs `init -backend=false`, with no AWS credentials | [terraform-module-validation.yml](../.github/workflows/terraform-module-validation.yml), [terraform-plan-and-apply-aws.yml](../.github/workflows/terraform-plan-and-apply-aws.yml) |
 | [terraform-plan-encrypt](#terraform-plan-encrypt) | Encrypts plan artifacts with AES-256-CBC before they are uploaded | [terraform-destroy.yml](../.github/workflows/terraform-destroy.yml), [terraform-plan-and-apply-aws.yml](../.github/workflows/terraform-plan-and-apply-aws.yml) |
@@ -50,6 +51,37 @@ Copies a file from this repository's [config/](../config) directory into the cal
 | `destination` | yes | - | The path to write the file to, relative to the working directory |
 | `source` | yes | - | The path of the file within the cicd-workflows repository |
 | `working-directory` | no | `.` | The working directory to write the file into |
+
+### schema-validate
+
+Source: [.github/actions/schema-validate](../.github/actions/schema-validate/action.yml)
+
+Validates YAML (`.yml`, `.yaml`) or JSON files against a JSON Schema (Draft 2020-12). Each violation is reported as `file: path/to/key: message`, annotated on the file, and tabulated in the job summary, and the step fails. A path or glob that matches no files, an unparseable file, or an invalid schema also fails the step, so a typo in a path cannot silently pass. An empty YAML document is validated as `{}`.
+
+The action validates one schema per invocation; call it once per schema. Guard a step with `hashFiles(...)` if its files are legitimately optional.
+
+```yml
+- name: Validate Runner Config
+  if: hashFiles('config/runners/*.yml') != ''
+  uses: appvia/appvia-cicd-workflows/.github/actions/schema-validate@main
+  with:
+    schema-file: config/schema/runners.schema.json
+    files: config/runners/*.yml
+```
+
+**Inputs**
+
+| Name | Required | Default | Description |
+| ---- | -------- | ------- | ----------- |
+| `schema-file` | yes | - | The JSON Schema file, relative to `working-directory` |
+| `files` | yes | - | Newline-separated file paths or globs to validate, relative to `working-directory` |
+| `working-directory` | no | `.` | The directory `schema-file` and `files` are relative to |
+
+**Outputs**
+
+| Name | Description |
+| ---- | ----------- |
+| `errors` | The number of schema violations found |
 
 ## Terraform Actions
 

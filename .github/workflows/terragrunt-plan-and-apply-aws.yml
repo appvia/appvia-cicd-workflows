@@ -483,7 +483,7 @@ jobs:
   terragrunt-plan-matrix:
     name: "${{ matrix.unit && format('Terragrunt Plan ({0}/{1})', matrix.unit.region, matrix.unit.unit_name) || 'Terragrunt Plan (matrix)' }}"
     if: inputs.enable-matrix == true && needs.terragrunt-matrix.outputs.count > 0 && ((github.event_name == 'pull_request') || (github.ref == 'refs/heads/main' && contains(fromJSON('["schedule"]'), github.event_name)) || (github.ref == 'refs/heads/main' && inputs.enable-terragrunt-plan))
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     defaults:
       run:
         working-directory: ${{ inputs.terragrunt-dir }}
