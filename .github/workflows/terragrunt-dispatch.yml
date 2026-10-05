@@ -31,6 +31,12 @@ on:
         type: string
         default: "."
 
+      runs-on:
+        description: "The runner to use"
+        required: false
+        type: string
+        default: "ubuntu-latest"
+
 permissions:
   contents: read
   id-token: write
@@ -52,3 +58,4 @@ jobs:
       enable-terragrunt-apply: ${{ inputs.enable_apply }}
       enable-terragrunt-plan: ${{ inputs.enable_plan }}
       terragrunt-dir: ${{ inputs.terragrunt-dir }}
+      runs-on: ${{ inputs.runs-on }}

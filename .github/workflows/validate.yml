@@ -66,3 +66,12 @@ jobs:
           yamllint_config_filepath: .yamllint.yaml
           yamllint_file_or_dir: .github/workflows
           yamllint_strict: false
+
+  schema-validate-tests:
+    name: "Schema Validate Tests"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Run Tests
+        run: bash .github/actions/schema-validate/tests/run.sh
