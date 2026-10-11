@@ -75,3 +75,28 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Run Tests
         run: bash .github/actions/schema-validate/tests/run.sh
+
+  tag-check-tests:
+    name: "Tag Check Tests"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Run Tests
+        run: bash .github/actions/terraform-tag-check/tests/run.sh
+      - name: Validate Tagging Policy
+        working-directory: .github/actions/terraform-tag-check
+        run: |
+          python3 -c 'import yaml' 2> /dev/null || python3 -m pip install --quiet --user 'pyyaml>=6,<7'
+          python3 - <<'PY'
+          import sys
+          from policy import PolicyError, load_policy
+
+          path = "../../../config/tagging-policy.yaml"
+          try:
+              policy = load_policy(path)
+          except PolicyError as err:
+              print(f"::error file=config/tagging-policy.yaml,title=Tag Policy::{err}")
+              sys.exit(1)
+          print(f"{path} is valid: {len(policy.rules)} rules")
+          PY

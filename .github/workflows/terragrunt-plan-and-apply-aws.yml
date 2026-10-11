@@ -368,30 +368,37 @@ jobs:
       - name: Generate Terraform files
         run: |
           terragrunt init --config ${{ inputs.terragrunt-config-file }} --all --backend=false
+      - name: Retrieve Centralised Lint Configuration
+        uses: appvia/appvia-cicd-workflows/.github/actions/cicd-config@main # main
+        with:
+          source: config/.tflint.hcl
+          destination: .tflint-centralised.hcl
+          working-directory: ${{ inputs.terragrunt-dir }}
       - name: Run TFLint
         id: lint
         run: |
-          # Find all .terragrunt-cache directories and run tflint on them
-          find . -name ".terragrunt-cache" -type d | while IFS= read -r cache_dir; do
-            if [ -d "$cache_dir" ]; then
-              echo "Running tflint in $cache_dir"
-              cd "$cache_dir" || continue
-
-              # Find the actual terraform files (usually in a subdirectory)
-              terraform_dir=$(find . -name "*.tf" -type f | head -1 | xargs dirname 2>/dev/null)
-              if [ -d "$terraform_dir" ] && [ -n "$terraform_dir" ]; then
-                cd "$terraform_dir" || continue
-                echo "  Found terraform files in: $terraform_dir"
-                tflint --init
-                tflint --format compact
-              else
-                echo "  No terraform files found in $cache_dir"
-              fi
-              cd - > /dev/null
-            else
-              echo "Directory $cache_dir does not exist, skipping"
+          # Lint each unit where terragrunt ran init (the parent of .terraform), as a source with a
+          # //subdir clones the whole repository into the cache. The centralised rules gate the job;
+          # the default rules are advisory, as the repository's .tflint.hcl is not in the cache
+          centralised="$(pwd)/.tflint-centralised.hcl"
+          failed=0
+          while IFS= read -r -d '' cache_dir; do
+            init_dir="$(find "${cache_dir}" -name ".terraform" -type d -prune -print -quit)"
+            if [[ -z "${init_dir}" ]]; then
+              echo "No initialised terraform found in ${cache_dir}"
+              continue
             fi
-          done
+            terraform_dir="$(dirname "${init_dir}")"
+            echo "Running tflint in ${terraform_dir}"
+            if ! (cd "${terraform_dir}" && tflint --init && tflint --format compact); then
+              echo "::warning title=TFLint::default rules reported issues in ${terraform_dir}"
+            fi
+            if ! (cd "${terraform_dir}" && tflint --config="${centralised}" --init && tflint --config="${centralised}" --format compact); then
+              echo "::error title=TFLint::centralised rules failed in ${terraform_dir}"
+              failed=1
+            fi
+          done < <(find . -name ".terragrunt-cache" -type d -prune -print0)
+          exit "${failed}"
 
   terragrunt-security:
     name: "Static Security Analysis"
@@ -499,6 +506,7 @@ jobs:
     outputs:
       result-auth: ${{ steps.bootstrap.outputs.outcome-auth }}
       result-plan: ${{ steps.plan.outcome }}
+      result-tags: ${{ steps.tag-check.outcome }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -564,6 +572,11 @@ jobs:
             -lock-timeout=${{ inputs.terraform-lock-timeout }} \
             ${{ inputs.terraform-plan-extra-args }} \
             2>&1 | tee tfplan.stdout
+      - name: Terragrunt Tag Check
+        id: tag-check
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-tag-check@main # main
+        with:
+          plan-json: ${{ runner.temp }}/tfplan-json
       - name: Collect Plan Summary
         if: always() && inputs.enable-plan-summary && steps.extract-directory-name.outcome == 'success'
         uses: appvia/appvia-cicd-workflows/.github/actions/terragrunt-plan-collect@main # main
@@ -572,6 +585,7 @@ jobs:
           json-dir: ${{ runner.temp }}/tfplan-json
           outcome-auth: ${{ steps.bootstrap.outputs.outcome-auth }}
           outcome-plan: ${{ steps.plan.outcome }}
+          outcome-tags: ${{ steps.tag-check.outcome }}
           plan-dir: ${{ runner.temp }}/tfplan
           terragrunt-config-file: ${{ inputs.terragrunt-config-file }}
           unit-account: ${{ matrix.unit.account }}
@@ -592,6 +606,7 @@ jobs:
       changes: ${{ steps.summary.outputs.changes }}
       result-auth: ${{ steps.summary.outputs.result-auth }}
       result-plan: ${{ steps.summary.outputs.result-plan }}
+      result-tags: ${{ steps.summary.outputs.result-tags }}
     steps:
       - name: Terragrunt Plan Summary
         id: summary
@@ -613,6 +628,7 @@ jobs:
     outputs:
       result-auth: ${{ steps.bootstrap.outputs.outcome-auth }}
       result-plan: ${{ steps.plan.outcome }}
+      result-tags: ${{ steps.tag-check.outcome }}
     #  result-validate: ${{ steps.validate.outcome }}
     env:
       TF_LOG: ${{ needs.debug-mode.outputs.tf_log }}
@@ -650,16 +666,28 @@ jobs:
           jq -n -r 'env.TF_VARS_JSON | gsub("[\n\r]";"") | fromjson | to_entries[] | "\(.key)=\(.value)"' >> "$GITHUB_ENV"
       - name: Terragrunt Plan
         id: plan
+        env:
+          PLAN_DIR: ${{ runner.temp }}/tfplan
+          PLAN_JSON_DIR: ${{ runner.temp }}/tfplan-json
         run: |
           echo "Running Terragrunt Plan on: ${{ inputs.terragrunt-dir }}"
           set -o pipefail
-          terragrunt run --config ${{ inputs.terragrunt-config-file }} --all ${{ inputs.terragrunt-plan-extra-args }} -- \
+          # Save the plans as json, so the resource tags can be checked against the policy
+          rm -rf "${PLAN_DIR}" "${PLAN_JSON_DIR}"
+          terragrunt run --config ${{ inputs.terragrunt-config-file }} --all \
+            --out-dir "${PLAN_DIR}" --json-out-dir "${PLAN_JSON_DIR}" \
+            ${{ inputs.terragrunt-plan-extra-args }} -- \
             plan \
             -no-color -input=false \
             -parallelism=${{ inputs.terraform-parallelism }} \
             -lock-timeout=${{ inputs.terraform-lock-timeout }} \
             ${{ inputs.terraform-plan-extra-args }} \
             2>&1 | tee tfplan.stdout
+      - name: Terragrunt Tag Check
+        id: tag-check
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-tag-check@main # main
+        with:
+          plan-json: ${{ runner.temp }}/tfplan-json
 
   terragrunt-infracost:
     name: "Terragrunt Get Cost Estimate"
@@ -849,6 +877,7 @@ jobs:
           status-inputs-render: ${{ needs.terragrunt-render.outputs.result }}
           status-linting: ${{ needs.terragrunt-lint.outputs.result }}
           status-plan: ${{ needs.terragrunt-plan-summary.outputs.result-plan || needs.terragrunt-plan-matrix.outputs.result-plan }}
+          status-tags: ${{ needs.terragrunt-plan-summary.outputs.result-tags || needs.terragrunt-plan-matrix.outputs.result-tags }}
           status-security: ${{ needs.terragrunt-security.outputs.result }}
           working-directory: ${{ inputs.terragrunt-dir }}
 
@@ -883,5 +912,6 @@ jobs:
           status-inputs-render: ${{ needs.terragrunt-render.outputs.result }}
           status-linting: ${{ needs.terragrunt-lint.outputs.result }}
           status-plan: ${{ needs.terragrunt-plan.outputs.result-plan }}
+          status-tags: ${{ needs.terragrunt-plan.outputs.result-tags }}
           status-security: ${{ needs.terragrunt-security.outputs.result }}
           working-directory: ${{ inputs.terragrunt-dir }}

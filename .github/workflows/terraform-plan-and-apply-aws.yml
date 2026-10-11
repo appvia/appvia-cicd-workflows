@@ -373,6 +373,7 @@ jobs:
       result-validate: ${{ steps.validate.outcome }}
       result-s3-backend-check: ${{ steps.s3-backend-check.outcome }}
       result-plan: ${{ steps.plan.outcome }}
+      result-tags: ${{ steps.tag-check.outcome }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -449,6 +450,14 @@ jobs:
       - name: Terraform Plan JSON Output
         run: |
           ${{ env.TOOL_NAME }} -chdir=${{ inputs.terraform-dir }} show -json tfplan > tfplan.json
+      # The job is failed by "Enforce Tag Policy" once the plan has been uploaded
+      - name: Terraform Tag Check
+        id: tag-check
+        continue-on-error: true
+        uses: appvia/appvia-cicd-workflows/.github/actions/terraform-tag-check@main # main
+        with:
+          plan-json: tfplan.json
+          working-directory: ${{ inputs.working-directory }}
       - name: Simple Plan Output
         run: |
           ${{ env.TOOL_NAME }} show -no-color tfplan | tee tfplan-simple
@@ -488,6 +497,11 @@ jobs:
           include-hidden-files: true
           path: ${{ inputs.additional-dir }}
           retention-days: 14
+      - name: Enforce Tag Policy
+        if: steps.tag-check.outcome == 'failure'
+        run: |
+          echo "::error title=Tag Policy::resources do not meet the tagging policy, see the Terraform Tag Check step and the job summary"
+          exit 1
 
   terraform-checkov:
     name: "Static Security Analysis - Checkov"
@@ -658,6 +672,7 @@ jobs:
             * 🤖 <b>Terraform Validation:</b>           \`${{ needs.terraform-plan.outputs.result-validate }}\`
             * 📁 <b>Terraform S3 Backend:</b>           \`${{ needs.terraform-plan.outputs.result-s3-backend-check }}\`
             * 📖 <b>Terraform Plan:</b>                 \`${{ needs.terraform-plan.outputs.result-plan }}\`
+            * 🏷️ <b>Terraform Tag Policy:</b>           \`${{ needs.terraform-plan.outputs.result-tags }}\`
             * 🔖 <b>Commitlint:</b>                     \`${{ needs.commitlint.outputs.result }}\`
 
             <details><summary><b>Output: 📖 Terraform Plan</b></summary>

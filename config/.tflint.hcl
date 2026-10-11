@@ -4,9 +4,10 @@ plugin "aws" {
   source  = "github.com/terraform-linters/tflint-ruleset-aws"
 }
 
+# Must match the required-tags rule and exclude_resource_types in config/tagging-policy.yaml
 rule "aws_resource_missing_tags" {
   enabled = true
-  tags    = ["Product", "Environment", "Owner"]
+  tags    = ["Environment", "Product", "GitRepo"]
   exclude = []
 }
 

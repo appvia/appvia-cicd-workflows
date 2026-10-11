@@ -7,3 +7,8 @@
 *.orig
 
 .idea
+
+__pycache__/
+*.pyc
+# Local design specs and implementation plans
+docs/superpowers/

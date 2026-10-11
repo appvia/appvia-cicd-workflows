@@ -15,6 +15,10 @@ inputs:
   outcome-plan:
     description: "The outcome of the terragrunt plan step"
     required: true
+  outcome-tags:
+    description: "The outcome of the tag policy check step"
+    required: false
+    default: ""
   plan-dir:
     description: "The directory passed to terragrunt --out-dir"
     required: true
@@ -67,6 +71,7 @@ runs:
         JSON_DIR: ${{ inputs.json-dir }}
         OUTCOME_AUTH: ${{ inputs.outcome-auth }}
         OUTCOME_PLAN: ${{ inputs.outcome-plan }}
+        OUTCOME_TAGS: ${{ inputs.outcome-tags }}
         OUTPUT_DIR: ${{ steps.name.outputs.output_dir }}
         PLAN_DIR: ${{ inputs.plan-dir }}
         TERRAGRUNT_CONFIG_FILE: ${{ inputs.terragrunt-config-file }}

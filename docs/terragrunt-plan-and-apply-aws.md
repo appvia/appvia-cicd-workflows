@@ -21,12 +21,12 @@ Terragrunt is a thin wrapper for Terraform that provides extra tools for keeping
 3. **Terragrunt HCL Format:** Checks that all `.hcl` files are properly formatted
 4. **Terragrunt Inputs Render:** Validates that Terragrunt can render all input configurations
 5. **Terragrunt Format:** Runs `terraform fmt` on all Terraform code within Terragrunt modules
-6. **Terragrunt Lint:** Runs TFLint to check for deprecated syntax, unused declarations, and best practices
+6. **Terragrunt Lint:** Runs TFLint in each unit's generated `.terragrunt-cache` working directory with the centralised [config/.tflint.hcl](../config/.tflint.hcl), failing the job if any unit fails. TFLint's default rules are also run, but only as warnings, since the repository's own `.tflint.hcl` is not copied into the cache. Units without a `terraform { source }` have no cache and are not linted
 7. **AWS Authentication:** Uses Web Identity Federation to authenticate with AWS via OIDC
 8. **Static Security Analysis:** Runs Trivy to scan for security misconfigurations (placeholder implementation)
 9. **Terragrunt Inputs Diff:** Detects which Terragrunt units have changed inputs (pull requests only)
 10. **Terragrunt Matrix:** Generates a matrix of Terragrunt units for parallel execution (optional)
-11. **Terragrunt Plan:** Runs `terragrunt plan` for all or specific units, either in parallel (matrix mode, one job per unit) or sequentially in a single job
+11. **Terragrunt Plan:** Runs `terragrunt plan` for all or specific units, either in parallel (matrix mode, one job per unit) or sequentially in a single job, then checks the planned resources against the [tagging policy](#tagging-policy)
 12. **Get Cost Estimate:** Runs Infracost to estimate infrastructure costs (PR only, optional, standard mode only)
 13. **Terragrunt Plan Summary:** In matrix mode, aggregates the per-unit plans into one report on the job summary, the job log and the PR (see [Plan Summary](#plan-summary-matrix-mode))
 14. **Add PR Comment:** Posts a comprehensive comment to the PR with all validation and plan results
@@ -356,6 +356,48 @@ with:
   enable-plan-summary: false
 ```
 
+## Tagging Policy
+
+The pipeline fails if a resource being created or updated breaks a rule in [config/tagging-policy.yaml](../config/tagging-policy.yaml). The shipped policy requires:
+
+| Rule | Applies to | Requirement |
+| ---- | ---------- | ----------- |
+| `required-tags` | every taggable resource | `Environment`, `Product` and `GitRepo` are present |
+| `environment-values` | every resource with `Environment` | `Environment` is `Production`, `Staging`, `Uat`, `Testing`, `Development` or `Sandbox` (case-sensitive) |
+| `git-repo-tag` | every resource with `GitRepo` | `GitRepo` starts with `https://github.com/` |
+| `product-tag-default`, `tenant-tag-default` | every resource with `Product` or `Tenant` | The value is not the `PRODUCT_NAME` or `TENANT_NAME` placeholder |
+| `backup-tiers-values` | every resource with `BackupTiers` | `BackupTiers` is a tier, a number and a period, such as `Bronze1d`, `Silver1w` or `Gold1m` |
+| `data-classification-values` | every resource with `DataClassification` | `DataClassification` is `Public`, `Internal`, `Confidential`, `Restricted` or `Critical` |
+| `security-classification-values` | every resource with `SecurityClassification` | `SecurityClassification` is `MissionCritical`, `BusinessCritical` or `Standard` |
+| `data-classification` | `aws_s3_bucket`, `aws_db_instance`, `aws_dynamodb_table` | `DataClassification` is present |
+| `instance-schedule-tag` | `aws_instance`, `aws_db_instance` in `Development`, `Staging`, `Testing` or `Uat` | `Schedule` is `AlwaysOn`, `UkWorkingHours`, `UkExtendedHours`, `WeekendsOnly` or `PlatformValidation` |
+| `sandbox-nukes` | every resource with `Environment=Sandbox` | `DisableNuke` is `"true"` or `"false"` |
+
+The policy is enforced twice:
+
+1. **Linting:** tflint's `aws_resource_missing_tags` rule, in the centralised [config/.tflint.hcl](../config/.tflint.hcl), reports resources missing a baseline key. It understands provider `default_tags`, but cannot see tags set inside remote modules or check their values.
+2. **Plan check:** the [terraform-tag-check](./actions.md#terraform-tag-check) action reads the Terragrunt plan JSON and applies every rule to the final tags (`tags_all`, which includes `default_tags`) of each resource being **created or updated**. Resources being deleted or left unchanged are not checked, so existing resources only need fixing when a change touches them. Values only known after apply produce a warning rather than a failure.
+
+In matrix mode each unit is checked in its own plan job, and the outcomes are aggregated into a single **Terragrunt Tag Policy** status in the pull request comment; units whose plan failed, and so never reached the check, are ignored.
+
+The `tags` list in the tflint rule must match the `required-tags` rule; a test in this repository enforces that. The rule syntax is described in the [terraform-tag-check README](../.github/actions/terraform-tag-check/README.md).
+
+### Fixing tag policy failures
+
+The job summary of the failing plan job lists each violation with its rule and a message saying what is missing or wrong. The simplest fix for the baseline tags is provider `default_tags`, which apply to every resource the provider creates:
+
+```hcl
+provider "aws" {
+  default_tags {
+    tags = {
+      Environment = "Production"
+      Product     = "payments"
+      GitRepo     = "https://github.com/appvia/payments"
+    }
+  }
+}
+```
+
 ## Pull Request Comments
 
 When the workflow runs on a pull request, it posts a review status comment containing:
@@ -369,6 +411,7 @@ When the workflow runs on a pull request, it posts a review status comment conta
 - **Security Status:** Results from Trivy security scan
 - **Authentication Status:** Whether AWS authentication succeeded
 - **Plan Status:** Whether the plan succeeded
+- **Tag Policy Status:** Whether the planned resources meet the [tagging policy](#tagging-policy) (aggregated across units in matrix mode)
 - **Cost Estimate:** Infrastructure cost changes (if Infracost is enabled)
 
 In matrix mode a second comment, the [plan summary](#plan-summary-matrix-mode), shows the changes for every unit.
@@ -456,6 +499,12 @@ The workflow is assembled from the following composite actions, which can also b
 - **A unit shows as failed with no plan:** the matrix job failed before or during the plan; open that unit's job for the logs
 - **"matrix job(s) did not report a plan summary":** a matrix job failed before the collect step ran, e.g. during checkout or bootstrap
 - **Plans missing from the PR comment:** the comment hit GitHub's size limit; the full report is on the workflow run's job summary
+
+### Tag Policy Failures
+
+- Open the job summary of the failing plan job; it lists each resource, the missing keys and the invalid values
+- Add the tags, ideally through provider `default_tags` in the generated provider block, and push again
+- A `TFLint` error naming `aws_resource_missing_tags` is the same policy caught by linting
 
 ### Formatting Failures
 

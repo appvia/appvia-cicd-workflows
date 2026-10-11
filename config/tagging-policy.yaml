@@ -1,0 +1,90 @@
+---
+# The tagging policy enforced by the terraform-tag-check action.
+# Rules are chains of steps: a `filter` narrows the resources a rule applies to, an `assert`
+# reports a violation when it does not hold. See docs/terraform-plan-and-apply-aws.md#tagging-policy
+version: 1
+
+# Resource types that are never checked
+exclude_resource_types: []
+
+rules:
+  #
+  ## Required Tags
+  #
+  - name: required-tags
+    description: Every taggable resource carries the baseline tags
+    steps:
+      - assert: {tag: [Environment, Product, GitRepo], present: true}
+  #
+  ## Ensure the values are correct
+  #
+  - name: git-repo-tag
+    description: Every resource is tagged with the GitRepo tag
+    steps:
+      - filter: {tag: GitRepo, present: true}
+      - assert: {tag: GitRepo, starts_with: https://github.com/}
+
+  - name: environment-values
+    description: Environment is one of the allowed values
+    steps:
+      - filter: {tag: Environment, present: true}
+      - assert: {tag: Environment, in: [Production, Staging, Uat, Testing, Development, Sandbox]}
+
+  - name: backup-tiers-values
+    description: BackupTiers is one of the allowed values
+    steps:
+      - filter: {tag: BackupTiers, present: true}
+      # Bronze, Silver, Gold followed by a number and a duration (d, w, m) e.g. Bronze1d, Silver1w, Gold1m
+      - assert: {tag: BackupTiers, matches: "^(Bronze|Silver|Gold)[0-9]+[dwm]$"}
+
+  - name: data-classification-values
+    description: DataClassification is one of the allowed values
+    steps:
+      - filter: {tag: DataClassification, present: true}
+      - assert: {tag: DataClassification, in: [Public, Internal, Confidential, Restricted, Critical]}
+
+  - name: security-classification-values
+    description: SecurityClassification is one of the allowed values
+    steps:
+      - filter: {tag: SecurityClassification, present: true}
+      - assert: {tag: SecurityClassification, in: [MissionCritical, BusinessCritical, Standard]}
+  #
+  ## Ensure we are not using default values
+  #
+  - name: product-tag-default
+    description: Ensure not using default product name
+    steps:
+      - filter: {tag: Product, present: true}
+      - assert: {tag: Product, equals: PRODUCT_NAME, not: true}
+
+  - name: tenant-tag-default
+    description: Ensure not using default tenant name
+    steps:
+      - filter: {tag: Tenant, present: true}
+      - assert: {tag: Tenant, equals: TENANT_NAME, not: true}
+  #
+  ## Data Classification
+  #
+  - name: data-classification
+    description: S3 buckets declare how sensitive their data is
+    steps:
+      - filter: {type: [aws_s3_bucket, aws_db_instance, aws_dynamodb_table]}
+      - assert: {tag: DataClassification, present: true}
+  #
+  ## Instance Scheduling
+  #
+  - name: instance-schedule-tag
+    description: Ensure the instance schedule is tagged correctly
+    steps:
+      - filter: {type: [aws_db_instance, aws_instance]}
+      - filter: {tag: Environment, contains: [Development, Staging, Testing, Uat]}
+      - assert: {tag: Schedule, in: [AlwaysOn, UkWorkingHours, UkExtendedHours, WeekendsOnly, "PlatformValidation"]}
+
+  #
+  ## Sandbox Nukes
+  #
+  - name: sandbox-nukes
+    description: Ensure the sandbox nukes are tagged correctly
+    steps:
+      - filter: {tag: Environment, equals: Sandbox}
+      - assert: {tag: DisableNuke, in: ["true", "false"]}

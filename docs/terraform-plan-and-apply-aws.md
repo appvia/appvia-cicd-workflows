@@ -22,9 +22,10 @@ with:
 6. **Terraform Security:** The module code and dependencies are examined by a static analysis tool to identify and misconfiguration or potential security issues.
 7. **Terraform Validate:** The workflow validates the Terraform configuration files using the terraform validate command to check for syntax errors and other issues.
 8. **Terraform Plan:** A Terraform plan is generated with a specified values file (overridable via inputs) using the terraform plan command.
-9. **Get Cost Estimate:** The infracost utility is run to get a cost estimate on the Terraform Plan output. A comment will be added to the pull request with the cost estimate.
-10. **Add PR Comment:** If the workflow is triggered via a Pull Request, a comment will be added to the ticket containing the results of the previous steps.
-11. **Apply Changes:** If the workflow is triggered by a push to the main branch or by a tag push, it automatically applies the changes using the terraform apply command. This step should be used with caution as AWS infrastructure is modified at this point. The automatic apply can be skipped by setting `enable-terraform-apply` to `false`.
+9. **Tag Policy Check:** The resources being created or updated in the plan are checked against the [tagging policy](#tagging-policy); the job fails, after the plan has been uploaded, if any resource breaks a rule in the tagging policy.
+10. **Get Cost Estimate:** The infracost utility is run to get a cost estimate on the Terraform Plan output. A comment will be added to the pull request with the cost estimate.
+11. **Add PR Comment:** If the workflow is triggered via a Pull Request, a comment will be added to the ticket containing the results of the previous steps.
+12. **Apply Changes:** If the workflow is triggered by a push to the main branch or by a tag push, it automatically applies the changes using the terraform apply command. This step should be used with caution as AWS infrastructure is modified at this point. The automatic apply can be skipped by setting `enable-terraform-apply` to `false`.
 
 ## Tag-triggered deployments
 
@@ -68,6 +69,52 @@ The `cicd-repository` and `cicd-branch` inputs have been removed; callers still 
 more: `uses:` cannot be templated with expressions, so the configuration is always taken from the
 same ref the workflow itself is called at. Pin the workflow to a tag and the configuration is
 pinned with it.
+
+## Tagging Policy
+
+The pipeline fails if a resource being created or updated breaks a rule in [config/tagging-policy.yaml](../config/tagging-policy.yaml). The shipped policy requires:
+
+| Rule | Applies to | Requirement |
+| ---- | ---------- | ----------- |
+| `required-tags` | every taggable resource | `Environment`, `Product` and `GitRepo` are present |
+| `environment-values` | every resource with `Environment` | `Environment` is `Production`, `Staging`, `Uat`, `Testing`, `Development` or `Sandbox` (case-sensitive) |
+| `git-repo-tag` | every resource with `GitRepo` | `GitRepo` starts with `https://github.com/` |
+| `product-tag-default`, `tenant-tag-default` | every resource with `Product` or `Tenant` | The value is not the `PRODUCT_NAME` or `TENANT_NAME` placeholder |
+| `backup-tiers-values` | every resource with `BackupTiers` | `BackupTiers` is a tier, a number and a period, such as `Bronze1d`, `Silver1w` or `Gold1m` |
+| `data-classification-values` | every resource with `DataClassification` | `DataClassification` is `Public`, `Internal`, `Confidential`, `Restricted` or `Critical` |
+| `security-classification-values` | every resource with `SecurityClassification` | `SecurityClassification` is `MissionCritical`, `BusinessCritical` or `Standard` |
+| `data-classification` | `aws_s3_bucket`, `aws_db_instance`, `aws_dynamodb_table` | `DataClassification` is present |
+| `instance-schedule-tag` | `aws_instance`, `aws_db_instance` in `Development`, `Staging`, `Testing` or `Uat` | `Schedule` is `AlwaysOn`, `UkWorkingHours`, `UkExtendedHours`, `WeekendsOnly` or `PlatformValidation` |
+| `sandbox-nukes` | every resource with `Environment=Sandbox` | `DisableNuke` is `"true"` or `"false"` |
+
+The policy is enforced twice:
+
+1. **Linting:** tflint's `aws_resource_missing_tags` rule, in the centralised [config/.tflint.hcl](../config/.tflint.hcl), reports resources missing a baseline key. It understands provider `default_tags`, but cannot see tags set inside remote modules or check their values.
+2. **Plan check:** the [terraform-tag-check](./actions.md#terraform-tag-check) action reads the Terraform plan JSON and applies every rule to the final tags (`tags_all`, which includes `default_tags`) of each resource being **created or updated**. Resources being deleted or left unchanged are not checked, so existing resources only need fixing when a change touches them. Values only known after apply produce a warning rather than a failure.
+
+The `tags` list in the tflint rule must match the `required-tags` rule; a test in this repository enforces that. The outcome of the check is shown as **Terraform Tag Policy** in the pull request status comment.
+
+### Writing rules
+
+Rules are YAML configuration, so adding one never needs code. Each rule is a chain of `filter` and `assert` steps over resource types, addresses and tags, using the operators `present`, `equals`, `in`, `contains`, `starts_with`, `ends_with` and `matches` (a regular expression), with `not: true` to invert any condition. For example, `filter: {type: aws_s3_bucket}` followed by `assert: {tag: DataClassification, present: true}` requires a data classification on every S3 bucket.
+
+The [terraform-tag-check README](../.github/actions/terraform-tag-check/README.md) is the full reference: every target and operator, how filters and asserts chain, nested rules, severity, how values unknown until apply are handled, and a set of recipes.
+
+### Fixing tag policy failures
+
+The job summary of the failing plan job lists each violation with its rule and a message saying what is missing or wrong. The simplest fix for the baseline tags is provider `default_tags`, which apply to every resource the provider creates:
+
+```hcl
+provider "aws" {
+  default_tags {
+    tags = {
+      Environment = "Production"
+      Product     = "payments"
+      GitRepo     = "https://github.com/appvia/payments"
+    }
+  }
+}
+```
 
 ## Usage
 
