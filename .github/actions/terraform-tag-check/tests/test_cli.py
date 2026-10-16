@@ -36,7 +36,7 @@ class CliTest(unittest.TestCase):
         self.policy = self.tmp / "policy.yaml"
         self.policy.write_text(POLICY, encoding="utf-8")
 
-    def run_check(self, plan_json, policy=None):
+    def run_check(self, plan_json, policy=None, mode=None):
         summary, output = self.tmp / "summary.md", self.tmp / "output.txt"
         summary.write_text("", encoding="utf-8")
         output.write_text("", encoding="utf-8")
@@ -47,6 +47,9 @@ class CliTest(unittest.TestCase):
             "GITHUB_STEP_SUMMARY": str(summary),
             "GITHUB_OUTPUT": str(output),
         }
+        env.pop("TAG_POLICY_MODE", None)
+        if mode:
+            env["TAG_POLICY_MODE"] = mode
         done = subprocess.run(["bash", str(CHECK_SH)], env=env, capture_output=True, text=True, cwd=self.tmp)
         return done, summary.read_text(encoding="utf-8"), output.read_text(encoding="utf-8")
 
@@ -60,7 +63,9 @@ class CliTest(unittest.TestCase):
         done, summary, output = self.run_check(path)
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         self.assertIn("violations=0", output)
+        self.assertIn("result=success", output)
         self.assertIn("meet the tagging policy", summary)
+        self.assertNotIn("Audit mode", summary)
 
     def test_violations_fail_with_annotations_summary_and_output(self):
         bad = {"Environment": "Production", "Team": "x", "Owner": "me"}
@@ -77,6 +82,36 @@ class CliTest(unittest.TestCase):
         self.assertIn("s3-data-classification: tag DataClassification must be present", done.stdout)
         self.assertIn("required-tags: tag Environment must be present", done.stdout)
         self.assertIn("| Rule |", summary)
+        self.assertIn("result=failure", output)
+
+    def test_audit_mode_reports_violations_as_warnings_without_failing(self):
+        path = self.write_plan(change("aws_sqs_queue.q", "aws_sqs_queue", {"tags_all": {"Owner": "me"}}))
+        done, summary, output = self.run_check(path, mode="audit")
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertIn("violations=1", output)
+        self.assertIn("result=warning", output)
+        self.assertIn("::warning title=Tag Policy::aws_sqs_queue.q (", done.stdout)
+        self.assertNotIn("::error", done.stdout)
+        self.assertIn("Audit mode", summary)
+        self.assertIn("| Rule |", summary)
+
+    def test_audit_mode_compliant_plan_succeeds(self):
+        path = self.write_plan(change("aws_s3_bucket.b", "aws_s3_bucket", {"tags_all": GOOD}))
+        done, summary, output = self.run_check(path, mode="audit")
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertIn("result=success", output)
+
+    def test_audit_mode_usage_errors_warn_without_failing(self):
+        done, _, output = self.run_check(self.tmp / "nope.json", mode="audit")
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertIn("::warning title=Tag Policy::plan json not found", done.stdout)
+        self.assertNotIn("::error", done.stdout)
+        self.assertIn("result=warning", output)
+
+    def test_invalid_mode_exits_2(self):
+        done, _, _ = self.run_check(self.write_plan(), mode="nope")
+        self.assertEqual(done.returncode, 2)
+        self.assertIn("TAG_POLICY_MODE must be enforce or audit", done.stdout)
 
     def test_warning_severity_rules_do_not_fail_the_job(self):
         tags = {"Environment": "Production", "Team": "x", "DataClassification": "Public"}

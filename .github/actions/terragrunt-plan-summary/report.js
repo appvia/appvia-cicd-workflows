@@ -149,6 +149,9 @@ function outcome(values, expected) {
   if (values.length === 0) {
     return "skipped";
   }
+  if (values.some((value) => value === "warning")) {
+    return values.every((value) => value === "success" || value === "warning") ? "warning" : "failure";
+  }
   return values.every((value) => value === "success") ? "success" : "failure";
 }
 

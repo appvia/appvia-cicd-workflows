@@ -19,11 +19,12 @@ def failing_resources(results):
     }
 
 
-def annotations(results):
+def annotations(results, audit=False):
+    """In audit mode every violation is annotated as a warning."""
     lines = []
     for result in results:
         for violation in result.violations:
-            level = "error" if violation.severity == "error" else "warning"
+            level = "error" if violation.severity == "error" and not audit else "warning"
             text = f"{violation.address} ({result.file}) {violation.rule}: {violation.message}"
             lines.append(f"::{level} title=Tag Policy::{_annotation(text)}")
         for item in result.unverified:
@@ -33,11 +34,13 @@ def annotations(results):
     return lines
 
 
-def summary(results, policy):
+def summary(results, policy, audit=False):
     failing = len(failing_resources(results))
     violations = [(r.file, v) for r in results for v in r.violations]
     unverified = [(r.file, u) for r in results for u in r.unverified]
     lines = ["### 🏷️ Tag Policy", ""]
+    if audit:
+        lines += ["> [!WARNING]", "> Audit mode: violations are reported but do not fail the job.", ""]
     if failing:
         lines.append(f"{failing} resource(s) do not meet the tagging policy.")
     elif violations or unverified:

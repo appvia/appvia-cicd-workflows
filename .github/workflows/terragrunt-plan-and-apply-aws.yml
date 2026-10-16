@@ -127,6 +127,12 @@ on:
         required: false
         type: string
 
+      tag-policy-mode:
+        default: "audit"
+        description: "How the tagging policy is applied to the plan: audit reports violations as warnings, enforce fails the job"
+        required: false
+        type: string
+
       terragrunt-dir:
         default: "."
         description: "The directory to validate"
@@ -506,7 +512,7 @@ jobs:
     outputs:
       result-auth: ${{ steps.bootstrap.outputs.outcome-auth }}
       result-plan: ${{ steps.plan.outcome }}
-      result-tags: ${{ steps.tag-check.outcome }}
+      result-tags: ${{ steps.tag-check.outputs.result || steps.tag-check.outcome }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -576,6 +582,7 @@ jobs:
         id: tag-check
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-tag-check@main # main
         with:
+          mode: ${{ inputs.tag-policy-mode }}
           plan-json: ${{ runner.temp }}/tfplan-json
       - name: Collect Plan Summary
         if: always() && inputs.enable-plan-summary && steps.extract-directory-name.outcome == 'success'
@@ -585,7 +592,7 @@ jobs:
           json-dir: ${{ runner.temp }}/tfplan-json
           outcome-auth: ${{ steps.bootstrap.outputs.outcome-auth }}
           outcome-plan: ${{ steps.plan.outcome }}
-          outcome-tags: ${{ steps.tag-check.outcome }}
+          outcome-tags: ${{ steps.tag-check.outputs.result || steps.tag-check.outcome }}
           plan-dir: ${{ runner.temp }}/tfplan
           terragrunt-config-file: ${{ inputs.terragrunt-config-file }}
           unit-account: ${{ matrix.unit.account }}
@@ -628,7 +635,7 @@ jobs:
     outputs:
       result-auth: ${{ steps.bootstrap.outputs.outcome-auth }}
       result-plan: ${{ steps.plan.outcome }}
-      result-tags: ${{ steps.tag-check.outcome }}
+      result-tags: ${{ steps.tag-check.outputs.result || steps.tag-check.outcome }}
     #  result-validate: ${{ steps.validate.outcome }}
     env:
       TF_LOG: ${{ needs.debug-mode.outputs.tf_log }}
@@ -687,6 +694,7 @@ jobs:
         id: tag-check
         uses: appvia/appvia-cicd-workflows/.github/actions/terraform-tag-check@main # main
         with:
+          mode: ${{ inputs.tag-policy-mode }}
           plan-json: ${{ runner.temp }}/tfplan-json
 
   terragrunt-infracost:

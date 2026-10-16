@@ -22,7 +22,7 @@ with:
 6. **Terraform Security:** The module code and dependencies are examined by a static analysis tool to identify and misconfiguration or potential security issues.
 7. **Terraform Validate:** The workflow validates the Terraform configuration files using the terraform validate command to check for syntax errors and other issues.
 8. **Terraform Plan:** A Terraform plan is generated with a specified values file (overridable via inputs) using the terraform plan command.
-9. **Tag Policy Check:** The resources being created or updated in the plan are checked against the [tagging policy](#tagging-policy); the job fails, after the plan has been uploaded, if any resource breaks a rule in the tagging policy.
+9. **Tag Policy Check:** The resources being created or updated in the plan are checked against the [tagging policy](#tagging-policy). In `audit` mode (the default) violations are reported as warnings; in `enforce` mode the job fails, after the plan has been uploaded, if any resource breaks a rule in the tagging policy.
 10. **Get Cost Estimate:** The infracost utility is run to get a cost estimate on the Terraform Plan output. A comment will be added to the pull request with the cost estimate.
 11. **Add PR Comment:** If the workflow is triggered via a Pull Request, a comment will be added to the ticket containing the results of the previous steps.
 12. **Apply Changes:** If the workflow is triggered by a push to the main branch or by a tag push, it automatically applies the changes using the terraform apply command. This step should be used with caution as AWS infrastructure is modified at this point. The automatic apply can be skipped by setting `enable-terraform-apply` to `false`.
@@ -72,7 +72,7 @@ pinned with it.
 
 ## Tagging Policy
 
-The pipeline fails if a resource being created or updated breaks a rule in [config/tagging-policy.yaml](../config/tagging-policy.yaml). The shipped policy requires:
+The pipeline reports, or in `enforce` mode fails on, any resource being created or updated that breaks a rule in [config/tagging-policy.yaml](../config/tagging-policy.yaml). The shipped policy requires:
 
 | Rule | Applies to | Requirement |
 | ---- | ---------- | ----------- |
@@ -93,6 +93,18 @@ The policy is enforced twice:
 2. **Plan check:** the [terraform-tag-check](./actions.md#terraform-tag-check) action reads the Terraform plan JSON and applies every rule to the final tags (`tags_all`, which includes `default_tags`) of each resource being **created or updated**. Resources being deleted or left unchanged are not checked, so existing resources only need fixing when a change touches them. Values only known after apply produce a warning rather than a failure.
 
 The `tags` list in the tflint rule must match the `required-tags` rule; a test in this repository enforces that. The outcome of the check is shown as **Terraform Tag Policy** in the pull request status comment.
+
+### Audit and enforce modes
+
+The `tag-policy-mode` input controls what a violation does. It defaults to `audit` while the policy is being rolled out:
+
+- **`audit`** (default): violations, and any error running the check, are annotated as warnings and listed in the job summary, but the job does not fail. The pull request status shows `warning`.
+- **`enforce`**: a violation of an `error`-severity rule fails the plan job.
+
+```yml
+    with:
+      tag-policy-mode: enforce
+```
 
 ### Writing rules
 
@@ -167,6 +179,7 @@ jobs:
 - `organization-name` - Default: the owner of the calling repository. The name of the GitHub organization
 - `environment` - Default: "production". The environment to deploy to
 - `runs-on` - Default: "ubuntu-latest". Single label value for the GitHub runner to use
+- `tag-policy-mode` - Default: "audit". `audit` reports tagging policy violations as warnings; `enforce` fails the job (see [Audit and enforce modes](#audit-and-enforce-modes))
 - `terraform-apply-extra-args` - Extra arguments to pass to terraform apply
 - `terraform-dir` - Default: ".". The directory to validate
 - `terraform-init-extra-args` - Extra arguments to pass to terraform init

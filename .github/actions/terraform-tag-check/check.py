@@ -4,6 +4,7 @@
 Run by check.sh with:
   PLAN_JSON   - a plan JSON file, or a directory searched recursively for *.json files
   POLICY_FILE - the tagging policy (YAML)
+  TAG_POLICY_MODE - enforce (default) or audit, where every annotation is a warning
 and, when set by the runner, GITHUB_OUTPUT (receives violations=<count>) and
 GITHUB_STEP_SUMMARY (receives a markdown report).
 
@@ -24,8 +25,13 @@ EXIT_VIOLATIONS = 1
 EXIT_USAGE = 2
 
 
+def audit_mode(env=os.environ):
+    return env.get("TAG_POLICY_MODE", "enforce") == "audit"
+
+
 def usage_error(message):
-    print(f"::error title=Tag Policy::{message}")
+    level = "warning" if audit_mode() else "error"
+    print(f"::{level} title=Tag Policy::{message}")
     return EXIT_USAGE
 
 
@@ -73,12 +79,13 @@ def main(env=os.environ):
     except PlanError as err:
         return usage_error(str(err))
 
+    audit = audit_mode(env)
     failing = len(report.failing_resources(results))
-    for line in report.annotations(results):
+    for line in report.annotations(results, audit=audit):
         print(line)
     if env.get("GITHUB_STEP_SUMMARY"):
         with open(env["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
-            handle.write(report.summary(results, policy))
+            handle.write(report.summary(results, policy, audit=audit))
     if env.get("GITHUB_OUTPUT"):
         with open(env["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
             handle.write(f"violations={failing}\n")

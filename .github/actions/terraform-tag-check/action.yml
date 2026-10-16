@@ -2,6 +2,10 @@
 name: Terraform Tag Check
 description: "Checks the resources created or updated in a terraform plan carry the tags required by the centralised tagging policy"
 inputs:
+  mode:
+    description: "enforce fails the step on a policy violation; audit reports violations as warnings and never fails"
+    required: false
+    default: "enforce"
   plan-json:
     description: "A plan JSON file (terraform show -json), or a directory searched recursively for *.json plan files"
     required: true
@@ -15,6 +19,9 @@ inputs:
     default: "."
 
 outputs:
+  result:
+    description: "success, failure, or warning when the check would have failed in audit mode"
+    value: ${{ steps.check.outputs.result }}
   violations:
     description: "The number of resources which violate the tagging policy"
     value: ${{ steps.check.outputs.violations }}
@@ -30,5 +37,6 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       env:
         PLAN_JSON: ${{ inputs.plan-json }}
+        TAG_POLICY_MODE: ${{ inputs.mode }}
         POLICY_FILE: ${{ inputs.policy-file || format('{0}/../../../config/tagging-policy.yaml', github.action_path) }}
       run: bash "${{ github.action_path }}/check.sh"

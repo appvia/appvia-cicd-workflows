@@ -188,7 +188,7 @@ Reverses `terraform-plan-encrypt`, turning each `<file>.enc` back into `<file>`.
 
 Source: [.github/actions/terraform-tag-check](../.github/actions/terraform-tag-check/action.yml)
 
-Checks the resources being created or updated in one or more Terraform plans (`terraform show -json`) against the rules in [config/tagging-policy.yaml](../config/tagging-policy.yaml). Each rule is a chain of `filter` and `assert` steps over resource types and tags, so rules such as "S3 buckets need `DataClassification`" or "Development instances need a `Schedule`" are configuration, not code. Resources being deleted or left unchanged, data sources, resources without `tags`/`tags_all` and excluded types are skipped. Each violation is annotated, a table is written to the job summary, and the step fails unless the violated rule has `severity: warning`. Tags only known after apply produce a warning. Requires Python 3 and PyYAML (installed if missing). The [action README](../.github/actions/terraform-tag-check/README.md) is the full reference for the targets, operators and rule chains; see also [Tagging Policy](./terraform-plan-and-apply-aws.md#tagging-policy).
+Checks the resources being created or updated in one or more Terraform plans (`terraform show -json`) against the rules in [config/tagging-policy.yaml](../config/tagging-policy.yaml). Each rule is a chain of `filter` and `assert` steps over resource types and tags, so rules such as "S3 buckets need `DataClassification`" or "Development instances need a `Schedule`" are configuration, not code. Resources being deleted or left unchanged, data sources, resources without `tags`/`tags_all` and excluded types are skipped. Each violation is annotated, a table is written to the job summary, and the step fails unless the violated rule has `severity: warning` or `mode` is `audit`, which reports everything as a warning and never fails. Tags only known after apply produce a warning. Requires Python 3 and PyYAML (installed if missing). The [action README](../.github/actions/terraform-tag-check/README.md) is the full reference for the targets, operators and rule chains; see also [Tagging Policy](./terraform-plan-and-apply-aws.md#tagging-policy).
 
 ```yml
 - name: Terraform Tag Check
@@ -201,6 +201,7 @@ Checks the resources being created or updated in one or more Terraform plans (`t
 
 | Name | Required | Default | Description |
 | ---- | -------- | ------- | ----------- |
+| `mode` | no | `enforce` | `enforce` fails on a violation; `audit` reports violations as warnings and never fails |
 | `plan-json` | yes | - | A plan JSON file, or a directory searched recursively for `*.json` plan files |
 | `policy-file` | no | `config/tagging-policy.yaml` | The tagging policy file |
 | `working-directory` | no | `.` | The directory `plan-json` is relative to |
@@ -209,6 +210,7 @@ Checks the resources being created or updated in one or more Terraform plans (`t
 
 | Name | Description |
 | ---- | ----------- |
+| `result` | `success`, `failure`, or `warning` when the check would have failed in audit mode |
 | `violations` | The number of resources which violate the tagging policy |
 
 ## Terragrunt Actions

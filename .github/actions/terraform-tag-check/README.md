@@ -28,6 +28,7 @@ A resource is checked when it is a managed resource (not a data source) with a `
 ```yaml
 - uses: appvia/appvia-cicd-workflows/.github/actions/terraform-tag-check@main
   with:
+    mode: enforce                     # or audit: report violations as warnings, never fail
     plan-json: tfplan.json            # a file, or a directory searched recursively
     working-directory: .              # plan-json is relative to this
     policy-file: ""                   # defaults to config/tagging-policy.yaml in this repository
@@ -35,15 +36,17 @@ A resource is checked when it is a managed resource (not a data source) with a `
 
 | Input | Required | Default | Description |
 | ----- | -------- | ------- | ----------- |
+| `mode` | no | `enforce` | `enforce` fails on a violation; `audit` annotates every finding, and any error running the check, as a warning and exits `0` |
 | `plan-json` | yes | | A plan JSON file, or a directory searched recursively for `*.json` plan files |
 | `policy-file` | no | `config/tagging-policy.yaml` | The tagging policy |
 | `working-directory` | no | `.` | The directory `plan-json` is relative to |
 
 | Output | Description |
 | ------ | ----------- |
+| `result` | `success`, `failure`, or `warning` when the check would have failed in audit mode |
 | `violations` | The number of resources with at least one `error`-severity violation |
 
-Exit codes: `0` compliant, `1` policy violations, `2` usage or policy error (an unreadable plan, an invalid policy, a crash). Requires Python 3 and PyYAML; PyYAML is installed if it is missing.
+Exit codes: `0` compliant (always `0` in audit mode), `1` policy violations, `2` usage or policy error (an unreadable plan, an invalid policy, a crash). Requires Python 3 and PyYAML; PyYAML is installed if it is missing.
 
 ## Policy file
 
@@ -270,13 +273,14 @@ The policy is validated before any plan is read. A problem exits with code 2 and
 
 - **Annotations:** one `::error` (or `::warning` for warning-severity rules and unverifiable values) per finding, naming the resource, plan file, rule and message.
 - **Job summary:** a table of violations (file, address, rule, message), the list of values not verifiable at plan time, and the policy's rules and descriptions.
-- **Step output:** `violations`, the count of resources with an `error`-severity violation.
+- **Step outputs:** `violations`, the count of resources with an `error`-severity violation, and `result`.
+- **Audit mode:** every annotation is a `::warning` and the job summary is headed with an audit notice.
 
 ## Developing
 
 | File | Responsibility |
 | ---- | -------------- |
-| `check.sh` | Entry point run by `action.yml`; makes sure PyYAML is available, then runs `check.py` |
+| `check.sh` | Entry point run by `action.yml`; makes sure PyYAML is available, runs `check.py`, and applies the mode to the exit code and `result` output |
 | `check.py` | Reads the environment, runs every plan file, writes output and the exit code |
 | `plan.py` | Turns a plan into the resources to check |
 | `policy.py` | Loads and validates the YAML policy |

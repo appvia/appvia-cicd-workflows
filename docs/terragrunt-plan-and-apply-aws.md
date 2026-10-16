@@ -89,6 +89,7 @@ jobs:
 - `enable-plan-summary` - Default: true. In matrix mode, whether to aggregate the per-unit plans into a single summary on the job summary, job log and pull request (see [Plan Summary](#plan-summary-matrix-mode))
 - `enable-private-access` - Default: false. Flag to indicate if Terraform requires pulling private modules
 - `organization-name` - The GitHub organization for private module access; defaults to the owner of the calling repository
+- `tag-policy-mode` - Default: "audit". `audit` reports tagging policy violations as warnings; `enforce` fails the plan job (see [Audit and enforce modes](#audit-and-enforce-modes))
 
 #### Environment Configuration
 
@@ -358,7 +359,7 @@ with:
 
 ## Tagging Policy
 
-The pipeline fails if a resource being created or updated breaks a rule in [config/tagging-policy.yaml](../config/tagging-policy.yaml). The shipped policy requires:
+The pipeline reports, or in `enforce` mode fails on, any resource being created or updated that breaks a rule in [config/tagging-policy.yaml](../config/tagging-policy.yaml). The shipped policy requires:
 
 | Rule | Applies to | Requirement |
 | ---- | ---------- | ----------- |
@@ -381,6 +382,18 @@ The policy is enforced twice:
 In matrix mode each unit is checked in its own plan job, and the outcomes are aggregated into a single **Terragrunt Tag Policy** status in the pull request comment; units whose plan failed, and so never reached the check, are ignored.
 
 The `tags` list in the tflint rule must match the `required-tags` rule; a test in this repository enforces that. The rule syntax is described in the [terraform-tag-check README](../.github/actions/terraform-tag-check/README.md).
+
+### Audit and enforce modes
+
+The `tag-policy-mode` input controls what a violation does. It defaults to `audit` while the policy is being rolled out:
+
+- **`audit`** (default): violations, and any error running the check, are annotated as warnings and listed in the job summary, but the job does not fail. The pull request status shows `warning` (in matrix mode, when any unit warned and none failed).
+- **`enforce`**: a violation of an `error`-severity rule fails the plan job.
+
+```yml
+    with:
+      tag-policy-mode: enforce
+```
 
 ### Fixing tag policy failures
 
@@ -502,6 +515,7 @@ The workflow is assembled from the following composite actions, which can also b
 
 ### Tag Policy Failures
 
+- Failures only happen with `tag-policy-mode: enforce`; in `audit` mode the same findings appear as warnings
 - Open the job summary of the failing plan job; it lists each resource, the missing keys and the invalid values
 - Add the tags, ideally through provider `default_tags` in the generated provider block, and push again
 - A `TFLint` error naming `aws_resource_missing_tags` is the same policy caught by linting
