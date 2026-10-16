@@ -24,6 +24,9 @@ outputs:
   result-plan:
     description: "The aggregated outcome of the plan across the matrix"
     value: ${{ steps.report.outputs.result-plan }}
+  result-tags:
+    description: "The aggregated outcome of the tag policy check across the matrix"
+    value: ${{ steps.report.outputs.result-tags }}
 
 runs:
   using: "composite"

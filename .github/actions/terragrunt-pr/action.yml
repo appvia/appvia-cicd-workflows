@@ -26,6 +26,10 @@ inputs:
   status-plan:
     description: "The plan of the status comment"
     required: true
+  status-tags:
+    description: "The tag policy check of the status comment"
+    required: false
+    default: ""
   status-commitlint:
     description: "The commitlint of the status comment"
     required: true
@@ -63,6 +67,7 @@ runs:
           * 🔍 <b>Terragrunt Security:</b>              \`${{ inputs.status-security }}\`
           * 🔑 <b>AWS Authentication:</b>               \`${{ inputs.status-auth }}\`
           * 📖 <b>Terragrunt Plan:</b>                  \`${{ inputs.status-plan }}\`
+          * 🏷️ <b>Terragrunt Tag Policy:</b>            \`${{ inputs.status-tags || 'skipped' }}\`
           * 🔖 <b>Commitlint:</b>                       \`${{ inputs.status-commitlint }}\`
 
           *<b>Pusher:</b> @${{ github.actor }}, <b>Action:</b> \`${{ github.event_name }}\`*

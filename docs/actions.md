@@ -17,6 +17,7 @@ When the runner resolves an action from this repository it checks out the whole 
 | [terraform-bootstrap-noauth](#terraform-bootstrap-noauth) | Installs Terraform or OpenTofu and runs `init -backend=false`, with no AWS credentials | [terraform-module-validation.yml](../.github/workflows/terraform-module-validation.yml), [terraform-plan-and-apply-aws.yml](../.github/workflows/terraform-plan-and-apply-aws.yml) |
 | [terraform-plan-encrypt](#terraform-plan-encrypt) | Encrypts plan artifacts with AES-256-CBC before they are uploaded | [terraform-destroy.yml](../.github/workflows/terraform-destroy.yml), [terraform-plan-and-apply-aws.yml](../.github/workflows/terraform-plan-and-apply-aws.yml) |
 | [terraform-plan-decrypt](#terraform-plan-decrypt) | Decrypts plan artifacts encrypted by `terraform-plan-encrypt` | [terraform-destroy.yml](../.github/workflows/terraform-destroy.yml), [terraform-plan-and-apply-aws.yml](../.github/workflows/terraform-plan-and-apply-aws.yml) |
+| [terraform-tag-check](#terraform-tag-check) | Checks the resources created or updated in a plan carry the tags required by `config/tagging-policy.yaml` | [terraform-plan-and-apply-aws.yml](../.github/workflows/terraform-plan-and-apply-aws.yml), [terragrunt-plan-and-apply-aws.yml](../.github/workflows/terragrunt-plan-and-apply-aws.yml) |
 | [terragrunt-bootstrap](#terragrunt-bootstrap) | Installs Terraform and Terragrunt, authenticates with AWS and sets up private module access | [terragrunt-plan-and-apply-aws.yml](../.github/workflows/terragrunt-plan-and-apply-aws.yml) |
 | [terragrunt-bootstrap-unauth](#terragrunt-bootstrap-unauth) | Installs Terraform and Terragrunt and sets up private module access, with no AWS credentials | [terragrunt-plan-and-apply-aws.yml](../.github/workflows/terragrunt-plan-and-apply-aws.yml) |
 | [terragrunt-diff](#terragrunt-diff) | Diffs the rendered Terragrunt inputs between the pull request and `main` | [terragrunt-plan-and-apply-aws.yml](../.github/workflows/terragrunt-plan-and-apply-aws.yml) |
@@ -182,6 +183,35 @@ Reverses `terraform-plan-encrypt`, turning each `<file>.enc` back into `<file>`.
 | `encryption-key` | no | - | Static encryption key. If not set, expects key at /tmp/tfplan-enc-key |
 | `files` | no | `tfplan tfplan.json` | Space-separated list of files to decrypt (without .enc suffix) |
 | `working-directory` | no | `.` | The working directory where encrypted plan files are located |
+
+### terraform-tag-check
+
+Source: [.github/actions/terraform-tag-check](../.github/actions/terraform-tag-check/action.yml)
+
+Checks the resources being created or updated in one or more Terraform plans (`terraform show -json`) against the rules in [config/tagging-policy.yaml](../config/tagging-policy.yaml). Each rule is a chain of `filter` and `assert` steps over resource types and tags, so rules such as "S3 buckets need `DataClassification`" or "Development instances need a `Schedule`" are configuration, not code. Resources being deleted or left unchanged, data sources, resources without `tags`/`tags_all` and excluded types are skipped. Each violation is annotated, a table is written to the job summary, and the step fails unless the violated rule has `severity: warning` or `mode` is `audit`, which reports everything as a warning and never fails. Tags only known after apply produce a warning. Requires Python 3 and PyYAML (installed if missing). The [action README](../.github/actions/terraform-tag-check/README.md) is the full reference for the targets, operators and rule chains; see also [Tagging Policy](./terraform-plan-and-apply-aws.md#tagging-policy).
+
+```yml
+- name: Terraform Tag Check
+  uses: appvia/appvia-cicd-workflows/.github/actions/terraform-tag-check@main
+  with:
+    plan-json: tfplan.json
+```
+
+**Inputs**
+
+| Name | Required | Default | Description |
+| ---- | -------- | ------- | ----------- |
+| `mode` | no | `enforce` | `enforce` fails on a violation; `audit` reports violations as warnings and never fails |
+| `plan-json` | yes | - | A plan JSON file, or a directory searched recursively for `*.json` plan files |
+| `policy-file` | no | `config/tagging-policy.yaml` | The tagging policy file |
+| `working-directory` | no | `.` | The directory `plan-json` is relative to |
+
+**Outputs**
+
+| Name | Description |
+| ---- | ----------- |
+| `result` | `success`, `failure`, or `warning` when the check would have failed in audit mode |
+| `violations` | The number of resources which violate the tagging policy |
 
 ## Terragrunt Actions
 
@@ -375,6 +405,7 @@ Run it with `if: always()` so failed plans are still reported.
 | `json-dir` | yes | - | The directory passed to terragrunt --json-out-dir |
 | `outcome-auth` | no | - | The outcome of the authentication step |
 | `outcome-plan` | yes | - | The outcome of the terragrunt plan step |
+| `outcome-tags` | no | - | The outcome of the tag policy check step |
 | `plan-dir` | yes | - | The directory passed to terragrunt --out-dir |
 | `terragrunt-config-file` | no | `terragrunt.hcl` | The configuration file to use for terragrunt |
 | `unit-account` | no | - | The account of the matrix unit |
@@ -425,12 +456,13 @@ plan-summary:
 | `changes` | Whether any unit has changes (true or false) |
 | `result-auth` | The aggregated outcome of authentication across the matrix |
 | `result-plan` | The aggregated outcome of the plan across the matrix |
+| `result-tags` | The aggregated outcome of the tag policy check across the matrix; units whose check was skipped are ignored |
 
 ### terragrunt-pr
 
 Source: [.github/actions/terragrunt-pr](../.github/actions/terragrunt-pr/action.yml)
 
-Posts the "Pull Request Review Status" comment listing the outcome of each check (format, lint, security, authentication, plan, commitlint, inputs diff and render), updating the existing comment for the environment rather than adding a new one each push.
+Posts the "Pull Request Review Status" comment listing the outcome of each check (format, lint, security, authentication, plan, tag policy, commitlint, inputs diff and render), updating the existing comment for the environment rather than adding a new one each push.
 
 **Inputs**
 
@@ -445,6 +477,7 @@ Posts the "Pull Request Review Status" comment listing the outcome of each check
 | `status-linting` | yes | - | The linting of the status comment |
 | `status-plan` | yes | - | The plan of the status comment |
 | `status-security` | yes | - | The security of the status comment |
+| `status-tags` | no | - | The tag policy check of the status comment, shown as `skipped` when empty |
 
 **Outputs**
 

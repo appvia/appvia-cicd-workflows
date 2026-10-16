@@ -149,6 +149,9 @@ function outcome(values, expected) {
   if (values.length === 0) {
     return "skipped";
   }
+  if (values.some((value) => value === "warning")) {
+    return values.every((value) => value === "success" || value === "warning") ? "warning" : "failure";
+  }
   return values.every((value) => value === "success") ? "success" : "failure";
 }
 
@@ -345,6 +348,8 @@ async function run({ github, context, core, inputs }) {
   core.info(`Loaded ${summaries.length} plan summaries (expected ${expected})`);
   core.setOutput("result-plan", outcome(summaries.map((summary) => summary.outcome_plan), expected));
   core.setOutput("result-auth", outcome(summaries.map((summary) => summary.outcome_auth).filter(Boolean), 0));
+  // Units whose plan failed never ran the tag check, so skipped legs are ignored
+  core.setOutput("result-tags", outcome(summaries.map((summary) => summary.outcome_tags).filter((value) => value && value !== "skipped"), 0));
   core.setOutput("changes", String(toRows(summaries).some((row) => row.changed)));
 
   printReport(summaries, core, options);

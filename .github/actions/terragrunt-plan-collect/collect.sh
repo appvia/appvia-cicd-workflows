@@ -16,6 +16,7 @@
 #   UNIT_NAME, UNIT_ACCOUNT, UNIT_REGION, UNIT_PATH - matrix unit metadata
 #   OUTCOME_PLAN     - the outcome of the plan step (success, failure, ...)
 #   OUTCOME_AUTH     - the outcome of the authentication step
+#   OUTCOME_TAGS     - the outcome of the tag policy check step
 #   TERRAGRUNT_CONFIG_FILE - the terragrunt config file (default: terragrunt.hcl)
 #   SKIP_SHOW        - when "true", do not render the human readable plan (testing)
 
@@ -104,6 +105,7 @@ jq -n \
   --arg name "${UNIT_NAME:-}" \
   --arg outcome_auth "${OUTCOME_AUTH:-}" \
   --arg outcome_plan "${OUTCOME_PLAN:-}" \
+  --arg outcome_tags "${OUTCOME_TAGS:-}" \
   --arg path "${UNIT_PATH:-${UNIT_DIR}}" \
   --arg region "${UNIT_REGION:-}" \
   --slurpfile units "${UNITS_FILE}" \
@@ -112,6 +114,7 @@ jq -n \
     name: $name,
     outcome_auth: $outcome_auth,
     outcome_plan: $outcome_plan,
+    outcome_tags: $outcome_tags,
     path: $path,
     region: $region,
     units: $units[0]

@@ -27,7 +27,7 @@ lint-actions: ## Lint GitHub workflows with actionlint, including embedded shell
 	actionlint -ignore SC2086 $(WORKFLOWS_DIR)/*.yml
 
 lint-shell: ## Shellcheck the helper scripts
-	shellcheck scripts/*.sh .github/actions/schema-validate/tests/*.sh
+	shellcheck scripts/*.sh .github/actions/schema-validate/tests/*.sh .github/actions/terraform-tag-check/*.sh .github/actions/terraform-tag-check/tests/*.sh
 
 lint-commits: ## Lint commit messages on this branch against $(BASE_BRANCH) (mirrors the commitlint CI job)
 	npx --yes commitlint --config $(COMMITLINT_CONFIG) --from $(BASE_BRANCH) --to HEAD
@@ -37,7 +37,10 @@ lint: lint-yaml lint-actions lint-shell lint-commits ## Run all linters
 test-schema-validate: ## Run the schema-validate fixture tests
 	bash .github/actions/schema-validate/tests/run.sh
 
-validate: lint test-schema-validate ## Run everything expected to pass before raising a pull request
+test-tag-check: ## Run the terraform-tag-check policy engine tests
+	bash .github/actions/terraform-tag-check/tests/run.sh
+
+validate: lint test-schema-validate test-tag-check ## Run everything expected to pass before raising a pull request
 
 audit-sha-pinning: ## Audit org repos for SHA-pinned reusable workflow references (requires gh CLI); usage: make audit-sha-pinning ORG=my-org
 	./scripts/audit_sha_pinning.sh $(ORG)
