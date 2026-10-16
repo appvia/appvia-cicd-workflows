@@ -708,7 +708,7 @@ jobs:
       - terragrunt-plan
     steps:
       - name: Setup Infracost
-        uses: infracost/actions/setup@fb736a8f219195d6efdca58682069b16fe1bc280 # v4
+        uses: infracost/actions/setup@a5783eb98adc93aa7a0049fce0abb06fdd30770a # v5
         with:
           api-key: ${{ secrets.infracost-api-key }}
           currency: GBP
