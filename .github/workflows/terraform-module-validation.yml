@@ -357,7 +357,7 @@ jobs:
           [ -f ".checkov.yml" ] || echo "{}" > .checkov.yml
       - name: Run Checkov
         id: security
-        uses: bridgecrewio/checkov-action@c13aafd679d3814a25067d10fcaf98c4f7594931 # v12
+        uses: bridgecrewio/checkov-action@6f26dc90000b74feb589a906cdfae540f5119895 # v12
         with:
           config_file: ${{ inputs.working-directory }}/.checkov.yml
           directory: ${{ inputs.working-directory }}
