@@ -158,7 +158,7 @@ on:
         required: false
         type: number
       terraform-version:
-        default: "1.14.5"
+        default: "1.16.6"
         description: "The version of terraform to use"
         required: false
         type: string
