@@ -479,7 +479,7 @@ jobs:
         id: checkov
         if: inputs.enable-checkov
         continue-on-error: true
-        uses: bridgecrewio/checkov-action@c13aafd679d3814a25067d10fcaf98c4f7594931 # v12
+        uses: bridgecrewio/checkov-action@c3e106d5f8f4253a6de5110efb41a080f83db294 # v12
         with:
           config_file: .checkov.yml
           directory: ${{ inputs.working-directory }}
