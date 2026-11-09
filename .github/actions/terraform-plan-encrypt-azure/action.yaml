@@ -1,0 +1,51 @@
+---
+name: "Terraform Plan Encrypt"
+description: "Encrypt Terraform plan files using AES-256-CBC before artifact upload."
+
+inputs:
+  encryption-key:
+    description: "Static encryption key."
+    required: true
+  working-directory:
+    description: "Directory containing the plan files."
+    required: false
+    default: "."
+  files:
+    description: "Space-separated list of files to encrypt."
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Write encryption key
+      shell: bash
+      run: |
+        set -euo pipefail
+        umask 077
+        printf '%s' "$ENCRYPTION_KEY" > "$RUNNER_TEMP/tfplan-enc-key"
+      env:
+        ENCRYPTION_KEY: ${{ inputs.encryption-key }}
+
+    - name: Encrypt plan files
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        FILES: ${{ inputs.files }}
+        KEY_FILE: ${{ runner.temp }}/tfplan-enc-key
+      run: |
+        set -euo pipefail
+        [[ -s "$KEY_FILE" ]] || { echo "::error::Encryption key is empty"; exit 1; }
+        for file in $FILES; do
+          if [[ ! -f "$file" ]]; then
+            echo "::error::Plan file not found: $file"
+            exit 1
+          fi
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 \
+            -in "$file" -out "$file.enc" -pass "file:$KEY_FILE"
+          rm "$file"
+        done
+
+    - name: Clean up encryption key
+      if: always()
+      shell: bash
+      run: rm -f "$RUNNER_TEMP/tfplan-enc-key"

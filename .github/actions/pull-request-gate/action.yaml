@@ -1,0 +1,53 @@
+---
+name: "Pull Request Gate"
+description: >-
+  Aggregates the outcomes of a job's own checks and only fails at the end, after every one of
+  them has had a chance to run: give each check step an `id:` and `if: always()` (so one check
+  failing doesn't skip a later, independent one), then pass their outcomes in here as the job's
+  last step. Publishes a pass/fail table to the job summary either way, and only fails the gate
+  itself — and so the job — when one of the results wasn't success or skipped, giving reviewers
+  every failure from a single run instead of one at a time across repeated pushes. Generic across
+  jobs/workflows: it only looks at whatever `results` it's handed.
+
+inputs:
+  results:
+    description: >-
+      One "Check Name=outcome" pair per line, e.g. "Ansible Lint=" followed by that step's
+      outcome context value. Any outcome other than success or skipped fails the gate.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Evaluate Results
+      shell: bash
+      env:
+        GATE_RESULTS: ${{ inputs.results }}
+      run: |
+        set -euo pipefail
+
+        {
+          echo "### Gate Results"
+          echo
+          echo "| Check | Outcome |"
+          echo "| --- | --- |"
+        } | tee -a "$GITHUB_STEP_SUMMARY"
+
+        failed=0
+        while IFS='=' read -r name outcome; do
+          [[ -z "$name" ]] && continue
+          case "$outcome" in
+            success) icon="✅" ;;
+            skipped) icon="⏭️" ;;
+            *)
+              icon="❌"
+              failed=1
+              ;;
+          esac
+          echo "| $name | $icon $outcome |" | tee -a "$GITHUB_STEP_SUMMARY"
+        done <<<"$GATE_RESULTS"
+
+        if [[ "$failed" -eq 1 ]]; then
+          echo "::error::One or more gated checks did not succeed — see the job summary for details."
+          exit 1
+        fi

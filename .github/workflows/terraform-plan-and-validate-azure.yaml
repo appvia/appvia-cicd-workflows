@@ -1,0 +1,624 @@
+---
+# =============================================================================
+# Terraform Plan & Validate (Azure)
+#
+# Reusable, input-driven workflow that handles a single environment per call.
+# Designed to be run on non-default branches and PRs.
+#
+# A handful of steps stay gated on github.event_name == 'pull_request' because they
+# need data only that event carries. Those guards are commented individually.
+# On a manual run the job summary and the plan-<environment> artifact carry the
+# output that the pull request comment would otherwise provide.
+#
+# Secrets are consumed via `secrets: inherit` in the consumer. That is what allows
+# any TF_VAR_* secret to be mapped onto a Terraform variable without editing a
+# workflow, and it is the only supported calling convention.
+# =============================================================================
+
+name: Terraform Plan and Validate
+
+on:
+  workflow_call:
+    inputs:
+      # --- Environment and location ------------------------------------------
+      environment:
+        description: >-
+          The Terraform environment to plan and apply, for example "dev". Selects the var-file and
+          the default state key. To cover several environments, fan out with strategy.matrix on the
+          calling job.
+        required: true
+        type: string
+      working-directory:
+        description: "Directory holding the root module."
+        required: false
+        default: "terraform"
+        type: string
+
+      # --- Runner ------------------------------------------------------------
+      runs-on:
+        description: "Runner label."
+        required: false
+        default: "ubuntu-2404-2core"
+        type: string
+      job-timeout-minutes:
+        description: >-
+          Job timeout in minutes, applied to every job. Raise it for slow Azure resources: an Azure
+          Firewall and similar can take around forty-five minutes on its own.
+        required: false
+        default: 90
+        type: number
+
+      # --- Toolchain ---------------------------------------------------------
+      install-tools:
+        description: >-
+          Install the toolchain when true. When false nothing is installed and the workflow instead
+          verifies that a bring-your-own runner image already provides every tool it needs, in which
+          case every version input is ignored.
+        required: false
+        default: true
+        type: boolean
+      enable-caching:
+        description: >-
+          Cache the installed tool binaries and the Terraform provider plugins between runs. Turn it
+          off to force a clean download of both.
+        required: false
+        default: true
+        type: boolean
+      node-version:
+        description: "Pinned Node.js version. Required when install-tools is true."
+        required: false
+        default: "22"
+        type: string
+      terraform-version:
+        description: "Pinned Terraform version. Required when install-tools is true."
+        required: false
+        default: ""
+        type: string
+      tflint-version:
+        description: "Pinned TFLint version. Required when install-tools is true."
+        required: false
+        default: ""
+        type: string
+      terraform-docs-version:
+        description: "Pinned terraform-docs version. Required when install-tools is true."
+        required: false
+        default: ""
+        type: string
+      checkov-version:
+        description: "Pinned Checkov version. Required when install-tools is true."
+        required: false
+        default: ""
+        type: string
+      conftest-version:
+        description: "Pinned Conftest version. Required when install-tools is true."
+        required: false
+        default: ""
+        type: string
+      infracost-version:
+        description: "Pinned Infracost version. Required when install-tools is true."
+        required: false
+        default: ""
+        type: string
+      commitlint-version:
+        description: "Pinned @commitlint/cli npm version. Required when install-tools is true."
+        required: false
+        default: ""
+        type: string
+      pre-commit-version:
+        description: "Pinned pre-commit version. Required when install-tools is true."
+        required: false
+        default: ""
+        type: string
+
+      # --- Terraform behaviour -----------------------------------------------
+      terraform-state-blob-name:
+        description: >-
+          Blob key within the state container. Defaults to <environment>.tfstate. Supply a complete
+          path such as networking/dev.tfstate when several states share one container.
+        required: false
+        default: ""
+        type: string
+      lock-id:
+        description: >-
+          Optional state lock ID to force-unlock after Terraform initializes. Copy the ID from the
+          "Error acquiring the state lock" output of a stuck run. Leave blank to skip.
+        required: false
+        default: ""
+        type: string
+      terraform-var-file:
+        description: "Environment var-file, relative to the working directory. Defaults to environments/<environment>.tfvars and must exist."
+        required: false
+        default: ""
+        type: string
+      terraform-common-var-file:
+        description: "Shared var-file applied to every environment. Ignored when the file is absent."
+        required: false
+        default: "environments/common.tfvars"
+        type: string
+      terraform-parallelism:
+        description: >-
+          Number of resource operations Terraform runs concurrently. Left at Terraform's own default
+          of ten, which is a deliberate choice: raising it on a large landing zone tends to trip
+          Azure Resource Manager throttling and produce intermittent failures rather than a faster
+          apply.
+        required: false
+        default: 10
+        type: number
+      terraform-log-level:
+        description: >-
+          Value for TF_LOG on plan and apply. One of TRACE, DEBUG, INFO, WARN, ERROR or OFF. Blank
+          disables Terraform debug logging.
+        required: false
+        default: ""
+        type: string
+
+      # --- Checks ------------------------------------------------------------
+      enable-commitlint:
+        description: "Run commitlint against the pull request commits."
+        required: false
+        default: true
+        type: boolean
+      commitlint-config-file:
+        description: "Commitlint configuration file. Defaults to .commitlintrc.yml"
+        required: false
+        default: ".commitlintrc.yml"
+        type: string
+      tflint-config-file:
+        description: "TFLint configuration file. Defaults to .tflint.hcl"
+        required: false
+        default: ".tflint.hcl"
+        type: string
+      pre-commit-config-file:
+        description: "Pre-commit configuration file. Defaults to .pre-commit-config.yaml."
+        required: false
+        default: ".pre-commit-config.yaml"
+        type: string
+      checkov-config-file:
+        description: "Checkov configuration file. Defaults to .checkov.yml."
+        required: false
+        default: ".checkov.yml"
+        type: string
+      upload-sarif:
+        description: "Upload Checkov SARIF results to GitHub Security."
+        required: false
+        default: true
+        type: boolean
+      enable-infracost:
+        description: "Run Infracost cost estimation. Requires the INFRACOST_API_KEY secret."
+        required: false
+        default: false
+        type: boolean
+      skip-pre-commit:
+        description: "Comma-separated pre-commit hook IDs to skip."
+        required: false
+        default: ""
+        type: string
+
+      # --- Private modules access ------------------------------------
+      github-app-owner:
+        description: "Owner the GitHub App token is scoped to. Defaults to current org if not set."
+        required: false
+        default: ""
+        type: string
+      github-repositories:
+        description: "Repositories comma separated list of repositories to scope the GitHub App token to. Empty will be scoped to all repositories."
+        required: false
+        default: ""
+        type: string
+      github-permission-readonly:
+        description: "All permissions grants will be read-only. Any overrides on individual permissions will be ignored."
+        required: false
+        default: true
+        type: boolean
+      github-app-auth-pwsh:
+        description: "Whether to use the GitHub App login PowerShell action, used for Bootstrap only."
+        required: false
+        default: false
+        type: boolean
+
+    secrets:
+      AZURE_CLIENT_ID:
+        description: "Azure client ID for OIDC authentication."
+        required: true
+      AZURE_TENANT_ID:
+        description: "Azure tenant ID for OIDC authentication."
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        description: "Azure subscription ID the deployment targets."
+        required: true
+      AZURE_STORAGE_RESOURCE_GROUP_NAME:
+        description: "Resource group containing the Terraform state storage account."
+        required: true
+      AZURE_STORAGE_ACCOUNT_NAME:
+        description: "Storage account containing Terraform state."
+        required: true
+      AZURE_STORAGE_CONTAINER_NAME:
+        description: "Blob container containing Terraform state. One container per repository."
+        required: true
+      AZURE_STORAGE_SUBSCRIPTION_ID:
+        description: "Subscription containing the Terraform state storage account. Defaults to AZURE_SUBSCRIPTION_ID when blank."
+        required: false
+      TERRAFORM_VARIABLES_JSON:
+        description: >-
+          JSON object of Terraform input variables, written to workflow-variables.auto.tfvars.json in
+          the working directory. Use it for structured values that must not be committed to
+          environments/*.tfvars. Individual TF_VAR_* secrets take precedence over it.
+        required: false
+      INFRACOST_API_KEY:
+        description: "Infracost API key. Required when enable-infracost is true."
+        required: false
+      GH_APP_ID:
+        description: "GitHub App ID used to pull private modules & auth to GitHub. Blank disables private module authentication."
+        required: false
+      GH_APP_INSTALLATION_ID:
+        description: "GitHub App Installation ID used to pull private modules & auth to GitHub. Required when GH_APP_ID is set."
+        required: false
+      GH_APP_PRIVATE_KEY:
+        description: "Private key for the GitHub App. Required when github-app-id is set."
+        required: false
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Validate & Plan — one job so the plan binary never leaves the runner and
+  # for more efficient execution, all required tool binaries are installed once.
+  #
+  # Runs on any ref other than the default branch, which covers both a pull
+  # request and a manual run on a feature branch.
+  # ---------------------------------------------------------------------------
+  validate-and-plan:
+    name: Validate and Plan
+    if: github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.job-timeout-minutes }}
+    environment: ${{ format('plan-{0}', inputs.environment) }}
+    permissions:
+      id-token: write # OIDC federation to Azure
+      contents: read
+      pull-requests: write # Pull request comment
+      security-events: write # Checkov SARIF upload
+      actions: read
+    steps:
+      # Full history only when commitlint can actually run, which needs every commit between the
+      # pull request base and head. Manual runs get a shallow clone and start faster.
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: ${{ github.event_name == 'pull_request' && inputs.enable-commitlint && '0' || '1' }}
+
+      - name: Derive Root Label
+        id: derive_root
+        uses: $/.github/actions/derive-root-label
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          environment: ${{ inputs.environment }}
+
+      - name: Validate Tool Versions and Generate Hash
+        id: validate_versions
+        uses: $/.github/actions/validate-and-hash-tool-versions
+        with:
+          tools: "terraform tflint terraform-docs checkov conftest infracost commitlint pre-commit node"
+          install-tools: ${{ inputs.install-tools }}
+          node-version: ${{ inputs.node-version }}
+          terraform-version: ${{ inputs.terraform-version }}
+          tflint-version: ${{ inputs.tflint-version }}
+          terraform-docs-version: ${{ inputs.terraform-docs-version }}
+          checkov-version: ${{ inputs.checkov-version }}
+          conftest-version: ${{ inputs.conftest-version }}
+          infracost-version: ${{ inputs.infracost-version }}
+          commitlint-version: ${{ inputs.commitlint-version }}
+          pre-commit-version: ${{ inputs.pre-commit-version }}
+
+      - name: Configure Terraform Environment
+        id: configure_terraform_environment
+        uses: $/.github/actions/configure-terraform-environment
+        with:
+          terraform-log-level: ${{ inputs.terraform-log-level }}
+
+      - name: Install Terraform Tools
+        id: install_terraform_tools
+        if: inputs.install-tools
+        uses: $/.github/actions/terraform-tools-install
+        with:
+          tools: ${{ steps.validate_versions.outputs.tools }}
+          enable-caching: ${{ inputs.enable-caching }}
+          node-version: ${{ steps.validate_versions.outputs.node }}
+          terraform-version: ${{ steps.validate_versions.outputs.terraform }}
+          tflint-version: ${{ steps.validate_versions.outputs.tflint }}
+          terraform-docs-version: ${{ steps.validate_versions.outputs.terraform-docs }}
+          checkov-version: ${{ steps.validate_versions.outputs.checkov }}
+          conftest-version: ${{ steps.validate_versions.outputs.conftest }}
+          infracost-version: ${{ steps.validate_versions.outputs.infracost }}
+          commitlint-version: ${{ steps.validate_versions.outputs.commitlint }}
+          pre-commit-version: ${{ steps.validate_versions.outputs.pre-commit }}
+          versions-hash: ${{ steps.validate_versions.outputs.versions-hash }}
+
+      - name: Verify Installed Tools (BYO Runner Only)
+        id: verify_byo_runner
+        if: ${{ !inputs.install-tools }}
+        uses: $/.github/actions/verify-terraform-tools
+        with:
+          tools: ${{ steps.validate_versions.outputs.tools }}
+
+      - name: GitHub App Login
+        id: github_app_login
+        if: ${{ !inputs.github-app-auth-pwsh }}
+        uses: $/.github/actions/github-app-login
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          owner: ${{ inputs.github-app-owner != '' && inputs.github-app-owner || github.repository_owner }}
+          repositories: ${{ inputs.github-repositories }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-readonly: ${{ inputs.github-permission-readonly }}
+
+      - name: GitHub App Login (PowerShell)
+        id: github_app_login_pwsh
+        if: ${{ inputs.github-app-auth-pwsh }}
+        uses: $/.github/actions/github-app-login-pwsh
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          app-installation-id: ${{ secrets.GH_APP_INSTALLATION_ID }}
+          owner: ${{ inputs.github-app-owner != '' && inputs.github-app-owner || github.repository_owner }}
+          repositories: ${{ inputs.github-repositories }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-readonly: ${{ inputs.github-permission-readonly }}
+
+      - name: Azure Login
+        id: azure_login
+        uses: $/.github/actions/azure-login
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Pulls out all TF_VAR_* secrets onto the job environment and materialises
+      # TERRAFORM_VARIABLES_JSON as an auto-loaded tfvars file, from a single secrets context.
+      - name: Write Terraform Secret Variables
+        id: write_terraform_variables
+        uses: $/.github/actions/terraform-write-secret-variables
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          secrets-json: ${{ toJSON(secrets) }}
+
+      # -----------------------------------------------------------------------
+      # Commitlint / Format / Lint (fast checks; non-blocking, reported later)
+      # -----------------------------------------------------------------------
+      # Pull request only: commitlint needs the base and head SHAs, which only the
+      # pull_request event carries.
+      - name: Commitlint (Pull Request Only)
+        id: commitlint
+        if: github.event_name == 'pull_request' && inputs.enable-commitlint
+        continue-on-error: true
+        uses: $/.github/actions/commitlint-check
+        with:
+          base-sha: ${{ github.event.pull_request.base.sha }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
+          config-file: ${{ inputs.commitlint-config-file }}
+          output-file: commitlint_output_${{ inputs.environment }}.txt
+
+      - name: Terraform Format Check
+        id: fmt_check
+        continue-on-error: true
+        uses: $/.github/actions/terraform-format-check
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          output-file: fmt_check_output_${{ inputs.environment }}.txt
+
+      # Deliberately overlaps the standalone checks below: pre-commit proves the consumer's hooks
+      # still run, the standalone steps provide hardcoded guardrails that can't be bypassed.
+      # continue-on-error is "true" here (unlike the cache-warm call in plan-and-apply): PR
+      # validation still wants later checks and the outcome reported in the PR comment even when a
+      # hook fails.
+      - name: Pre-Commit
+        id: pre_commit
+        continue-on-error: true
+        uses: $/.github/actions/pre-commit-check
+        with:
+          config-file: ${{ inputs.pre-commit-config-file }}
+          output-file: pre_commit_output_${{ inputs.environment }}.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          continue-on-error: "true"
+          skip: ${{ inputs.skip-pre-commit }}
+
+      - name: Terraform Init
+        id: terraform_init
+        continue-on-error: true
+        uses: $/.github/actions/terraform-init-azure
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          environment: ${{ inputs.environment }}
+          terraform-state-key: ${{ inputs.terraform-state-blob-name }}
+          terraform-var-file: ${{ inputs.terraform-var-file }}
+          terraform-common-var-file: ${{ inputs.terraform-common-var-file }}
+          enable-caching: ${{ inputs.enable-caching }}
+          backend-resource-group-name: ${{ secrets.AZURE_STORAGE_RESOURCE_GROUP_NAME }}
+          backend-storage-account-name: ${{ secrets.AZURE_STORAGE_ACCOUNT_NAME }}
+          backend-container-name: ${{ secrets.AZURE_STORAGE_CONTAINER_NAME }}
+          backend-subscription-id: ${{ secrets.AZURE_STORAGE_SUBSCRIPTION_ID }}
+          github-app-token: ${{ inputs.github-app-auth-pwsh && steps.github_app_login_pwsh.outputs.token || steps.github_app_login.outputs.token }}
+          output-file: init_output_${{ inputs.environment }}.txt
+
+      - name: Terraform State Unlock
+        id: terraform_state_unlock
+        if: steps.terraform_init.outcome == 'success' && inputs.lock-id != ''
+        continue-on-error: true
+        working-directory: ${{ inputs.working-directory }}
+        run: terraform force-unlock -force "${{ inputs.lock-id }}"
+
+      - name: Run TFLint
+        id: tflint
+        continue-on-error: true
+        uses: $/.github/actions/terraform-tflint
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          config-file: ${{ inputs.tflint-config-file }}
+          var-file: ${{ steps.terraform_init.outputs.tf-var-file }}
+          common-var-file: ${{ steps.terraform_init.outputs.tf-common-var-file }}
+          output-file: tflint_output_${{ inputs.environment }}.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Checkov runs directly after init. It is a static code scan, so inline skip-comments (no plan needed)
+      - name: Checkov Security Scan
+        id: checkov
+        continue-on-error: true
+        uses: $/.github/actions/terraform-checkov-scan
+        with:
+          environment: ${{ inputs.environment }}
+          working-directory: ${{ inputs.working-directory }}
+          var-file: ${{ steps.terraform_init.outputs.tf-var-file }}
+          common-var-file: ${{ steps.terraform_init.outputs.tf-common-var-file }}
+          upload-sarif: ${{ inputs.upload-sarif }}
+          config-file: ${{ inputs.checkov-config-file }}
+
+      # -detailed-exitcode: 0 = no changes, 2 = changes, 1 = error. The binary plan is converted
+      - name: Terraform Plan
+        id: terraform_plan
+        if: steps.terraform_init.outcome == 'success'
+        continue-on-error: true
+        uses: $/.github/actions/terraform-exec
+        with:
+          command: plan
+          working-directory: ${{ inputs.working-directory }}
+          var-file: ${{ steps.terraform_init.outputs.tf-var-file }}
+          common-var-file: ${{ steps.terraform_init.outputs.tf-common-var-file }}
+          parallelism: ${{ inputs.terraform-parallelism }}
+          out-file: tfplan.${{ inputs.environment }}
+          detailed-exitcode: "true"
+          convert-to-json: "true"
+          json-file: tfplan_${{ inputs.environment }}.json
+          github-app-token: ${{ inputs.github-app-auth-pwsh && steps.github_app_login_pwsh.outputs.token || steps.github_app_login.outputs.token }}
+          output-file: plan_output_${{ inputs.environment }}.txt
+          fail-on-error: "false"
+
+      - name: Terraform Plan Summary
+        id: terraform_plan_summary
+        if: steps.terraform_plan.outputs.json-outcome == 'success'
+        uses: $/.github/actions/terraform-plan-summary
+        with:
+          plan-json: ${{ steps.terraform_plan.outputs.json-path }}
+          title: "Terraform Plan Summary"
+
+      - name: Generate Terraform Plan HTML Report
+        id: terraform_plan_html
+        if: steps.terraform_plan.outputs.json-outcome == 'success'
+        continue-on-error: true
+        uses: $/.github/actions/terraform-plan-report
+        with:
+          plan-json: ${{ steps.terraform_plan.outputs.json-path }}
+          output-file: plan_report_${{ inputs.environment }}.html
+
+      # -----------------------------------------------------------------------
+      # OPA — repository-local policies, verified before test
+      # -----------------------------------------------------------------------
+      - name: OPA Local Policy Check
+        id: opa_local
+        if: steps.terraform_plan.outputs.json-outcome == 'success'
+        continue-on-error: true
+        uses: $/.github/actions/terraform-opa-check
+        with:
+          policies-directory: policies/opa
+          plan-json: ${{ steps.terraform_plan.outputs.json-path }}
+          verify-output-file: rego_validate_local_output_${{ inputs.environment }}.txt
+          test-output-file: opa_local_output_${{ inputs.environment }}.txt
+
+      # -----------------------------------------------------------------------
+      # Infracost
+      # -----------------------------------------------------------------------
+      - name: Infracost (If Enabled)
+        id: infracost
+        # env (not secrets) in `if:` — secrets can't be evaluated in conditions
+        if: inputs.enable-infracost && steps.terraform_plan.outputs.json-outcome == 'success' && env.INFRACOST_API_KEY != ''
+        continue-on-error: true
+        env:
+          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+        uses: $/.github/actions/infracost-breakdown
+        with:
+          plan-json-path: ${{ inputs.working-directory }}/tfplan_${{ inputs.environment }}.json
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+          output-file: infracost_${{ inputs.environment }}.txt
+
+      # -----------------------------------------------------------------------
+      # Collect outcomes + upload artifact (no binary plan — already deleted)
+      # -----------------------------------------------------------------------
+      - name: Collect Step Outcomes
+        id: collect_step_outcomes
+        uses: $/.github/actions/collect-check-outcomes
+        with:
+          environment: ${{ inputs.environment }}
+          root: ${{ steps.derive_root.outputs.root }}
+          commitlint: ${{ steps.commitlint.outcome }}
+          pre-commit: ${{ steps.pre_commit.outputs.outcome }}
+          fmt-check: ${{ steps.fmt_check.outputs.outcome || steps.fmt_check.outcome }}
+          tflint: ${{ steps.tflint.outcome }}
+          init: ${{ steps.terraform_init.outcome }}
+          plan: ${{ steps.terraform_plan.outcome }}
+          plan-json: ${{ steps.terraform_plan.outputs.json-outcome }}
+          plan-exit: ${{ steps.terraform_plan.outputs.exit-code }}
+          checkov: ${{ steps.checkov.outputs.outcome || steps.checkov.outcome }}
+          opa-local: ${{ steps.opa_local.outputs.outcome || steps.opa_local.outcome }}
+          infracost: ${{ steps.infracost.outcome }}
+          output-file: outcomes_${{ steps.derive_root.outputs.file-label }}.json
+
+      # Uploaded before the comment step: the comment links the artifact by ID, so it has to exist.
+      # Only tool logs and the HTML report — the plan itself never leaves the runner on this path.
+      # Named with the root-qualified label (not just environment): multi-root repos call this
+      # workflow once per root with the same environment value, and artifact names must be unique
+      # within a workflow run, so two roots both producing e.g. "prd" would otherwise collide.
+      - name: Upload Plan Outputs
+        id: upload_plan_outputs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: validation-plan-outputs-${{ steps.derive_root.outputs.file-label }}
+          path: |
+            outcomes_${{ steps.derive_root.outputs.file-label }}.json
+            commitlint_output_${{ inputs.environment }}.txt
+            pre_commit_output_${{ inputs.environment }}.txt
+            fmt_check_output_${{ inputs.environment }}.txt
+            init_output_${{ inputs.environment }}.txt
+            tflint_output_${{ inputs.environment }}.txt
+            plan_output_${{ inputs.environment }}.txt
+            plan_report_${{ inputs.environment }}.html
+            checkov_output_${{ inputs.environment }}.txt
+            rego_validate_local_output_${{ inputs.environment }}.txt
+            opa_local_output_${{ inputs.environment }}.txt
+            infracost_${{ inputs.environment }}.txt
+          if-no-files-found: warn
+          retention-days: 14
+          compression-level: 9
+
+      # Pull request only: there is no pull request to comment on for a manual run, which reads the
+      # job summary and the artifact instead. In-job, so the logs are read straight from the
+      # workspace with no artifact round-trip.
+      - name: Post / Update Comment (Pull Request Only)
+        id: post_update_comment
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: $/.github/actions/terraform-plan-comment
+
+      # Several checks report their result via an output rather than the step
+      # conclusion, so a failure here can follow a green step above — name them.
+      - name: Final Result
+        id: final_result
+        if: github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: $/.github/actions/pull-request-gate
+        with:
+          results: |
+            Commitlint=${{ steps.commitlint.outcome }}
+            Pre-commit=${{ steps.pre_commit.outputs.outcome }}
+            Terraform format check=${{ steps.fmt_check.outputs.outcome || steps.fmt_check.outcome }}
+            TFLint=${{ steps.tflint.outcome }}
+            Terraform init=${{ steps.terraform_init.outcome }}
+            Terraform plan=${{ steps.terraform_plan.outputs.failed == 'true' && 'failure' || steps.terraform_plan.outcome }}
+            Terraform plan (JSON)=${{ steps.terraform_plan.outputs.json-outcome }}
+            Checkov security scan=${{ steps.checkov.outputs.outcome || steps.checkov.outcome }}
+            OPA local policy check=${{ steps.opa_local.outputs.outcome || steps.opa_local.outcome }}
+            Infracost=${{ steps.infracost.outcome }}
+
+      - name: Cleanup Terraform Plan Files and Variables
+        id: cleanup_terraform_plan_files_and_variables
+        if: always()
+        uses: $/.github/actions/terraform-cleanup
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          plan-files: tfplan.${{ inputs.environment }} tfplan_${{ inputs.environment }}.json
+          terraform-variable-names: ${{ steps.write_terraform_variables.outputs.exported }}

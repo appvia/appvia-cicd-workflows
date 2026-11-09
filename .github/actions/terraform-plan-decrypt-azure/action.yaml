@@ -1,0 +1,51 @@
+---
+name: "Terraform Plan Decrypt"
+description: "Decrypt Terraform plan files downloaded from an artifact."
+
+inputs:
+  encryption-key:
+    description: "Static encryption key."
+    required: true
+  working-directory:
+    description: "Directory containing the encrypted plan files."
+    required: false
+    default: "."
+  files:
+    description: "Space-separated list of encrypted files, named without the .enc suffix."
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Write encryption key
+      shell: bash
+      run: |
+        set -euo pipefail
+        umask 077
+        printf '%s' "$ENCRYPTION_KEY" > "$RUNNER_TEMP/tfplan-enc-key"
+      env:
+        ENCRYPTION_KEY: ${{ inputs.encryption-key }}
+
+    - name: Decrypt plan files
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        FILES: ${{ inputs.files }}
+        KEY_FILE: ${{ runner.temp }}/tfplan-enc-key
+      run: |
+        set -euo pipefail
+        [[ -s "$KEY_FILE" ]] || { echo "::error::Encryption key is empty"; exit 1; }
+        for file in $FILES; do
+          if [[ ! -f "$file.enc" ]]; then
+            echo "::error::Encrypted plan file not found: $file.enc"
+            exit 1
+          fi
+          openssl enc -aes-256-cbc -d -pbkdf2 -iter 100000 \
+            -in "$file.enc" -out "$file" -pass "file:$KEY_FILE"
+          rm "$file.enc"
+        done
+
+    - name: Clean up encryption key
+      if: always()
+      shell: bash
+      run: rm -f "$RUNNER_TEMP/tfplan-enc-key"

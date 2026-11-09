@@ -1,0 +1,63 @@
+---
+name: "Derive Root Label"
+description: >-
+  Derive a root label from working-directory for multi-root repos (e.g. terraform/base +
+  terraform/workloads) that call a reusable workflow once per root with the same `environment`
+  value, differentiated only by working-directory. The label lets PR comments, drift issues,
+  artifact names, and outcome filenames tell the roots apart; it's blank when working-directory is
+  the documented single-root default (`terraform`), which keeps single-root output unchanged.
+  Encodes the full relative path rather than just its basename, so two distinct roots that happen
+  to share a final directory name (e.g. regions/eu/network and regions/uk/network) don't collapse
+  onto the same slug and collide on marker, outcomes filename, or artifact name.
+
+inputs:
+  working-directory:
+    description: "Directory holding the root module"
+    required: true
+  environment:
+    description: >-
+      Environment name, combined with the derived root slug to produce file-label. Required
+      because file-label must still be unique per environment even when root is blank.
+    required: true
+
+outputs:
+  root:
+    description: "Root slug derived from working-directory; blank for the single-root default"
+    value: ${{ steps.derive.outputs.root }}
+  file-label:
+    description: >-
+      Root-qualified label safe for use in file/artifact names: '<root>-<environment>' when root
+      is non-blank, otherwise just '<environment>'. Two roots sharing one environment would
+      otherwise collide on identically-named outcome files and artifact names, which must be
+      unique within a workflow run.
+    value: ${{ steps.derive.outputs.file-label }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Derive Root Label
+      id: derive
+      shell: bash
+      env:
+        WORKING_DIR: ${{ inputs.working-directory }}
+        ENVIRONMENT: ${{ inputs.environment }}
+      run: |
+        set -euo pipefail
+        normalised="${WORKING_DIR%/}"
+        while [[ "${normalised}" == ./* ]]; do
+          normalised="${normalised#./}"
+        done
+        if [[ "${normalised}" == "terraform" ]]; then
+          root_slug=""
+        elif [[ "${normalised}" == terraform/* ]]; then
+          root_slug="${normalised#terraform/}"
+          root_slug="${root_slug//\//-}"
+        else
+          root_slug="${normalised//\//-}"
+        fi
+        echo "root=${root_slug}" >>"${GITHUB_OUTPUT}"
+        if [[ -n "${root_slug}" ]]; then
+          echo "file-label=${root_slug}-${ENVIRONMENT}" >>"${GITHUB_OUTPUT}"
+        else
+          echo "file-label=${ENVIRONMENT}" >>"${GITHUB_OUTPUT}"
+        fi

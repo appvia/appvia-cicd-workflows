@@ -1,0 +1,84 @@
+---
+name: "Collect Check Outcomes"
+description: >-
+  Write the outcome of every validate-and-plan check to a JSON file, for the plan-<environment>
+  artifact.
+
+inputs:
+  environment:
+    description: "The Terraform environment, used to name the output file and tag the JSON."
+    required: true
+  var-file:
+    description: "Terraform var-file evaluated by this plan. Omitted from the outcome JSON when blank."
+    required: false
+    default: ""
+  root:
+    description: >-
+      Optional root label for multi-root repos, derived from working-directory. Blank for
+      single-root repos, in which case the comment title/marker are keyed on environment alone.
+    required: false
+    default: ""
+  commitlint:
+    description: "Outcome of the commitlint step."
+    required: true
+  pre-commit:
+    description: "Outcome of the pre-commit step."
+    required: true
+  fmt-check:
+    description: "Outcome of the terraform fmt check step."
+    required: true
+  tflint:
+    description: "Outcome of the TFLint step."
+    required: true
+  init:
+    description: "Outcome of the Terraform init step."
+    required: true
+  plan:
+    description: "Outcome of the Terraform plan step."
+    required: true
+  plan-json:
+    description: "Outcome of the Terraform plan JSON conversion."
+    required: true
+  plan-exit:
+    description: "Exit code of the Terraform plan step."
+    required: true
+  plan-skip-reason:
+    description: "Why the plan was skipped, shown in the PR comment. Blank when the plan was not skipped deliberately."
+    required: false
+    default: ""
+  checkov:
+    description: "Outcome of the Checkov step."
+    required: true
+  opa-local:
+    description: "Outcome of the local OPA policy check step."
+    required: true
+  infracost:
+    description: "Outcome of the Infracost step."
+    required: true
+  output-file:
+    description: "Where to write the JSON, relative to GITHUB_WORKSPACE."
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Write outcomes JSON
+      shell: bash
+      env:
+        ENV: ${{ inputs.environment }}
+        VAR_FILE: ${{ inputs.var-file }}
+        ROOT: ${{ inputs.root }}
+        RESULT_COMMITLINT: ${{ inputs.commitlint }}
+        RESULT_PRE_COMMIT: ${{ inputs.pre-commit }}
+        RESULT_FMT_CHECK: ${{ inputs.fmt-check }}
+        RESULT_TFLINT: ${{ inputs.tflint }}
+        RESULT_INIT: ${{ inputs.init }}
+        RESULT_PLAN: ${{ inputs.plan }}
+        RESULT_PLAN_JSON: ${{ inputs.plan-json }}
+        RESULT_PLAN_EXIT: ${{ inputs.plan-exit }}
+        PLAN_SKIP_REASON: ${{ inputs.plan-skip-reason }}
+        RESULT_CHECKOV: ${{ inputs.checkov }}
+        RESULT_OPA_LOCAL: ${{ inputs.opa-local }}
+        RESULT_INFRACOST: ${{ inputs.infracost }}
+        OUTPUT_FILE: ${{ inputs.output-file }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/collect-outcomes.sh"

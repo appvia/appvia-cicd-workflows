@@ -1,0 +1,122 @@
+---
+name: "Validate Tool Versions and Generate Hash"
+description: >-
+  Resolve and validate the pinned version of every requested tool, produce the stable cache key
+  used by install-terraform-tools, and surface the paths to this repository's bundled TFLint and
+  commitlint configuration. Installs nothing itself.
+
+inputs:
+  tools:
+    description: >-
+      Space-separated list of tools to resolve. Supported values are terraform, tflint,
+      terraform-docs, checkov, conftest, infracost, commitlint, pre-commit and node. Only the
+      matching *-version inputs are read; every other version input is ignored.
+    required: false
+    default: "terraform"
+  install-tools:
+    description: >-
+      Whether tools will be installed. Version pins are required for every requested tool only when
+      this is true; verification mode accepts a blank version because the tool is expected to
+      already be on PATH at whatever version the runner image provides.
+    required: false
+    default: "true"
+  node-version:
+    description: "Pinned Node.js version. Required when node or commitlint is requested. 'latest' is not supported."
+    required: false
+    default: "22"
+  terraform-version:
+    description: "Pinned Terraform version. Required when terraform is requested and install-tools is true."
+    required: false
+    default: ""
+  tflint-version:
+    description: "Pinned TFLint version. Required when tflint is requested and install-tools is true."
+    required: false
+    default: ""
+  terraform-docs-version:
+    description: "Pinned terraform-docs version. Required when terraform-docs is requested and install-tools is true."
+    required: false
+    default: ""
+  checkov-version:
+    description: "Pinned Checkov version. Required when checkov is requested and install-tools is true."
+    required: false
+    default: ""
+  conftest-version:
+    description: "Pinned Conftest version. Required when conftest is requested and install-tools is true."
+    required: false
+    default: ""
+  infracost-version:
+    description: "Pinned Infracost version. Required when infracost is requested and install-tools is true."
+    required: false
+    default: ""
+  commitlint-version:
+    description: "Pinned @commitlint/cli npm version. Required when commitlint is requested and install-tools is true."
+    required: false
+    default: ""
+  pre-commit-version:
+    description: "Pinned pre-commit version. Required when pre-commit is requested and install-tools is true."
+    required: false
+    default: ""
+
+outputs:
+  tools:
+    description: "Deduplicated, space-separated list of tools that were resolved, including node when commitlint implied it."
+    value: ${{ steps.validate_versions.outputs.tools }}
+  needs-node:
+    description: "'true' when node is in the resolved tool list."
+    value: ${{ steps.validate_versions.outputs.needs-node }}
+  node:
+    description: "Resolved Node.js version. Blank when node was not requested."
+    value: ${{ steps.validate_versions.outputs.node }}
+  terraform:
+    description: "Resolved Terraform version. Blank when terraform was not requested."
+    value: ${{ steps.validate_versions.outputs.terraform }}
+  tflint:
+    description: "Resolved TFLint version. Blank when tflint was not requested."
+    value: ${{ steps.validate_versions.outputs.tflint }}
+  terraform-docs:
+    description: "Resolved terraform-docs version. Blank when terraform-docs was not requested."
+    value: ${{ steps.validate_versions.outputs.terraform-docs }}
+  checkov:
+    description: "Resolved Checkov version. Blank when checkov was not requested."
+    value: ${{ steps.validate_versions.outputs.checkov }}
+  conftest:
+    description: "Resolved Conftest version. Blank when conftest was not requested."
+    value: ${{ steps.validate_versions.outputs.conftest }}
+  infracost:
+    description: "Resolved Infracost version. Blank when infracost was not requested."
+    value: ${{ steps.validate_versions.outputs.infracost }}
+  commitlint:
+    description: "Resolved commitlint version. Blank when commitlint was not requested."
+    value: ${{ steps.validate_versions.outputs.commitlint }}
+  pre-commit:
+    description: "Resolved pre-commit version. Blank when pre-commit was not requested."
+    value: ${{ steps.validate_versions.outputs.pre-commit }}
+  versions-hash:
+    description: "Stable hash of the resolved tool set and versions, for use as a cache key."
+    value: ${{ steps.validate_versions.outputs.versions-hash }}
+  commitlint-config-path:
+    description: "Absolute path to this repository's bundled commitlint.config.js."
+    value: ${{ steps.bundled_config.outputs.commitlint-config-path }}
+  tflint-config-path:
+    description: "Absolute path to this repository's bundled default .tflint.hcl."
+    value: ${{ steps.bundled_config.outputs.tflint-config-path }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: "Validate Tool Versions and Generate Hash"
+      id: validate_versions
+      shell: bash
+      env:
+        TOOLS: ${{ inputs.tools }}
+        INSTALL_TOOLS: ${{ inputs.install-tools }}
+        INPUT_NODE_VERSION: ${{ inputs.node-version }}
+        INPUT_TERRAFORM_VERSION: ${{ inputs.terraform-version }}
+        INPUT_TFLINT_VERSION: ${{ inputs.tflint-version }}
+        INPUT_TERRAFORM_DOCS_VERSION: ${{ inputs.terraform-docs-version }}
+        INPUT_CHECKOV_VERSION: ${{ inputs.checkov-version }}
+        INPUT_CONFTEST_VERSION: ${{ inputs.conftest-version }}
+        INPUT_INFRACOST_VERSION: ${{ inputs.infracost-version }}
+        INPUT_COMMITLINT_VERSION: ${{ inputs.commitlint-version }}
+        INPUT_PRE_COMMIT_VERSION: ${{ inputs.pre-commit-version }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/validate-and-hash-versions.sh"

@@ -1,0 +1,227 @@
+---
+name: "GitHub App Login"
+description: >-
+  Mint a short-lived GitHub App installation token and configure git to use it, so Terraform can
+  resolve private module sources over HTTPS. No-ops when no app ID is supplied, which lets a
+  calling workflow declare the step unconditionally.
+
+inputs:
+  app-id:
+    description: "GitHub App ID used to pull private modules. Blank disables the action entirely."
+    required: false
+    default: ""
+    type: string
+  owner:
+    description: "Owner the GitHub App token is scoped to."
+    required: false
+    default: ""
+    type: string
+  repositories:
+    description: "Repositories comma separated list of repositories to scope the GitHub App token to. Empty will be scoped to only the current repository."
+    required: false
+    default: ""
+    type: string
+  private-key:
+    description: "Private key for the GitHub App. Required when app-id is set."
+    required: false
+    default: ""
+    type: string
+  configure-git:
+    description: "Whether to configure git to use the GitHub App token."
+    required: false
+    default: true
+    type: boolean
+  permission-readonly:
+    description: "All permissions grants will be read-only. Any overrides on individual permissions will be ignored."
+    required: false
+    default: true
+    type: boolean
+  permission-actions:
+    description: "GitHub Actions permission for the installation token. Read-only if permission-readonly is set. Empty adopts app default permissions."
+    required: false
+    default: ""
+    options:
+      - ""
+      - read
+      - write
+    type: string
+  permission-administration:
+    description: "Repository administration permission for the installation token. Read-only if permission-readonly is set. Empty adopts app default permissions."
+    required: false
+    default: ""
+    options:
+      - ""
+      - read
+      - write
+    type: string
+  permission-contents:
+    description: "Repository contents permission for the installation token. Read-only if permission-readonly is set. Empty adopts app default permissions."
+    required: false
+    default: ""
+    options:
+      - ""
+      - read
+      - write
+    type: string
+  permission-environments:
+    description: "Repository environments permission for the installation token. Read-only if permission-readonly is set. Empty adopts app default permissions."
+    required: false
+    default: ""
+    options:
+      - ""
+      - read
+      - write
+    type: string
+  permission-members:
+    description: "Organization members permission for the installation token. Read-only if permission-readonly is set. Empty adopts app default permissions, read."
+    required: false
+    default: ""
+    options:
+      - ""
+      - read
+      # GitHub app not granted write permissions so disabled
+      # - write
+    type: string
+  permission-metadata:
+    description: "Repository metadata permission for the installation token. Read-only if permission-readonly is set. Empty adopts app default permissions, read."
+    required: false
+    default: ""
+    options:
+      - ""
+      - read
+      # GitHub app not granted write permissions so disabled
+      # - write
+    type: string
+  permission-secrets:
+    description: "Repository secrets permission for the installation token. Read-only if permission-readonly is set. Empty adopts app default permissions."
+    required: false
+    default: ""
+    options:
+      - ""
+      - read
+      - write
+    type: string
+  permission-workflows:
+    description: "Repository workflows permission for the installation token. Read-only if permission-readonly is set. Empty adopts app default permissions."
+    required: false
+    default: ""
+    options:
+      - ""
+      - read
+      - write
+    type: string
+  # Variables are currently not supported: https://github.com/actions/create-github-app-token/issues/231
+  # permission-variables:
+  #   description: "Repository variables permission for the GitHub App token. Read-only if github-permission-readonly is set. Empty adopts app default permissions."
+  #   required: false
+  #   default: ""
+  #   options:
+  #     - ""
+  #     - read
+  #     - write
+  #   type: string
+
+outputs:
+  token:
+    description: "The generated installation token. Blank when the action was disabled."
+    value: ${{ steps.app_token.outputs.token }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Warn when GitHub App authentication is disabled
+      if: inputs.app-id == ''
+      shell: bash
+      run: |
+        echo "::warning::No GitHub App token was created because app-id is blank. If GitHub authentication is required, configure GH_APP_ID and GH_APP_PRIVATE_KEY in the job environment or accessible repository/organisation secrets."
+
+    - name: Validate the private key is present
+      if: inputs.app-id != ''
+      shell: bash
+      env:
+        PRIVATE_KEY: ${{ inputs.private-key }}
+      run: |
+        set -euo pipefail
+        if [[ -z ${PRIVATE_KEY//[[:space:]]/} ]]; then
+          echo "::error::github-app-id is set but the private key is blank. Supply the github-app-private-key secret."
+          exit 1
+        fi
+
+    # Mask the private key and convert it from PKCS#1 to PKCS#8 format, if necessary
+    - name: Mask Key & Convert PKCS#1 private key to PKCS#8
+      id: convert_private_key
+      if: inputs.app-id != ''
+      shell: bash
+      env:
+        PRIVATE_KEY: ${{ inputs.private-key }}
+      run: |
+        set -euo pipefail
+        # Restore escaped PEM line endings.
+        private_key=$(printf '%s' "$PRIVATE_KEY" | perl -pe 's/\\r\\n/\n/g; s/\\n/\n/g')
+
+        # PKCS#1 keys must be converted to PKCS#8.
+        if [[ $private_key == *"-----BEGIN RSA PRIVATE KEY-----"* ]]; then
+          # Keep only the PEM block if the secret has surrounding text.
+          private_key=$(printf '%s\n' "$private_key" | awk '
+            /-----BEGIN RSA PRIVATE KEY-----/ { in_key = 1 }
+            in_key { print }
+            /-----END RSA PRIVATE KEY-----/ { exit }
+          ')
+          # Reject a truncated PEM block before conversion.
+          if [[ $private_key != *"-----END RSA PRIVATE KEY-----" ]]; then
+            echo "::error::GitHub App private key contains an incomplete PKCS#1 PEM block."
+            exit 1
+          fi
+          # Produce an unencrypted PKCS#8 key.
+          private_key=$(printf '%s\n' "$private_key" | openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt)
+        # The key is already in PKCS#8 format.
+        elif [[ $private_key == *"-----BEGIN PRIVATE KEY-----"* ]]; then
+          # Deliberate no-op.
+          :
+        else
+          echo "::error::GitHub App private key must be an unencrypted PEM in PKCS#1 or PKCS#8 format."
+          exit 1
+        fi
+
+        # Multiline GitHub outputs need a delimiter that cannot occur in the key.
+        delimiter=$(uuidgen)
+        while IFS= read -r key_line || [[ -n $key_line ]]; do
+          # Mask each line because GitHub masks exact strings.
+          echo "::add-mask::$key_line"
+        done <<< "$private_key"
+        {
+          echo "private-key<<$delimiter"
+          printf '%s\n' "$private_key"
+          echo "$delimiter"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Generate GitHub App token
+      id: app_token
+      if: inputs.app-id != ''
+      uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+      with:
+        # app-id is deprecated, and instead we should move to app's client-id instead, which is Github recommendation as well.
+        # Will be removed in v4 based on this issue: https://github.com/actions/create-github-app-token/issues/252
+        app-id: ${{ inputs.app-id }}
+        owner: ${{ inputs.owner }}
+        repositories: ${{ inputs.repositories }}
+        private-key: ${{ steps.convert_private_key.outputs.private-key }}
+        permission-actions: ${{ inputs.permission-readonly && 'read' || inputs.permission-actions }}
+        permission-administration: ${{ inputs.permission-readonly && 'read' || inputs.permission-administration }}
+        permission-contents: ${{ inputs.permission-readonly && 'read' || inputs.permission-contents }}
+        permission-environments: ${{ inputs.permission-readonly && 'read' || inputs.permission-environments }}
+        permission-members: ${{ inputs.permission-readonly && 'read' || inputs.permission-members }}
+        permission-metadata: ${{ inputs.permission-readonly && 'read' || inputs.permission-metadata }}
+        permission-secrets: ${{ inputs.permission-readonly && 'read' || inputs.permission-secrets }}
+        permission-workflows: ${{ inputs.permission-readonly && 'read' || inputs.permission-workflows }}
+        # Variables are currently not supported: https://github.com/actions/create-github-app-token/issues/231
+        # permission-variables: ${{ inputs.readonly && 'read' || inputs.permission-variables }}
+
+    - name: Configure git to use the GitHub App token
+      if: inputs.app-id != '' && inputs.configure-git
+      shell: bash
+      env:
+        APP_TOKEN: ${{ steps.app_token.outputs.token }}
+      run: |
+        set -euo pipefail
+        git config --global url."https://x-access-token:${APP_TOKEN}@github.com/".insteadOf "https://github.com/"

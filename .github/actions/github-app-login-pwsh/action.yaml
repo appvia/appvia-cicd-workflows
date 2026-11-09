@@ -1,0 +1,87 @@
+---
+name: "GitHub App Login"
+description: "Login to GitHub using a JWT generated from a GitHub App private key"
+inputs:
+  app-id:
+    description: "GitHub App ID"
+    required: false
+    type: string
+    default: ""
+  app-installation-id:
+    description: "GitHub App Installation ID"
+    type: string
+    default: ""
+  owner:
+    description: "Owner the GitHub App token is scoped to."
+    required: false
+    default: ""
+    type: string
+  repositories:
+    description: "Comma-separated repositories to scope the GitHub App token to. Empty scopes the token to all repositories in the organization."
+    required: false
+    default: ""
+    type: string
+  private-key:
+    description: "GitHub App private key"
+    required: true
+    type: string
+  permissions:
+    description: "JSON permission overrides. Empty or '{}' inherits all permissions approved for the App installation; permission-readonly overrides this."
+    default: "{}"
+    required: false
+    type: string
+  permission-readonly:
+    description: "If true, requests the supported read-only repository and organization permissions, including administration, network configurations, and runners. The App installation must have approved them."
+    default: false
+    required: false
+    type: boolean
+  configure-git:
+    description: "Whether to configure git to use the GitHub App token."
+    required: false
+    default: true
+    type: boolean
+
+outputs:
+  token:
+    description: "The generated installation token. Blank when the action was disabled."
+    value: ${{ steps.app_token.outputs.token }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Warn when GitHub App authentication is disabled
+      if: inputs.app-id == ''
+      shell: bash
+      run: |
+        echo "::warning::No GitHub App token was created because app-id is blank. If GitHub authentication is required, configure GH_APP_ID, GH_APP_INSTALLATION_ID and GH_APP_PRIVATE_KEY in the job environment or accessible repository/organisation secrets."
+
+    - name: Generate GitHub access token
+      id: app_token
+      if: inputs.app-id != ''
+      shell: pwsh
+      env:
+        APP_ID: ${{ inputs.app-id }}
+        APP_INSTALLATION_ID: ${{ inputs.app-installation-id }}
+        APP_PRIVATE_KEY: ${{ inputs.private-key }}
+        ENCRYPTION_SECRET: ${{ inputs.encryption-secret }}
+        PERMISSIONS: ${{ inputs.permissions }}
+        REPOSITORIES: ${{ inputs.repositories }}
+        PERMISSION_READONLY: ${{ inputs.permission-readonly }}
+      run: |
+        ${{ github.action_path }}/GitHub-AppLogin.ps1 `
+          -AppId $env:APP_ID `
+          -AppInstallationId $env:APP_INSTALLATION_ID `
+          -AppPrivateKey $env:APP_PRIVATE_KEY `
+          -Repositories $env:REPOSITORIES `
+          -EncryptionSecret $env:ENCRYPTION_SECRET `
+          -Permissions $env:PERMISSIONS `
+          -Readonly:($env:PERMISSION_READONLY -eq 'true')
+
+    - name: Configure git to use the GitHub App token
+      if: inputs.app-id != '' && inputs.configure-git
+      shell: bash
+      env:
+        APP_TOKEN: ${{ steps.app_token.outputs.token }}
+      run: |
+        set -euo pipefail
+        git config --global url."https://x-access-token:${APP_TOKEN}@github.com/".insteadOf "https://github.com/"

@@ -1,0 +1,53 @@
+---
+name: "Terraform Drift Filter"
+description: >-
+  Remove known/accepted Terraform addresses from a drift plan JSON before drift is reported, so a
+  deliberately out-of-band resource doesn't keep a drift issue permanently open. Exact address
+  match only — no globs. Safe to call with no exclusions file configured: it then passes the plan
+  through unchanged.
+
+inputs:
+  plan-json:
+    description: "Path to the (unfiltered) plan JSON, relative to GITHUB_WORKSPACE"
+    required: true
+  working-directory:
+    description: "Directory holding the root module"
+    required: true
+  exclusions-file:
+    description: >-
+      Plain-text file of exact Terraform addresses to exclude, one per line, relative to
+      GITHUB_WORKSPACE (the repository root). '#' starts a trailing comment; blank lines are
+      ignored. Blank input or a missing file is not an error — drift detection then runs as if no
+      exclusions exist.
+    required: false
+    default: ""
+  filtered-json-file:
+    description: "Destination for the filtered plan JSON, relative to working-directory"
+    required: true
+
+outputs:
+  has-drift:
+    description: "'true' when any non-excluded resource still shows planned changes"
+    value: ${{ steps.filter.outputs.has-drift }}
+  excluded-count:
+    description: "Number of drifted resources removed because their address was excluded"
+    value: ${{ steps.filter.outputs.excluded-count }}
+  remaining-count:
+    description: "Number of resources with planned changes after exclusions are applied"
+    value: ${{ steps.filter.outputs.remaining-count }}
+  filtered-json-path:
+    description: "Path to the filtered plan JSON, relative to GITHUB_WORKSPACE"
+    value: ${{ steps.filter.outputs.filtered-json-path }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Filter drift exclusions
+      id: filter
+      shell: bash
+      env:
+        PLAN_JSON: ${{ inputs.plan-json }}
+        WORKING_DIR: ${{ inputs.working-directory }}
+        EXCLUSIONS_FILE: ${{ inputs.exclusions-file }}
+        FILTERED_JSON_FILE: ${{ inputs.filtered-json-file }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/filter-drift.sh"

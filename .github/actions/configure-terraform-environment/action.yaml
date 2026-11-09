@@ -1,0 +1,32 @@
+---
+name: "Configure Terraform Environment"
+description: >-
+  Validate the requested Terraform log level and export the Terraform CLI environment variables
+  that are invariant across every job in every Terraform workflow — TF_INPUT, TF_IN_AUTOMATION,
+  TF_PLUGIN_CACHE_DIR and, when requested, TF_LOG. This is deliberately separate from tool
+  installation: these settings apply whether the tools on PATH were installed by
+  install-terraform-tools or already provided by the runner image.
+
+inputs:
+  terraform-log-level:
+    description: >-
+      Value for TF_LOG. One of TRACE, DEBUG, INFO, WARN, ERROR or OFF. Blank disables Terraform
+      debug logging.
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - name: Validate Terraform log level
+      if: inputs.terraform-log-level != ''
+      shell: bash
+      env:
+        LOG_LEVEL: ${{ inputs.terraform-log-level }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/validate-log-level.sh"
+
+    - name: Configure Terraform environment
+      shell: bash
+      env:
+        TERRAFORM_LOG_LEVEL: ${{ inputs.terraform-log-level }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/configure-env.sh"

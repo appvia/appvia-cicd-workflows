@@ -1,0 +1,43 @@
+---
+name: "Terraform Cleanup"
+description: >-
+  Remove secret-backed Terraform variables, unencrypted plan files, and clear exported Terraform
+  variable values after Terraform finishes.
+
+inputs:
+  working-directory:
+    description: "Directory holding the root module."
+    required: true
+  plan-files:
+    description: "Space-separated plaintext plan files, relative to working-directory."
+    required: false
+    default: ""
+  terraform-variable-names:
+    description: "Space-separated TF_VAR_* names exported by terraform-write-secret-variables."
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - name: Remove Terraform secrets and plan files
+      shell: bash
+      env:
+        WORKING_DIR: ${{ inputs.working-directory }}
+        PLAN_FILES: ${{ inputs.plan-files }}
+        TERRAFORM_VARIABLE_NAMES: ${{ inputs.terraform-variable-names }}
+      run: |
+        set -euo pipefail
+        rm -f "${WORKING_DIR}/workflow-variables.auto.tfvars.json"
+
+        read -r -a plan_files <<<"${PLAN_FILES}"
+        for plan_file in "${plan_files[@]}"; do
+          rm -f "${WORKING_DIR}/${plan_file}"
+        done
+
+        # GITHUB_ENV is append-only, so writing an empty value prevents each secret from being
+        # propagated to later steps even though it cannot unset the current shell environment.
+        read -r -a terraform_variable_names <<<"${TERRAFORM_VARIABLE_NAMES}"
+        for variable_name in "${terraform_variable_names[@]}"; do
+          printf '%s=\n' "${variable_name}" >>"${GITHUB_ENV}"
+        done

@@ -1,0 +1,27 @@
+---
+name: "Infracost Breakdown"
+description: "Run an Infracost cost breakdown against a Terraform plan JSON file."
+
+inputs:
+  plan-json-path:
+    description: "Path to the plan JSON, relative to GITHUB_WORKSPACE."
+    required: true
+  api-key:
+    description: "Infracost API key."
+    required: true
+  output-file:
+    description: "Where to tee the output, relative to GITHUB_WORKSPACE."
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Run infracost breakdown
+      shell: bash
+      env:
+        INFRACOST_API_KEY: ${{ inputs.api-key }}
+        PLAN_JSON: ${{ inputs.plan-json-path }}
+        OUTPUT_FILE: ${{ inputs.output-file }}
+      run: |
+        set -euo pipefail
+        infracost breakdown --path "$GITHUB_WORKSPACE/$PLAN_JSON" --format table 2>&1 | tee "$GITHUB_WORKSPACE/$OUTPUT_FILE"

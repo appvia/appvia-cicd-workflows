@@ -1,0 +1,163 @@
+---
+name: "Install Terraform Tools"
+description: >-
+  Install the requested tools with checksum verification, and nothing else. Callers in
+  bring-your-own-runner mode must not invoke this action at all — use verify-terraform-tools
+  instead, which checks the same tool list is already on PATH.
+
+inputs:
+  tools:
+    description: >-
+      Space-separated list of tools to install, as resolved by validate-and-hash-tool-versions.
+      Supported values are terraform, tflint, terraform-docs, checkov, conftest, infracost, yq,
+      commitlint, pre-commit and node.
+    required: true
+  enable-caching:
+    description: "Restore and save the tool binary cache around installation."
+    required: false
+    default: "true"
+  node-version:
+    description: "Pinned Node.js version. Required when node is in the tools list."
+    required: false
+    default: ""
+  terraform-version:
+    description: "Pinned Terraform version. Required when terraform is in the tools list."
+    required: false
+    default: ""
+  tflint-version:
+    description: "Pinned TFLint version. Required when tflint is in the tools list."
+    required: false
+    default: ""
+  terraform-docs-version:
+    description: "Pinned terraform-docs version. Required when terraform-docs is in the tools list."
+    required: false
+    default: ""
+  checkov-version:
+    description: "Pinned Checkov version. Required when checkov is in the tools list."
+    required: false
+    default: ""
+  conftest-version:
+    description: "Pinned Conftest version. Required when conftest is in the tools list."
+    required: false
+    default: ""
+  infracost-version:
+    description: "Pinned Infracost version. Required when infracost is in the tools list."
+    required: false
+    default: ""
+  yq-version:
+    description: "Pinned mikefarah/yq version. Required when yq is in the tools list."
+    required: false
+    default: ""
+  commitlint-version:
+    description: "Pinned @commitlint/cli npm version. Required when commitlint is in the tools list."
+    required: false
+    default: ""
+  pre-commit-version:
+    description: "Pinned pre-commit version. Required when pre-commit is in the tools list."
+    required: false
+    default: ""
+  versions-hash:
+    description: "Stable hash of the resolved tool set and versions, from validate-and-hash-tool-versions, used as the cache key."
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    # actions/setup-node has its own download and cache handling; it is still "installation" and
+    # belongs here, not in configure-terraform-environment, which only ever exports variables.
+    - name: Setup Node.js
+      if: contains(inputs.tools, 'node')
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    # The cache key covers the requested tool set and versions, plus a hash of this action's own
+    # install scripts and the generic installer it delegates to — self-invalidating by
+    # construction. The outer path (~/.local) covers more than any one script writes to
+    # (~/.local/bin, ~/.local/checksummed-tools, ~/.local/commitlint/...), so if a future refactor
+    # moves where binaries land (as this PR's move to ~/.local/checksummed-tools did), the hash
+    # of the scripts that define that layout changes too and the cache key changes with it —
+    # no one has to remember to bump a manual version literal for it to take effect.
+    - name: Compute install-layout hash
+      id: layout_hash
+      if: inputs.enable-caching == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        hash=$(cat "$GITHUB_ACTION_PATH"/scripts/*.sh \
+                   "$GITHUB_ACTION_PATH"/../install-checksummed-tools/action.yaml \
+                   "$GITHUB_ACTION_PATH"/../install-checksummed-tools/scripts/*.sh \
+               | sha256sum | cut -d' ' -f1)
+        echo "hash=${hash}" >>"$GITHUB_OUTPUT"
+
+    - name: Restore tool binary cache
+      id: tools_cache
+      if: inputs.enable-caching == 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/.local
+        key: tools-${{ runner.os }}-${{ steps.layout_hash.outputs.hash }}-${{ inputs.versions-hash }}
+
+    - name: Add cached tools to PATH
+      shell: bash
+      run: |
+        {
+          echo "${HOME}/.local/bin"
+          echo "${HOME}/.local/checksummed-tools"
+        } >>"${GITHUB_PATH}"
+
+    - name: Build checksummed tools list
+      id: build_list
+      if: steps.tools_cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        TOOLS: ${{ inputs.tools }}
+        TERRAFORM_VERSION: ${{ inputs.terraform-version }}
+        TFLINT_VERSION: ${{ inputs.tflint-version }}
+        TERRAFORM_DOCS_VERSION: ${{ inputs.terraform-docs-version }}
+        CONFTEST_VERSION: ${{ inputs.conftest-version }}
+        INFRACOST_VERSION: ${{ inputs.infracost-version }}
+        YQ_VERSION: ${{ inputs.yq-version }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/build-checksummed-tools-list.sh"
+
+    # Delegates the actual download/verify/extract/PATH work for every checksummed binary tool to
+    # the shared, generic installer - caching stays this action's own responsibility (one ~/.local
+    # cache entry keyed on versions-hash, covering this and the pip/npm installs below), so the
+    # generic action's own caching is switched off here.
+    - name: Install checksummed binary tools
+      if: steps.tools_cache.outputs.cache-hit != 'true'
+      uses: $/.github/actions/install-checksummed-tools
+      with:
+        tools: ${{ steps.build_list.outputs.tools }}
+        enable-caching: "false"
+
+    - name: Install pip/npm tool binaries
+      if: steps.tools_cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        TOOLS: ${{ inputs.tools }}
+        COMMITLINT_VERSION: ${{ inputs.commitlint-version }}
+        CHECKOV_VERSION: ${{ inputs.checkov-version }}
+        PRE_COMMIT_VERSION: ${{ inputs.pre-commit-version }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/install-tools.sh"
+
+    - name: Save tool binary cache
+      if: inputs.enable-caching == 'true' && steps.tools_cache.outputs.cache-hit != 'true'
+      continue-on-error: true
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/.local
+        key: ${{ steps.tools_cache.outputs.cache-primary-key }}
+
+    # The binaries only just landed under ~/.local; put them on PATH here so a caller does not have
+    # to know that detail, but export nothing else — TF_INPUT, TF_LOG and friends are
+    # configure-terraform-environment's job, not this action's.
+    - name: Add installed tools to PATH
+      shell: bash
+      run: |
+        {
+          echo "${HOME}/.local/bin"
+          echo "${HOME}/.local/checksummed-tools"
+          echo "${HOME}/.local/commitlint/node_modules/.bin"
+        } >>"${GITHUB_PATH}"
+        echo "NODE_PATH=${HOME}/.local/commitlint/node_modules" >>"${GITHUB_ENV}"

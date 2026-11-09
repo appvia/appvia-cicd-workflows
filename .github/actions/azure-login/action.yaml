@@ -1,0 +1,71 @@
+---
+name: "Azure Login"
+description: >-
+  Authenticate to Azure using OIDC federation and export the ARM_* environment variables that the
+  azurerm provider reads. Installs nothing and knows nothing about the Terraform toolchain, so a
+  workflow that needs Azure credentials alone — a state unlock, for example — can use it without
+  pinning tool versions it will never use.
+
+inputs:
+  client-id:
+    description: "Azure client ID of the OIDC service principal."
+    required: true
+  tenant-id:
+    description: "Azure tenant ID of the OIDC service principal."
+    required: true
+  subscription-id:
+    description: "Azure subscription ID the service principal operates against."
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    # Fail here with a named message rather than letting azure/login report an opaque
+    # authentication error. A blank value almost always means the secret was never created in the
+    # environment the calling job entered. Delegates to require-secret rather than re-implementing
+    # the same blank-check three times.
+    - name: Require Azure Client ID
+      uses: $/.github/actions/require-secret
+      with:
+        value: ${{ inputs.client-id }}
+        name: "client-id"
+        message: "Check the calling workflow passes secrets: inherit and that the secret exists on the GitHub Environment the job entered."
+
+    - name: Require Azure Tenant ID
+      uses: $/.github/actions/require-secret
+      with:
+        value: ${{ inputs.tenant-id }}
+        name: "tenant-id"
+        message: "Check the calling workflow passes secrets: inherit and that the secret exists on the GitHub Environment the job entered."
+
+    - name: Require Azure Subscription ID
+      uses: $/.github/actions/require-secret
+      with:
+        value: ${{ inputs.subscription-id }}
+        name: "subscription-id"
+        message: "Check the calling workflow passes secrets: inherit and that the secret exists on the GitHub Environment the job entered."
+
+    - name: Azure login (OIDC)
+      uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+      with:
+        client-id: ${{ inputs.client-id }}
+        tenant-id: ${{ inputs.tenant-id }}
+        subscription-id: ${{ inputs.subscription-id }}
+
+    # Exported once here so no calling job has to restate them, and so the azurerm provider and the
+    # Azure CLI always agree on which identity and subscription are in use.
+    - name: Export ARM environment
+      shell: bash
+      env:
+        AZURE_CLIENT_ID: ${{ inputs.client-id }}
+        AZURE_TENANT_ID: ${{ inputs.tenant-id }}
+        AZURE_SUBSCRIPTION_ID: ${{ inputs.subscription-id }}
+      run: |
+        set -euo pipefail
+        {
+          echo "ARM_CLIENT_ID=${AZURE_CLIENT_ID}"
+          echo "ARM_TENANT_ID=${AZURE_TENANT_ID}"
+          echo "ARM_SUBSCRIPTION_ID=${AZURE_SUBSCRIPTION_ID}"
+          echo "ARM_USE_OIDC=true"
+          echo "ARM_USE_AZUREAD=true"
+        } >>"${GITHUB_ENV}"
