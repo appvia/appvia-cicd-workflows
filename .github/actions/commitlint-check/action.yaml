@@ -1,0 +1,31 @@
+---
+name: "Commitlint Check"
+description: "Run commitlint over the commit range between a pull request's base and head SHAs."
+
+inputs:
+  base-sha:
+    description: "Base commit SHA of the range to lint."
+    required: true
+  head-sha:
+    description: "Head commit SHA of the range to lint."
+    required: true
+  config-file:
+    description: "Path to the commitlint configuration."
+    required: true
+  output-file:
+    description: "Where to tee the output, relative to GITHUB_WORKSPACE."
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Run commitlint
+      shell: bash
+      env:
+        BASE_SHA: ${{ inputs.base-sha }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+        CONFIG_FILE: ${{ inputs.config-file }}
+        OUTPUT_FILE: ${{ inputs.output-file }}
+      run: |
+        set -euo pipefail
+        commitlint --from "$BASE_SHA" --to "$HEAD_SHA" --config "$CONFIG_FILE" 2>&1 | tee "$GITHUB_WORKSPACE/$OUTPUT_FILE"

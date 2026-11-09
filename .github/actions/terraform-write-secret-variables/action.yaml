@@ -1,0 +1,34 @@
+---
+name: "Write Terraform variables"
+description: >-
+  Pass Terraform input variables from secrets through to Terraform, via two complementary
+  mechanisms driven by a single secrets context: every TF_VAR_* secret is mapped onto the job
+  environment, and the TERRAFORM_VARIABLES_JSON secret (if present) is materialised as an
+  auto-loaded tfvars.json file in the working directory. No-ops for whichever mechanism has
+  nothing to do.
+
+inputs:
+  working-directory:
+    description: "Directory holding the root module."
+    required: true
+  secrets-json:
+    description: >-
+      The serialised secrets context, supplied by the caller as toJSON(secrets). Keys beginning
+      with TF_VAR_ and the TERRAFORM_VARIABLES_JSON key are read; everything else is ignored.
+    required: true
+
+outputs:
+  exported:
+    description: "Space-separated list of the Terraform variable names exported from TF_VAR_* secrets."
+    value: ${{ steps.write.outputs.exported }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Write Terraform variables
+      id: write
+      shell: bash
+      env:
+        WORKING_DIR: ${{ inputs.working-directory }}
+        SECRETS_JSON: ${{ inputs.secrets-json }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/write-variables.sh"

@@ -1,0 +1,87 @@
+---
+name: "Pre-commit Check"
+description: >-
+  Run the repository's own pre-commit hooks, caching the hook environments between runs. The "Run
+  pre-commit" step reports failure (visible in the UI) whenever hooks fail or the configuration is
+  missing. By default a failure stops the job, since a modifying hook (terraform_fmt,
+  terraform_docs, ...) rewriting files in place must not flow into a later step such as a Terraform
+  plan; set continue-on-error to "true" for callers such as PR validation that still want later
+  checks and the outcome output to run even when a hook fails. Set install-only to "true" to only
+  install hook environments (`pre-commit install-hooks`) without executing any hook against the
+  checkout — for warming the cache outside a PR, where hooks shouldn't run at all: a hook such as
+  no-commit-to-branch is expected to fail off a feature branch, and any hook's install step is
+  unaffected either way.
+
+inputs:
+  config-file:
+    description: "Path to the pre-commit configuration"
+    required: false
+    default: ".pre-commit-config.yaml"
+  output-file:
+    description: "Where to tee the output, relative to GITHUB_WORKSPACE"
+    required: false
+    default: "pre-commit-output.txt"
+  github-token:
+    description: "GitHub token for authentication"
+    required: false
+    default: ""
+  skip:
+    description: >-
+      Comma-separated list of hook IDs to skip (passed through to pre-commit's own SKIP
+      environment variable). Leave blank to run every configured hook.
+    required: false
+    default: ""
+  continue-on-error:
+    description: >-
+      Whether a hook failure (including a modifying hook leaving files changed) is non-fatal. Keep
+      "false" (default) for a caller whose workspace is reused afterwards, e.g. for a Terraform
+      plan, so a mutating/failing hook stops the job instead of leaving behind unreviewed,
+      uncommitted changes for that plan to pick up. Set to "true" for PR validation, which still
+      wants the outcome reported alongside other checks.
+    required: false
+    default: "false"
+  install-only:
+    description: >-
+      When "true", only install hook environments (`pre-commit install-hooks`) instead of running
+      them against the checkout. Use for cache-warming callers that aren't a real pre-commit check,
+      so hooks that depend on context such as the current branch (e.g. no-commit-to-branch) or that
+      would otherwise modify files (terraform_fmt, terraform_docs, ...) never execute at all.
+    required: false
+    default: "false"
+
+outputs:
+  outcome:
+    description: "'success', 'failure' or 'skipped'"
+    value: ${{ steps.run.outputs.outcome }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Restore pre-commit cache
+      id: cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/.cache/pre-commit
+        key: pre-commit-${{ runner.os }}-${{ hashFiles(inputs.config-file) }}
+        restore-keys: |
+          pre-commit-${{ runner.os }}-
+
+    - name: Run pre-commit
+      id: run
+      shell: bash
+      continue-on-error: ${{ inputs.continue-on-error == 'true' }}
+      env:
+        CONFIG_FILE: ${{ inputs.config-file }}
+        OUTPUT_FILE: ${{ inputs.output-file }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        INSTALL_ONLY: ${{ inputs.install-only }}
+        SKIP: ${{ inputs.skip }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/run-pre-commit.sh"
+
+    - name: Save pre-commit cache
+      if: steps.cache.outputs.cache-hit != 'true' && steps.run.outputs.outcome != 'skipped'
+      continue-on-error: true
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/.cache/pre-commit
+        key: ${{ steps.cache.outputs.cache-primary-key }}

@@ -1,0 +1,35 @@
+---
+name: "Terraform Format Check"
+description: "Check that every Terraform file in the working directory is canonically formatted."
+
+inputs:
+  working-directory:
+    description: "Directory holding the root module."
+    required: true
+  output-file:
+    description: "Where to tee the output, relative to GITHUB_WORKSPACE."
+    required: true
+
+outputs:
+  outcome:
+    description: "Outcome of the Terraform format check: 'success' or 'failure'"
+    value: ${{ steps.fmt.outputs.outcome }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Run terraform fmt -check
+      id: fmt
+      shell: bash
+      env:
+        WORKING_DIR: ${{ inputs.working-directory }}
+        OUTPUT_FILE: ${{ inputs.output-file }}
+      run: |
+        set -euo pipefail
+        if terraform -chdir="$WORKING_DIR" fmt -check -recursive 2>&1 | tee "$GITHUB_WORKSPACE/$OUTPUT_FILE"; then
+          echo "outcome=success" >> "$GITHUB_OUTPUT"
+        else
+          echo "outcome=failure" >> "$GITHUB_OUTPUT"
+          echo "::error::terraform fmt -check failed for $WORKING_DIR. Run terraform fmt -recursive before pushing."
+          exit 1
+        fi

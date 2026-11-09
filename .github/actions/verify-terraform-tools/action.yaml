@@ -1,0 +1,22 @@
+---
+name: "Verify Pre-Setup Runner"
+description: >-
+  Bring-your-own-runner mode. Verify that every requested tool is already on PATH, and nothing
+  else. Fails fast with one message naming every missing tool, rather than letting a gap surface
+  mid-run as a "command not found" inside a Terraform step.
+
+inputs:
+  tools:
+    description: >-
+      Space-separated list of tools that must already be on PATH, as resolved by
+      validate-and-hash-tool-versions.
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Verify required tools
+      shell: bash
+      env:
+        REQUIRED_TOOLS: ${{ inputs.tools }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/verify-tools.sh"

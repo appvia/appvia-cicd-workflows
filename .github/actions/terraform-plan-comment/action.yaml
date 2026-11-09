@@ -1,0 +1,28 @@
+---
+name: "Terraform Plan Comment"
+description: >-
+  Post or update the per-environment plan results comment on a pull request, built from the
+  outcomes JSON and log files the plan job leaves in the workspace.
+
+inputs:
+  artifacts-directory:
+    description: "Directory holding the outcomes JSON and log files"
+    required: false
+    default: "."
+
+runs:
+  using: "composite"
+  steps:
+    # github-script resolves $GITHUB_ACTION_PATH to its own directory, so capture ours first.
+    - name: Export action path
+      shell: bash
+      run: echo "COMPOSITE_ACTION_PATH=$GITHUB_ACTION_PATH" >>"$GITHUB_ENV"
+
+    - name: Post or update comment
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      env:
+        ARTIFACTS_DIR: ${{ inputs.artifacts-directory }}
+      with:
+        script: |
+          const run = require(`${process.env.COMPOSITE_ACTION_PATH}/scripts/build-comment.js`);
+          await run({ github, context, core });

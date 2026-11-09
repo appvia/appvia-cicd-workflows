@@ -1,0 +1,42 @@
+---
+name: "Terraform TFLint"
+description: "Initialise and run TFLint against the working directory, using the resolved var-files."
+
+inputs:
+  working-directory:
+    description: "Directory holding the root module."
+    required: true
+  config-file:
+    description: >-
+      Path to the TFLint configuration. Relative paths are resolved against the repository root,
+      not the working directory.
+    required: true
+  var-file:
+    description: "Environment-specific var-file to pass through, blank to omit."
+    required: false
+    default: ""
+  common-var-file:
+    description: "Common var-file to pass through, blank to omit."
+    required: false
+    default: ""
+  output-file:
+    description: "Where to tee the output, relative to GITHUB_WORKSPACE."
+    required: true
+  github-token:
+    description: "GitHub token for authentication."
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - name: Run TFLint
+      shell: bash
+      env:
+        WORKING_DIR: ${{ inputs.working-directory }}
+        TFLINT_CONFIG: ${{ inputs.config-file }}
+        TF_VAR_FILE: ${{ inputs.var-file }}
+        TF_COMMON_VAR_FILE: ${{ inputs.common-var-file }}
+        OUTPUT_FILE: ${{ inputs.output-file }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/run-tflint.sh"

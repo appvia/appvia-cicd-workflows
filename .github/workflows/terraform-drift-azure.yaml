@@ -1,0 +1,351 @@
+---
+# =============================================================================
+# Terraform Drift Detection (Azure)
+#
+# The consumer should run this on a periodic basis (every 24hrs recommended)
+# The -detailed-exitcode is used to identify drift in deployed resources.
+# When drift is detected, the pipeline will open (or update) a GitHub issue.
+#
+# One environment per call — fan out with `strategy.matrix` on the calling job
+# to cover several.
+# =============================================================================
+name: Terraform Drift Detection (Azure)
+
+on:
+  workflow_call:
+    inputs:
+      # --- Environment and location ------------------------------------------
+      environment:
+        description: >-
+          The Terraform environment to plan against, for example "dev". Selects the var-file and
+          the default state key. To cover several environments, fan out with strategy.matrix on the
+          calling job.
+        required: true
+        type: string
+      working-directory:
+        description: "Directory holding the root module."
+        required: false
+        default: "terraform"
+        type: string
+
+      # --- Runner ------------------------------------------------------------
+      runs-on:
+        description: "Runner label."
+        required: false
+        default: "ubuntu-2404-2core"
+        type: string
+      job-timeout-minutes:
+        description: >-
+          Job timeout in minutes, applied to every job. Raise it for slow Azure resources: an Azure
+          Firewall and similar can take around forty-five minutes on its own.
+        required: false
+        default: 90
+        type: number
+
+      # --- Toolchain ---------------------------------------------------------
+      install-tools:
+        description: >-
+          Install the toolchain when true. When false nothing is installed and the workflow instead
+          verifies that a bring-your-own runner image already provides every tool it needs, in which
+          case every version input is ignored.
+        required: false
+        default: true
+        type: boolean
+      enable-caching:
+        description: >-
+          Cache the installed tool binaries and the Terraform provider plugins between runs. Turn it
+          off to force a clean download of both.
+        required: false
+        default: true
+        type: boolean
+      node-version:
+        description: "Pinned Node.js version. Required when install-tools is true."
+        required: false
+        default: "22"
+        type: string
+      terraform-version:
+        description: "Pinned Terraform version. Required when install-tools is true."
+        required: false
+        default: ""
+        type: string
+
+      # --- Terraform behaviour -----------------------------------------------
+      terraform-state-blob-name:
+        description: >-
+          Blob key within the state container. Defaults to <environment>.tfstate. Supply a complete
+          path such as networking/dev.tfstate when several states share one container.
+        required: false
+        default: ""
+        type: string
+      terraform-var-file:
+        description: "Environment var-file, relative to the working directory. Defaults to environments/<environment>.tfvars and must exist."
+        required: false
+        default: ""
+        type: string
+      terraform-common-var-file:
+        description: "Shared var-file applied to every environment. Ignored when the file is absent."
+        required: false
+        default: "environments/common.tfvars"
+        type: string
+      terraform-parallelism:
+        description: >-
+          Number of resource operations Terraform runs concurrently. Left at Terraform's own default
+          of ten, which is a deliberate choice: raising it on a large landing zone tends to trip
+          Azure Resource Manager throttling and produce intermittent failures rather than a faster
+          apply.
+        required: false
+        default: 10
+        type: number
+      terraform-log-level:
+        description: >-
+          Value for TF_LOG on plan and apply. One of TRACE, DEBUG, INFO, WARN, ERROR or OFF. Blank
+          disables Terraform debug logging.
+        required: false
+        default: ""
+        type: string
+      drift-exclusions-file:
+        description: >-
+          Plain-text file of exact Terraform addresses to exclude from drift gating, one per line,
+          relative to GITHUB_WORKSPACE (the repository root — not working-directory, matching the
+          convention used by checkov-config-file/tflint-config-file). '#' starts a trailing
+          comment; blank lines are ignored. A drift issue is only opened/updated when changes
+          remain after exclusions are applied. Blank (the default) or a missing file disables the
+          feature entirely — every detected change is treated as drift.
+        required: false
+        default: ""
+        type: string
+
+      # --- Private modules access ------------------------------------
+      github-app-owner:
+        description: "Owner the GitHub App token is scoped to. Defaults to current org if not set."
+        required: false
+        default: ""
+        type: string
+      github-repositories:
+        description: "Repositories comma separated list of repositories to scope the GitHub App token to. Empty will be scoped to all repositories."
+        required: false
+        default: ""
+        type: string
+      github-permission-readonly:
+        description: "All permissions grants will be read-only. Any overrides on individual permissions will be ignored."
+        required: false
+        default: true
+        type: boolean
+      github-app-auth-pwsh:
+        description: "Whether to use the GitHub App login PowerShell action, used for Bootstrap only."
+        required: false
+        default: false
+        type: boolean
+
+    secrets:
+      AZURE_CLIENT_ID:
+        description: "Azure client ID for OIDC authentication."
+        required: true
+      AZURE_TENANT_ID:
+        description: "Azure tenant ID for OIDC authentication."
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        description: "Azure subscription ID the deployment targets."
+        required: true
+      AZURE_STORAGE_RESOURCE_GROUP_NAME:
+        description: "Resource group containing the Terraform state storage account."
+        required: true
+      AZURE_STORAGE_ACCOUNT_NAME:
+        description: "Storage account containing Terraform state."
+        required: true
+      AZURE_STORAGE_CONTAINER_NAME:
+        description: "Blob container containing Terraform state. One container per repository."
+        required: true
+      AZURE_STORAGE_SUBSCRIPTION_ID:
+        description: "Subscription containing the Terraform state storage account. Defaults to AZURE_SUBSCRIPTION_ID when blank."
+        required: false
+      TERRAFORM_VARIABLES_JSON:
+        description: >-
+          JSON object of Terraform input variables, written to workflow-variables.auto.tfvars.json in
+          the working directory. Use it for structured values that must not be committed to
+          environments/*.tfvars. Individual TF_VAR_* secrets take precedence over it.
+        required: false
+      GH_APP_ID:
+        description: "GitHub App ID used to pull private modules & auth to GitHub. Blank disables private module authentication."
+        required: false
+      GH_APP_INSTALLATION_ID:
+        description: "GitHub App Installation ID used to pull private modules & auth to GitHub. Required when GH_APP_ID is set."
+        required: false
+      GH_APP_PRIVATE_KEY:
+        description: "Private key for the GitHub App. Required when github-app-id is set."
+        required: false
+
+jobs:
+  drift:
+    name: Drift Detection
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.job-timeout-minutes }}
+    environment: ${{ format('plan-{0}', inputs.environment) }}
+    permissions:
+      id-token: write # OIDC federation to Azure
+      contents: read
+      issues: write # Open/update the drift issue
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_USE_OIDC: "true"
+      ARM_USE_AZUREAD: "true"
+      TF_INPUT: "0"
+      TF_IN_AUTOMATION: "true"
+      TF_LOG: ${{ inputs.terraform-log-level }}
+      ENV: ${{ inputs.environment }}
+      WORKING_DIR: ${{ inputs.working-directory }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Derive Root Label
+        id: derive_root
+        uses: $/.github/actions/derive-root-label
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          environment: ${{ inputs.environment }}
+
+      - name: Validate Tool Versions and Generate Hash
+        id: validate_versions
+        uses: $/.github/actions/validate-and-hash-tool-versions
+        with:
+          tools: "terraform node"
+          install-tools: ${{ inputs.install-tools }}
+          node-version: ${{ inputs.node-version }}
+          terraform-version: ${{ inputs.terraform-version }}
+
+      - name: Configure Terraform Environment
+        id: configure_terraform_environment
+        uses: $/.github/actions/configure-terraform-environment
+        with:
+          terraform-log-level: ${{ inputs.terraform-log-level }}
+
+      - name: Install Terraform Tools
+        id: install_terraform_tools
+        if: inputs.install-tools
+        uses: $/.github/actions/terraform-tools-install
+        with:
+          # Tools below are not all necessary for main, but kept the same so feature branches can benefit from main's cache
+          tools: ${{ steps.validate_versions.outputs.tools }}
+          enable-caching: ${{ inputs.enable-caching }}
+          node-version: ${{ steps.validate_versions.outputs.node }}
+          terraform-version: ${{ steps.validate_versions.outputs.terraform }}
+          versions-hash: ${{ steps.validate_versions.outputs.versions-hash }}
+
+      - name: Verify Installed Tools (BYO Runner Only)
+        id: verify_byo_runner
+        if: ${{ !inputs.install-tools }}
+        uses: $/.github/actions/verify-terraform-tools
+        with:
+          tools: ${{ steps.validate_versions.outputs.tools }}
+
+      - name: GitHub App Login
+        id: github_app_login
+        uses: $/.github/actions/github-app-login
+        if: ${{ !inputs.github-app-auth-pwsh }}
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          owner: ${{ inputs.github-app-owner != '' && inputs.github-app-owner || github.repository_owner }}
+          repositories: ${{ inputs.github-repositories }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-readonly: ${{ inputs.github-permission-readonly }}
+
+      - name: GitHub App Login (PowerShell)
+        id: github_app_login_pwsh
+        if: ${{ inputs.github-app-auth-pwsh }}
+        uses: $/.github/actions/github-app-login-pwsh
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          app-installation-id: ${{ secrets.GH_APP_INSTALLATION_ID }}
+          owner: ${{ inputs.github-app-owner != '' && inputs.github-app-owner || github.repository_owner }}
+          repositories: ${{ inputs.github-repositories }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-readonly: ${{ inputs.github-permission-readonly }}
+
+      - name: Azure Login
+        id: azure_login
+        uses: $/.github/actions/azure-login
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Pulls out all TF_VAR_* secrets onto the job environment and materialises
+      # TERRAFORM_VARIABLES_JSON as an auto-loaded tfvars file, from a single secrets context.
+      - name: Write Terraform Secret Variables
+        id: write_terraform_variables
+        uses: $/.github/actions/terraform-write-secret-variables
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          secrets-json: ${{ toJSON(secrets) }}
+
+      - name: Terraform Init
+        id: terraform_init
+        uses: $/.github/actions/terraform-init-azure
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          environment: ${{ inputs.environment }}
+          terraform-state-key: ${{ inputs.terraform-state-blob-name }}
+          terraform-var-file: ${{ inputs.terraform-var-file }}
+          terraform-common-var-file: ${{ inputs.terraform-common-var-file }}
+          enable-caching: ${{ inputs.enable-caching }}
+          backend-resource-group-name: ${{ secrets.AZURE_STORAGE_RESOURCE_GROUP_NAME }}
+          backend-storage-account-name: ${{ secrets.AZURE_STORAGE_ACCOUNT_NAME }}
+          backend-container-name: ${{ secrets.AZURE_STORAGE_CONTAINER_NAME }}
+          backend-subscription-id: ${{ secrets.AZURE_STORAGE_SUBSCRIPTION_ID }}
+          github-app-token: ${{ inputs.github-app-auth-pwsh && steps.github_app_login_pwsh.outputs.token || steps.github_app_login.outputs.token }}
+
+      # -detailed-exitcode: 0 = no drift, 2 = drift, 1 = error
+      - name: Terraform Plan (Drift Check)
+        id: terraform_plan
+        if: steps.terraform_init.outcome == 'success'
+        uses: $/.github/actions/terraform-exec
+        with:
+          command: plan
+          delete-plan: "true"
+          working-directory: ${{ inputs.working-directory }}
+          var-file: ${{ steps.terraform_init.outputs.tf-var-file }}
+          common-var-file: ${{ steps.terraform_init.outputs.tf-common-var-file }}
+          parallelism: ${{ inputs.terraform-parallelism }}
+          detailed-exitcode: "true"
+          convert-to-json: "true"
+          json-file: driftplan_${{ inputs.environment }}.json
+          out-file: driftplan.${{ inputs.environment }}
+          github-app-token: ${{ inputs.github-app-auth-pwsh && steps.github_app_login_pwsh.outputs.token || steps.github_app_login.outputs.token }}
+          output-file: drift_output.txt
+
+      - name: Filter Drift Exclusions
+        id: drift_filter
+        if: steps.terraform_plan.outputs.json-outcome == 'success'
+        uses: $/.github/actions/terraform-drift-filter
+        with:
+          plan-json: ${{ steps.terraform_plan.outputs.json-path }}
+          working-directory: ${{ inputs.working-directory }}
+          exclusions-file: ${{ inputs.drift-exclusions-file }}
+          filtered-json-file: driftplan_${{ inputs.environment }}.filtered.json
+
+      - name: Terraform Drift Summary
+        if: steps.terraform_plan.outputs.json-outcome == 'success'
+        uses: $/.github/actions/terraform-plan-summary
+        with:
+          plan-json: ${{ steps.drift_filter.outputs.filtered-json-path }}
+          title: "Terraform Drift Summary"
+
+      - name: Open, Update, or Close Drift Issue
+        if: steps.drift_filter.outcome == 'success'
+        uses: $/.github/actions/terraform-drift-issue
+        with:
+          environment: ${{ inputs.environment }}
+          root: ${{ steps.derive_root.outputs.root }}
+          has-drift: ${{ steps.drift_filter.outputs.has-drift }}
+          plan-output-file: drift_output.txt
+
+      - name: Cleanup Terraform Drift Files and Variables
+        if: always()
+        uses: $/.github/actions/terraform-cleanup
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          plan-files: driftplan.${{ inputs.environment }} driftplan_${{ inputs.environment }}.json driftplan_${{ inputs.environment }}.filtered.json
+          terraform-variable-names: ${{ steps.write_terraform_variables.outputs.exported }}

@@ -1,0 +1,31 @@
+---
+name: "Require Secret"
+description: "Fail fast if a required secret is blank, rather than after later steps have run."
+
+inputs:
+  value:
+    description: "The secret value to check."
+    required: true
+  name:
+    description: "Name of the secret, used in the error message."
+    required: true
+  message:
+    description: "Extra context appended to the error message explaining why the secret is required."
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - name: Check secret is set
+      shell: bash
+      env:
+        SECRET_VALUE: ${{ inputs.value }}
+        SECRET_NAME: ${{ inputs.name }}
+        MESSAGE: ${{ inputs.message }}
+      run: |
+        set -euo pipefail
+        if [ -z "${SECRET_VALUE//[[:space:]]/}" ]; then
+          echo "::error::Secret '${SECRET_NAME}' is not set. ${MESSAGE}"
+          exit 1
+        fi
