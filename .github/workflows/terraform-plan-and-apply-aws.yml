@@ -543,7 +543,7 @@ jobs:
           fi
       - name: Run Checkov
         id: security
-        uses: bridgecrewio/checkov-action@b17b606d6ec72bb8ba5721ad5b7e340b80a9fc39 # v12
+        uses: bridgecrewio/checkov-action@b782b35c8411ff565b881fba67ceebdb426d7dc4 # v12
         with:
           config_file: .checkov.yml
           directory: ${{ inputs.working-directory }}
